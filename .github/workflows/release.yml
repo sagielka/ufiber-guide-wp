@@ -1,40 +1,90 @@
-# Push a tag like v1.1.8 and GitHub builds noga-ufiber-guide-1.1.8.zip and attaches it
-# to a release. Sites running the plugin then offer that version automatically.
+# Publishing a new version of the plugin.
 #
-# The version in the tag must match the version committed in noga-ufiber-guide.php —
-# the update checker reads the header from the tagged commit, so the build fails fast
-# here rather than publishing a release no site can see.
+# Two ways in:
+#   1. Actions tab -> "Build plugin release" -> "Run workflow" -> type the version.
+#      GitHub bumps the version in the repository, commits it, tags it, builds the
+#      zip and publishes the release. Nothing to edit, nothing to upload.
+#   2. Push a tag like v1.1.9 yourself. The version in the plugin header must already
+#      match, or this stops rather than publishing a release no site can see.
 name: Build plugin release
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version, e.g. 1.1.9 (must be higher than the last one)'
+        required: true
+      changelog:
+        description: 'One line describing what changed (optional)'
+        required: false
   push:
     tags: ['v*']
+
 permissions:
   contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Check the tag matches the version in the plugin
+      - name: Work out the version
+        id: v
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          SRC=$(grep -m1 -oP "Version:\s*\K[0-9.]+" noga-ufiber-guide.php)
-          echo "tag $TAG | plugin header $SRC"
-          if [ "$TAG" != "$SRC" ]; then
-            echo "::error::Tag v$TAG does not match the plugin header ($SRC). Commit the version bump, then tag."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME}"
+          fi
+          V="${V#v}"
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::Version must look like 1.2.3, got '$V'"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V"    >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to overwrite a version that already exists
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if git rev-parse "refs/tags/${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::${{ steps.v.outputs.tag }} already exists. Use a higher version."
             exit 1
           fi
 
-      - name: Build the zip
-        run: python3 tools/build_release.py --version "${GITHUB_REF_NAME#v}"
+      - name: Build the zip (this also stamps the version into the source)
+        run: |
+          python3 tools/build_release.py --version "${{ steps.v.outputs.version }}" \
+            ${{ inputs.changelog && format('--changelog "{0}"', inputs.changelog) || '' }}
+
+      - name: Check the tag matches the plugin header
+        if: github.event_name == 'push'
+        run: |
+          SRC=$(grep -m1 -oP 'Version:\s*\K[0-9.]+' noga-ufiber-guide.php)
+          echo "tag ${{ steps.v.outputs.version }} | plugin header $SRC"
+          if [ "$SRC" != "${{ steps.v.outputs.version }}" ]; then
+            echo "::error::The tag does not match the version in noga-ufiber-guide.php ($SRC). Commit the bump, then tag."
+            exit 1
+          fi
+
+      - name: Commit the version bump and tag it
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name  "UFIBER release"
+          git config user.email "noreply@noga.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "UFIBER Guide ${{ steps.v.outputs.version }}"
+          git tag "${{ steps.v.outputs.tag }}"
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "${{ steps.v.outputs.tag }}"
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: ${{ steps.v.outputs.version }}
           files: dist/noga-ufiber-guide-*.zip
           generate_release_notes: true
           fail_on_unmatched_files: true
