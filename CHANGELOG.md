@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.3 – 2026-10-04
+- Update check no longer reports a failure when a release was found but a side request to GitHub failed.
+
 ## 1.1.2 – 2026-10-04
 - Version and build date shown in a footer, on screen and on printed setup sheets.
 
