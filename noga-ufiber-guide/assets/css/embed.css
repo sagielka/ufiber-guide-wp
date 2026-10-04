@@ -1,0 +1,4 @@
+.nufg{position:relative;width:100%;max-width:100%;overflow:hidden;background:transparent}
+.nufg__frame{display:block;width:100%;max-width:100%;border:0;min-height:var(--nufg-min,560px);height:var(--nufg-h,720px);background:transparent;color-scheme:light dark}
+.nufg--fit .nufg__frame{height:var(--nufg-min,560px);transition:height .12s ease-out}
+@media (prefers-reduced-motion:reduce){.nufg--fit .nufg__frame{transition:none}}

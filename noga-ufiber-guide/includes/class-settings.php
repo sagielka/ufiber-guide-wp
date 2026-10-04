@@ -1,0 +1,222 @@
+<?php
+/**
+ * Settings → UFIBER Guide
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class NUFG_Settings {
+
+	public static function init() {
+		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
+		add_action( 'admin_init', array( __CLASS__, 'register' ) );
+		add_action( 'admin_post_nufg_check_updates', array( __CLASS__, 'handle_check' ) );
+	}
+
+	public static function menu() {
+		add_options_page(
+			__( 'UFIBER Guide', 'noga-ufiber-guide' ),
+			__( 'UFIBER Guide', 'noga-ufiber-guide' ),
+			'manage_options',
+			'nufg',
+			array( __CLASS__, 'page' )
+		);
+	}
+
+	public static function register() {
+		register_setting(
+			'nufg',
+			NUFG_Plugin::OPTION,
+			array( 'type' => 'array', 'sanitize_callback' => array( __CLASS__, 'sanitize' ), 'default' => NUFG_Plugin::defaults() )
+		);
+	}
+
+	public static function sanitize( $in ) {
+		$old = NUFG_Plugin::options();
+		$in  = is_array( $in ) ? $in : array();
+		$out = $old;
+
+		$tab = isset( $in['tab'] ) ? sanitize_key( $in['tab'] ) : $old['tab'];
+		$out['tab']        = isset( NUFG_Plugin::TABS[ $tab ] ) ? $tab : 'find';
+		$out['units']      = ( isset( $in['units'] ) && 'inch' === $in['units'] ) ? 'inch' : 'mm';
+		$out['brand']      = empty( $in['brand'] ) ? 0 : 1;
+		$out['scroll_off'] = isset( $in['scroll_off'] ) ? max( 0, min( 400, (int) $in['scroll_off'] ) ) : $old['scroll_off'];
+
+		$out['update_mode'] = ( isset( $in['update_mode'] ) && 'github' === $in['update_mode'] ) ? 'github' : 'json';
+		$out['update_url']  = isset( $in['update_url'] ) ? NUFG_Updater::clean_url( $in['update_url'] ) : '';
+		$out['github_repo'] = isset( $in['github_repo'] ) ? NUFG_Updater::normalize_github( $in['github_repo'] ) : '';
+		// Keep the saved token unless a new one was typed. A single "-" clears it.
+		$token = isset( $in['github_token'] ) ? trim( (string) $in['github_token'] ) : '';
+		if ( '' === $token ) {
+			$out['github_token'] = $old['github_token'];
+		} elseif ( '-' === $token ) {
+			$out['github_token'] = '';
+		} else {
+			$out['github_token'] = preg_replace( '/[^A-Za-z0-9_\-]/', '', $token );
+		}
+
+		if ( isset( $in['update_url'] ) && '' !== trim( $in['update_url'] ) && '' === $out['update_url'] ) {
+			add_settings_error( NUFG_Plugin::OPTION, 'nufg_url', __( 'The update URL must be a full https:// address.', 'noga-ufiber-guide' ) );
+		}
+		if ( 'github' === $out['update_mode'] && '' === $out['github_repo'] && ! empty( $in['github_repo'] ) ) {
+			add_settings_error( NUFG_Plugin::OPTION, 'nufg_repo', __( 'Enter the repository as owner/name, for example nogamt/ufiber-guide-wp.', 'noga-ufiber-guide' ) );
+		}
+		return $out;
+	}
+
+	public static function handle_check() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'noga-ufiber-guide' ), 403 );
+		}
+		check_admin_referer( 'nufg_check_updates' );
+		$r = NUFG_Updater::check_now();
+		// Make WordPress re-read the update list as well so the Plugins screen is current.
+		delete_site_transient( 'update_plugins' );
+		wp_safe_redirect(
+			add_query_arg(
+				array( 'page' => 'nufg', 'nufg_checked' => $r['ok'] ? '1' : '0', 'nufg_msg' => rawurlencode( $r['message'] ) ),
+				admin_url( 'options-general.php' )
+			)
+		);
+		exit;
+	}
+
+	public static function page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		$o      = NUFG_Plugin::options();
+		$src    = NUFG_Updater::source();
+		$avail  = NUFG_Updater::available_version();
+		$last   = NUFG_Updater::last_checked();
+		$name   = NUFG_Plugin::OPTION;
+		$active = NUFG_Updater::active();
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'UFIBER Guide', 'noga-ufiber-guide' ); ?></h1>
+
+			<?php
+			// phpcs:disable WordPress.Security.NonceVerification
+			if ( isset( $_GET['nufg_msg'] ) ) {
+				$cls = ( isset( $_GET['nufg_checked'] ) && '1' === $_GET['nufg_checked'] ) ? 'notice-success' : 'notice-error';
+				echo '<div class="notice ' . esc_attr( $cls ) . ' is-dismissible"><p>' . esc_html( rawurldecode( wp_unslash( $_GET['nufg_msg'] ) ) ) . '</p></div>';
+			}
+			// phpcs:enable
+			settings_errors( $name );
+			?>
+
+			<p><?php
+				echo wp_kses(
+					__( 'Add the guide with the <strong>UFIBER Guide</strong> widget in Elementor (category <em>NOGA MT</em>), or with the shortcode below.', 'noga-ufiber-guide' ),
+					array( 'strong' => array(), 'em' => array() )
+				);
+			?></p>
+			<p><code>[ufiber_guide]</code> &nbsp; <code>[ufiber_guide tab="speeds" units="inch"]</code> &nbsp; <code>[ufiber_guide height="900"]</code></p>
+
+			<form method="post" action="options.php">
+				<?php settings_fields( 'nufg' ); ?>
+
+				<h2><?php esc_html_e( 'Defaults', 'noga-ufiber-guide' ); ?></h2>
+				<p class="description"><?php esc_html_e( 'Used by the shortcode and as the starting values of new widgets.', 'noga-ufiber-guide' ); ?></p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="nufg_tab"><?php esc_html_e( 'Start on', 'noga-ufiber-guide' ); ?></label></th>
+						<td>
+							<select id="nufg_tab" name="<?php echo esc_attr( $name ); ?>[tab]">
+								<?php
+								$labels = array(
+									'find' => __( 'Find a tool', 'noga-ufiber-guide' ), 'speeds' => __( 'Speeds & feeds', 'noga-ufiber-guide' ),
+									'fix' => __( 'Fix a problem', 'noga-ufiber-guide' ), 'replace' => __( 'Replace XEBEC', 'noga-ufiber-guide' ),
+									'learn' => __( 'Learn', 'noga-ufiber-guide' ), 'products' => __( 'Products', 'noga-ufiber-guide' ),
+								);
+								foreach ( $labels as $k => $l ) {
+									echo '<option value="' . esc_attr( $k ) . '"' . selected( $o['tab'], $k, false ) . '>' . esc_html( $l ) . '</option>';
+								}
+								?>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="nufg_units"><?php esc_html_e( 'Units', 'noga-ufiber-guide' ); ?></label></th>
+						<td>
+							<select id="nufg_units" name="<?php echo esc_attr( $name ); ?>[units]">
+								<option value="mm" <?php selected( $o['units'], 'mm' ); ?>>mm</option>
+								<option value="inch" <?php selected( $o['units'], 'inch' ); ?>><?php esc_html_e( 'inch', 'noga-ufiber-guide' ); ?></option>
+							</select>
+							<p class="description"><?php esc_html_e( 'Visitors can switch units themselves inside the guide.', 'noga-ufiber-guide' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Logo bar', 'noga-ufiber-guide' ); ?></th>
+						<td><label><input type="checkbox" name="<?php echo esc_attr( $name ); ?>[brand]" value="1" <?php checked( $o['brand'] ); ?>> <?php esc_html_e( 'Show the NOGA MT logo at the top of the guide', 'noga-ufiber-guide' ); ?></label></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="nufg_off"><?php esc_html_e( 'Scroll offset', 'noga-ufiber-guide' ); ?></label></th>
+						<td>
+							<input id="nufg_off" type="number" min="0" max="400" class="small-text" name="<?php echo esc_attr( $name ); ?>[scroll_off]" value="<?php echo esc_attr( $o['scroll_off'] ); ?>"> px
+							<p class="description"><?php esc_html_e( 'Height of your sticky site header, so the guide is not hidden underneath it after opening a new section.', 'noga-ufiber-guide' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'Updates', 'noga-ufiber-guide' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Installed version', 'noga-ufiber-guide' ); ?></th>
+						<td>
+							<strong><?php echo esc_html( NUFG_VERSION ); ?></strong>
+							<?php if ( $avail ) : ?>
+								&nbsp;<span style="color:#b32d2e">
+									<?php
+									/* translators: %s: version */
+									printf( esc_html__( 'Version %s is available.', 'noga-ufiber-guide' ), esc_html( $avail ) );
+									?>
+									<a href="<?php echo esc_url( admin_url( 'plugins.php' ) ); ?>"><?php esc_html_e( 'Update on the Plugins screen', 'noga-ufiber-guide' ); ?></a>
+								</span>
+							<?php elseif ( $active && $last ) : ?>
+								&nbsp;<span style="color:#1a7f37"><?php esc_html_e( 'Up to date.', 'noga-ufiber-guide' ); ?></span>
+								<span class="description"><?php
+									/* translators: %s: time */
+									printf( esc_html__( 'Last checked %s ago.', 'noga-ufiber-guide' ), esc_html( human_time_diff( $last ) ) );
+								?></span>
+							<?php elseif ( ! $active ) : ?>
+								&nbsp;<span class="description"><?php esc_html_e( 'No update source set. Choose one below to receive updates.', 'noga-ufiber-guide' ); ?></span>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Update source', 'noga-ufiber-guide' ); ?></th>
+						<td>
+							<fieldset>
+								<label><input type="radio" name="<?php echo esc_attr( $name ); ?>[update_mode]" value="json" <?php checked( $o['update_mode'], 'json' ); ?>> <?php esc_html_e( 'Update manifest (update.json on your server)', 'noga-ufiber-guide' ); ?></label><br>
+								<input type="url" class="regular-text code" name="<?php echo esc_attr( $name ); ?>[update_url]" value="<?php echo esc_attr( $o['update_url'] ); ?>" placeholder="https://www.example.com/updates/noga-ufiber-guide/update.json" style="margin:4px 0 12px 24px;width:min(520px,90%)"><br>
+								<label><input type="radio" name="<?php echo esc_attr( $name ); ?>[update_mode]" value="github" <?php checked( $o['update_mode'], 'github' ); ?>> <?php esc_html_e( 'GitHub releases', 'noga-ufiber-guide' ); ?></label><br>
+								<input type="text" class="regular-text code" name="<?php echo esc_attr( $name ); ?>[github_repo]" value="<?php echo esc_attr( $o['github_repo'] ); ?>" placeholder="owner/repository" style="margin:4px 0 6px 24px"><br>
+								<input type="password" class="regular-text code" autocomplete="new-password" name="<?php echo esc_attr( $name ); ?>[github_token]" value="" placeholder="<?php echo $o['github_token'] ? esc_attr__( 'Token saved – leave empty to keep, type - to remove', 'noga-ufiber-guide' ) : esc_attr__( 'Access token (private repositories only)', 'noga-ufiber-guide' ); ?>" style="margin:0 0 4px 24px">
+							</fieldset>
+							<?php if ( $src ) : ?>
+								<p class="description"><?php
+									/* translators: %s: URL */
+									printf( esc_html__( 'Currently checking: %s', 'noga-ufiber-guide' ), '<code>' . esc_html( $src['url'] ) . '</code>' );
+								?></p>
+							<?php endif; ?>
+							<p class="description"><?php esc_html_e( 'WordPress checks twice a day. When a newer version exists it appears under Dashboard → Updates and Plugins, where you can also switch on automatic updates for this plugin.', 'noga-ufiber-guide' ); ?></p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button(); ?>
+			</form>
+
+			<?php if ( $active ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="nufg_check_updates">
+					<?php wp_nonce_field( 'nufg_check_updates' ); ?>
+					<?php submit_button( __( 'Check for updates now', 'noga-ufiber-guide' ), 'secondary', 'submit', false ); ?>
+				</form>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+}
