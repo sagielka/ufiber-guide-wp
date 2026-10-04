@@ -1,23 +1,29 @@
-# Publishing a new version of the plugin.
+# Publishing the plugin.
 #
-# Two ways in:
-#   1. Actions tab -> "Build plugin release" -> "Run workflow" -> type the version.
-#      GitHub bumps the version in the repository, commits it, tags it, builds the
-#      zip and publishes the release. Nothing to edit, nothing to upload.
-#   2. Push a tag like v1.1.9 yourself. The version in the plugin header must already
-#      match, or this stops rather than publishing a release no site can see.
+# Three ways in, in order of least effort:
+#
+#   1. AUTOMATIC — push a commit to main that changes the version in
+#      noga-ufiber-guide.php. A release is built and published on its own.
+#      Nothing to click. If the version is unchanged, nothing happens.
+#
+#   2. Actions tab -> "Build plugin release" -> "Run workflow" -> type a version.
+#      Use this to publish a version without editing any file.
+#
+#   3. Push a tag like v1.1.14 yourself. The plugin header must already match.
 name: Build plugin release
 on:
+  push:
+    branches: [main]
+    paths: ['noga-ufiber-guide.php']
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       version:
-        description: 'New version, e.g. 1.1.9 (must be higher than the last one)'
+        description: 'New version, e.g. 1.1.14 (must be higher than the last one)'
         required: true
       changelog:
         description: 'One line describing what changed (optional)'
         required: false
-  push:
-    tags: ['v*']
 
 permissions:
   contents: write
@@ -36,51 +42,54 @@ jobs:
       - name: Work out the version
         id: v
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            V="${{ inputs.version }}"
-          else
-            V="${GITHUB_REF_NAME}"
-          fi
+          case "${{ github.event_name }}" in
+            workflow_dispatch) V="${{ inputs.version }}" ;;
+            *) if [ "${GITHUB_REF_TYPE}" = "tag" ]; then V="${GITHUB_REF_NAME}";
+               else V=$(grep -m1 -oP 'Version:\s*\K[0-9.]+' noga-ufiber-guide.php); fi ;;
+          esac
           V="${V#v}"
           echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::Version must look like 1.2.3, got '$V'"; exit 1; }
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "tag=v$V"    >> "$GITHUB_OUTPUT"
 
-      - name: Refuse to overwrite a version that already exists
-        if: github.event_name == 'workflow_dispatch'
+      - name: Skip if this version was already released
+        id: gate
         run: |
-          if git rev-parse "refs/tags/${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then
-            echo "::error::${{ steps.v.outputs.tag }} already exists. Use a higher version."
-            exit 1
+          if git rev-parse "refs/tags/${{ steps.v.outputs.tag }}" >/dev/null 2>&1 && [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "${{ steps.v.outputs.tag }} already exists — nothing to do."
+            echo "go=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build the zip (this also stamps the version into the source)
+        if: steps.gate.outputs.go == 'yes'
         run: |
           python3 tools/build_release.py --version "${{ steps.v.outputs.version }}" \
             ${{ inputs.changelog && format('--changelog "{0}"', inputs.changelog) || '' }}
 
       - name: Check the tag matches the plugin header
-        if: github.event_name == 'push'
+        if: steps.gate.outputs.go == 'yes' && github.ref_type == 'tag'
         run: |
           SRC=$(grep -m1 -oP 'Version:\s*\K[0-9.]+' noga-ufiber-guide.php)
-          echo "tag ${{ steps.v.outputs.version }} | plugin header $SRC"
           if [ "$SRC" != "${{ steps.v.outputs.version }}" ]; then
             echo "::error::The tag does not match the version in noga-ufiber-guide.php ($SRC). Commit the bump, then tag."
             exit 1
           fi
 
-      - name: Commit the version bump and tag it
-        if: github.event_name == 'workflow_dispatch'
+      - name: Commit any stamped files and tag
+        if: steps.gate.outputs.go == 'yes' && github.ref_type != 'tag'
         run: |
           git config user.name  "UFIBER release"
           git config user.email "noreply@noga.com"
           git add -A
           git diff --cached --quiet || git commit -m "UFIBER Guide ${{ steps.v.outputs.version }}"
           git tag "${{ steps.v.outputs.tag }}"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:main
           git push origin "${{ steps.v.outputs.tag }}"
 
       - name: Publish the release
+        if: steps.gate.outputs.go == 'yes'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.v.outputs.tag }}
