@@ -1,0 +1,23 @@
+# Push a tag like v1.1.0 and this builds noga-ufiber-guide-1.1.0.zip and attaches it to a GitHub release.
+# Sites set to "GitHub releases" under Settings -> UFIBER Guide pick it up automatically.
+name: Build plugin release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Build the zip (version taken from the tag)
+        run: python3 build_release.py --version "${GITHUB_REF_NAME#v}"
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/noga-ufiber-guide-*.zip
+          generate_release_notes: true
