@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.21 – 2026-10-04
+- Releases are now published automatically when the version changes on main.
+
 ## 1.1.20 – 2026-10-04
 - Carries the app changes from 1.1.18 and 1.1.19: the upright ceramic disc photo and fibers that follow the selected grit.
 
