@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.10 – 2026-10-04
+- Fixed: the offline cache name was not being updated on release, so an installed copy could keep serving the previous build.
+
+## 1.1.9 – 2026-10-04
+- Releases can now be published from the Actions tab with nothing to edit or upload.
+
 ## 1.1.8 – 2026-10-04
 - Products page now shows the NOGA MT application photos and the catalogue grit scale.
 - "Copy link to this setup" shares a recommendation; the link reopens it, on the site or standalone.
