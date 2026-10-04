@@ -1109,7 +1109,17 @@ function finishDisc(R, st, grit, mat, mode, machine, maxRpm) {
     { t: `Why #${grit}`, d: 'Discs come in #150–#1000. ' + gritWhy(st, grit, mode) },
     { t: 'Why these parameters', d: 'From NOGA\'s disc table: start at the low end of feed and engagement, keep 6,000–8,000 RPM.' },
   ];
-  R.watch = ['Max 9,000 RPM — a broken disc ejects fragments. Guard the machine and wear eye protection.', 'No air tools; use a rigid electric spindle.', 'Collect abrasive dust so it doesn\'t reach guideways.'];
+  R.watch = [
+      'Max 9,000 RPM, and never above the lowest rating of disc, adapter, spindle or machine. A broken disc ejects fragments.',
+      'Keep the enclosure or guards closed, and wear eye protection with side shields.',
+      'No air tools. Use a rigid, correctly guarded electric spindle or rotary tool.',
+      'Inspect the disc, adapter, clamping screw and washer before every use; do not run a cracked, chipped or deformed part.',
+      'Check it runs true before touching the workpiece. Stop at once on vibration, overheating or unusual noise.',
+      'Light, controlled contact. Do not force, jam or side-load the disc.',
+      'Use dust extraction or a dust collector: abrasive powder reaches guideways, bearings and seals and wears them. Do not blow it deeper in with compressed air.',
+      'Dress or reshape the disc only with a diamond dressing tool, then re-check mounting and true running.',
+      'Stop the spindle completely before touching, adjusting or changing the disc.',
+    ];
   R.alts.push({ label: 'Point brush', note: 'For groove bottoms where a brush tip is enough.', ov: { family: 'point', grit, dia: 2 } });
   R.diagram = 'disc';
   return finalize(R, st);
@@ -1483,7 +1493,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.1.21';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.1.22';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2174,6 +2184,7 @@ const LEARN = [
   { t: 'How to maximize tool life', ic: GLYPH.fix || '', b: () => `<ul><li>Stay at or below the catalogue depth (0.5 mm deburring).</li><li>Use the fastest feed that still removes the burr.</li><li>Use coolant — wet machining improves life and finish.</li><li>Never let the side of the brush rub a wall or step.</li><li>Reset projection as it wears (max 10 mm from the sleeve).</li><li>For uneven or long runs, a floating damper keeps pressure constant.</li><li>Clean the brush: rinse and blow off sludge.</li></ul>` },
   { t: 'When to use a floating damper', ic: GLYPH.robot, b: () => `<p>A floating damper holds the brush on a spring so contact pressure stays constant.</p><ul><li><b>Robots</b> — path accuracy is lower than a machine tool.</li><li><b>Cast or uneven surfaces</b>, runout on gears and rings.</li><li><b>Long production runs</b> — it absorbs wear so you don't keep re-offsetting.</li></ul><p>BT30/BT40 types: 5 mm float, about 50 N, max 6,000 RPM. End types (Ø6 / Ø10 shank): 4 mm float, about 20 N, max 12,000 RPM.</p>` },
   { t: 'Point and End brush contact', ic: GLYPH.small, b: () => `<ul><li><b>Tip contact (axial)</b> — recess bottoms, small flat areas.</li><li><b>Side contact (radial)</b> — groove walls and bore walls, with light lateral pressure.</li><li><b>Angled contact</b> — corners and transitions; the 45° end brush reaches chamfers and recesses.</li><li><b>Avoid</b> forcing the fibers sideways against an edge: it bends them, lowers stability and wears the brush faster.</li><li>Grip the shank at least 20 mm, match the collet to the shank, keep runout low and never dwell at one point.</li><li>As the fibers wear and shorten, stiffness changes: re-check the process, reduce engagement, raise feed or go one grit finer. Clean off debris and coolant residue, and inspect tip, shank and runout before production.</li><li>Hand-held: start near 1,000 RPM and go up to 3,000 RPM at most. Electric drives only, no air tools.</li></ul>` },
+  { t: 'Ceramic fiber disc', ic: GLYPH.groove, b: () => `<ul><li>0.8 mm thick radial disc, Ø13–30 mm, six grits #150–#1000. It cuts with its outer rim, which is what gets into grooves, slots, rib bottoms and side walls.</li><li><b>9,000 RPM maximum</b>; NOGA recommends running 6,000–8,000. Never exceed the lowest rating of the disc, adapter, spindle or machine.</li><li>Mount on clamping shank UF7030 (Ø3) or UF7023 (Ø2.35) with its screw and washer. Electric spindle only — <b>not air tools</b>.</li><li>Inspect the disc and mounting before every use, and confirm it runs true before contact. Stop immediately on vibration, overheating or odd noise.</li><li>A broken disc throws fragments: keep guards or the enclosure closed and wear eye protection.</li><li>Grinding dust is abrasive and reaches guideways, bearings and seals. Extract it; do not blow it deeper in with compressed air.</li><li>Dress it only with a diamond dressing tool, then re-check mounting and run-out.</li></ul>` },
   { t: 'Ceramic diamond stones', ic: GLYPH.hard, b: () => `<ul><li>Diamond abrasive in a ceramic-fiber body for tungsten carbide, hardened steel, ceramics, glass and EDM surfaces. Ø1–3 mm, #200 black, #400 silver, #600 forest green, #800 green.</li><li>Up to <b>60,000 RPM</b>, but about <b>30,000 RPM</b> or less is enough for most jobs.</li><li>Light contact: aim for about <b>1 N</b>, never above <b>5 N</b>.</li><li>Test-run first and stop on any runout or vibration. NOGA prescribes no feed or depth: tune on the part.</li><li>The grit number is the diamond grain size. The bond is epoxy resin; a harder bond is not offered. Stones can be dressed to custom shapes and work with pneumatic tools at controlled speed.</li></ul>` },
   { t: 'When UFIBER is not the right tool', ic: I.warn, b: () => `<ul><li><b>Thick burrs</b> — more than ~0.2 mm at the root, or a fingernail can't bend them. Cut them off first (chamfer pass or NOGA UBURR).</li><li><b>Sharp edge required</b> — brushing always leaves a small radius (roughly 0.1–0.3 mm).</li><li><b>Mirror finish</b> — brushes reach fine Ra but leave a directional pattern.</li><li><b>Off-center or steeply angled cross holes</b> — the brush can't reach evenly.</li><li><b>No rotating spindle</b> — a lathe without live tooling can't drive the brush.</li><li><b>Carbide, ceramics, glass, >55 HRC finishing</b> — use Ceramic Diamond Stones.</li><li><b>Air tools</b> for end and point brushes — use an electric drive like the E-Pack.</li></ul>` },
 ];
