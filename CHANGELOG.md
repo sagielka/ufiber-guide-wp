@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.24 – 2026-10-04
+- Corrected the finish advice: a faster feed does not give a finer finish. NOGA's polishing feed is below the deburring feed in every material row.
+- Learn gained the four ways to turn the process up or down, with the limits that cap each one.
+
 ## 1.1.23 – 2026-10-04
 - Fixed: the "Right / Too deep" captions on the engagement diagram ran past the edge and were cut off. They now sit above each illustration and fit.
 
