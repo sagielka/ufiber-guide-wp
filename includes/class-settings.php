@@ -173,7 +173,15 @@ class NUFG_Settings {
 									/* translators: %s: version */
 									printf( esc_html__( 'Version %s is available.', 'noga-ufiber-guide' ), esc_html( $avail ) );
 									?>
-									<a href="<?php echo esc_url( admin_url( 'plugins.php' ) ); ?>"><?php esc_html_e( 'Update on the Plugins screen', 'noga-ufiber-guide' ); ?></a>
+									<?php
+								$nufg_file = plugin_basename( NUFG_FILE );
+								$nufg_url  = wp_nonce_url(
+									self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( $nufg_file ) ),
+									'upgrade-plugin_' . $nufg_file
+								);
+								?>
+								<a class="button button-primary" href="<?php echo esc_url( $nufg_url ); ?>"><?php esc_html_e( 'Install it now', 'noga-ufiber-guide' ); ?></a>
+								<span class="description"><?php esc_html_e( 'or update it from the Plugins screen', 'noga-ufiber-guide' ); ?></span>
 								</span>
 							<?php elseif ( $active && $last ) : ?>
 								&nbsp;<span style="color:#1a7f37"><?php esc_html_e( 'Up to date.', 'noga-ufiber-guide' ); ?></span>

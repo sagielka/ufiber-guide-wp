@@ -61,6 +61,26 @@ def main():
     if not (src / (SLUG + ".php")).exists():
         die("plugin source not found at %s" % src)
 
+    # Stamp the version into the source itself. The update checker reads the plugin header
+    # from the tagged commit in the repository, so a source that lags behind the tag makes
+    # the release invisible to every site. Commit this change, then tag.
+    def stamp_source():
+        f = src / "noga-ufiber-guide.php"
+        if f.exists():
+            t = f.read_text(encoding="utf-8")
+            t = re.sub(r"^(\s\*\s*Version:\s*).+$", r"\g<1>" + a.version, t, count=1, flags=re.M)
+            t = re.sub(r"(define\(\s*'NUFG_VERSION',\s*')[^']+(')", r"\g<1>" + a.version + r"\g<2>", t, count=1)
+            f.write_text(t, encoding="utf-8")
+        f = src / "readme.txt"
+        if f.exists():
+            t = f.read_text(encoding="utf-8")
+            f.write_text(re.sub(r"^Stable tag:.*$", "Stable tag: " + a.version, t, count=1, flags=re.M), encoding="utf-8")
+        f = src / "assets" / "app" / "ufiber-guide.html"
+        if f.exists() and not a.app:
+            t = f.read_text(encoding="utf-8")
+            f.write_text(re.sub(r"(const APP_VERSION = ')[^']*(')", r"\g<1>" + a.version + r"\g<2>", t, count=1), encoding="utf-8")
+    stamp_source()
+
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp) / SLUG
@@ -87,6 +107,12 @@ def main():
                 app_file.write_text(new, encoding="utf-8")
             else:
                 print("warning: APP_VERSION not found in the app; its footer will show the old version")
+
+        # the service worker cache name must change with the version, or an installed
+        # copy would keep serving the old guide offline
+        sw = work / "assets" / "app" / "sw.js"
+        if sw.exists():
+            sw.write_text(sw.read_text(encoding="utf-8").replace("__VERSION__", a.version), encoding="utf-8")
 
         # 2. version numbers
         main_php = work / (SLUG + ".php")
