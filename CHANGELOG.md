@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.1.20 – 2026-10-04
+- Carries the app changes from 1.1.18 and 1.1.19: the upright ceramic disc photo and fibers that follow the selected grit.
+
+## 1.1.19 – 2026-10-04
+- On the Products page the photo now shows the fibers in the colour of the grit you pick, so the picture matches the item number.
+
+## 1.1.18 – 2026-10-04
+- Ceramic fiber disc photo restored to its upright orientation; the sleeve is presented at a gentler angle.
+
+## 1.1.17 – 2026-10-04
+- Grit swatches now use the real fiber colors rather than the catalogue colour names, so #800 reads teal, #1000 cream and #2000 khaki as the product actually looks.
+- Products page shows the official grit progression graphic, and the sleeve and disc photos are angled to match the other product shots.
+
+## 1.1.16 – 2026-10-04
+- Photos added for the face sleeve and the BT-type floating damper. Every card on the Products page now shows a real NOGA MT product photo.
+
+## 1.1.15 – 2026-10-04
+- Official NOGA MT photos for the 90° angled end brush, ceramic fiber disc, ceramic diamond stone and the Portable E-Pack. Every product card now shows a real photo.
+
+## 1.1.14 – 2026-10-04
+- The item decoder now recognises sleeves, shanks, disc clamping shanks, floating dampers and the E-Pack, and no longer reads a disc shank (UF7030) as a disc. Codes outside the disc grit range are rejected.
+
+## 1.1.13 – 2026-10-04
+- Products page now shows the correct isolated product photo for each family, with nothing cropped; the two end-brush cards no longer share one picture. Grit scale caption no longer clipped.
+
+## 1.1.12 – 2026-10-04
+- Fixed: the ceramic fiber disc could be offered in grits finer than #1000, which NOGA does not make. It now stays within #150–#1000.
+
 ## 1.1.11 – 2026-10-04
 - The offline cache name is stamped with the release version again, so an installed copy no longer keeps serving an older build.
 
