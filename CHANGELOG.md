@@ -1,10 +1,7 @@
 # Changelog
 
-## 1.1.21 – 2026-10-04
-- Releases are now published automatically when the version changes on main.
-
-## 1.1.20 – 2026-10-04
-- Carries the app changes from 1.1.18 and 1.1.19: the upright ceramic disc photo and fibers that follow the selected grit.
+## 1.1.22 – 2026-10-04
+- Ceramic fiber disc: the safety and maintenance guidance from NOGA MT is now carried in the app — guarding, inspection before use, run-out check, dust extraction to protect guideways, and dressing only with a diamond dressing tool. Learn gained a disc section.
 
 ## 1.1.19 – 2026-10-04
 - On the Products page the photo now shows the fibers in the colour of the grit you pick, so the picture matches the item number.
