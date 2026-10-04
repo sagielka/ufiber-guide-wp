@@ -33,6 +33,25 @@ class NUFG_Updater {
 				}
 				// Use the zip attached to the release (built by the release kit) so the folder name is correct.
 				$checker->getVcsApi()->enableReleaseAssets();
+
+				// The library reads the plugin header from the tagged commit and lets it win.
+				// If that header was never bumped, a real release stays invisible. Trust the
+				// higher of the two, so a forgotten commit cannot silently stop updates.
+				$checker->addResultFilter(
+					function ( $info, $response = null ) {
+						if ( ! $info || empty( $info->version ) ) {
+							return $info;
+						}
+						$tag = isset( $info->slug ) ? null : null;
+						if ( ! empty( $info->download_url ) && preg_match( '#/(?:download|tags?)/v?([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)#', $info->download_url, $m ) ) {
+							$tag = $m[1];
+						}
+						if ( $tag && version_compare( $tag, $info->version, '>' ) ) {
+							$info->version = $tag;
+						}
+						return $info;
+					}
+				);
 			}
 			self::$checker = $checker;
 		} catch ( \Throwable $e ) {
