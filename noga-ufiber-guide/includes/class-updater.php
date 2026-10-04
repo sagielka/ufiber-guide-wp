@@ -126,10 +126,8 @@ class NUFG_Updater {
 		$update = self::$checker->checkForUpdates();
 		remove_action( 'puc_api_error', $collect, 10 );
 
-		if ( $errors ) {
-			/* translators: %s: error text */
-			return array( 'ok' => false, 'message' => sprintf( __( 'Could not read the update source: %s', 'noga-ufiber-guide' ), $errors[0] ), 'version' => null );
-		}
+		// A release can be found even when a side request fails (GitHub returns 404 for the
+		// header file when the plugin lives in a subfolder). Report what matters: the version.
 		if ( $update && version_compare( $update->version, NUFG_VERSION, '>' ) ) {
 			return array(
 				'ok'      => true,
@@ -137,6 +135,10 @@ class NUFG_Updater {
 				'message' => sprintf( __( 'Update available: version %s.', 'noga-ufiber-guide' ), $update->version ),
 				'version' => $update->version,
 			);
+		}
+		if ( $errors && ! $update ) {
+			/* translators: %s: error text */
+			return array( 'ok' => false, 'message' => sprintf( __( 'Could not read the update source: %s', 'noga-ufiber-guide' ), $errors[0] ), 'version' => null );
 		}
 		return array( 'ok' => true, 'message' => __( 'You are running the latest version.', 'noga-ufiber-guide' ), 'version' => null );
 	}
