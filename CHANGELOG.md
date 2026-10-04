@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.23 – 2026-10-04
+- Fixed: the "Right / Too deep" captions on the engagement diagram ran past the edge and were cut off. They now sit above each illustration and fit.
+
 ## 1.1.22 – 2026-10-04
 - Ceramic fiber disc: the safety and maintenance guidance from NOGA MT is now carried in the app — guarding, inspection before use, run-out check, dust extraction to protect guideways, and dressing only with a diamond dressing tool. Learn gained a disc section.
 
