@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.11 – 2026-10-04
+- The offline cache name is stamped with the release version again, so an installed copy no longer keeps serving an older build.
+
 ## 1.1.10 – 2026-10-04
 - Fixed: the offline cache name was not being updated on release, so an installed copy could keep serving the previous build.
 
