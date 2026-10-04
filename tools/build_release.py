@@ -15,6 +15,7 @@ import argparse, datetime, hashlib, html, json, pathlib, re, shutil, sys, tempfi
 
 SLUG = "noga-ufiber-guide"
 HERE = pathlib.Path(__file__).resolve().parent
+ROOT = HERE.parent                      # the repository root *is* the plugin
 
 def die(msg):
     sys.exit("error: " + msg)
@@ -25,8 +26,8 @@ def parse_args():
     p.add_argument("--base-url", default="", help="public folder URL where the zip will be uploaded (no trailing slash). Omit for GitHub-only setups: only the zip is built")
     p.add_argument("--app", help="new ufiber-guide.html to ship (default: the one already in the plugin)")
     p.add_argument("--changelog", default="", help="one-line description of what changed (added to CHANGELOG.md)")
-    p.add_argument("--src", default=str(HERE / SLUG), help="plugin source folder")
-    p.add_argument("--out", default=str(HERE / "dist"), help="output folder")
+    p.add_argument("--src", default=str(ROOT), help="plugin source folder (defaults to the repository root)")
+    p.add_argument("--out", default=str(ROOT / "dist"), help="output folder")
     p.add_argument("--default-update-url", default="https://github.com/sagielka/ufiber-guide-wp",
                    help="update source baked into the build; defaults to the GitHub repo releases are published to. Pass \'\' to build without one.")
     p.add_argument("--tested", default="6.8", help="WordPress version tested up to")
@@ -63,7 +64,9 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp) / SLUG
-        shutil.copytree(src, work, ignore=shutil.ignore_patterns(".DS_Store", "*.zip", "__pycache__", ".git*"))
+        shutil.copytree(src, work, ignore=shutil.ignore_patterns(
+            ".DS_Store", "*.zip", "__pycache__", ".git", ".github", ".gitignore",
+            "tools", "dist", "README.md", "CHANGELOG.md"))
 
         # 1. new app
         if a.app:
@@ -95,7 +98,7 @@ def main():
         main_php.write_text(t, encoding="utf-8")
 
         # 3. changelog (kept in CHANGELOG.md next to this script and in readme.txt)
-        cl_path = HERE / "CHANGELOG.md"
+        cl_path = ROOT / "CHANGELOG.md"
         cl = cl_path.read_text(encoding="utf-8") if cl_path.exists() else "# Changelog\n"
         today = datetime.date.today().isoformat()
         if a.changelog and ("## %s " % a.version) not in cl and ("## %s\n" % a.version) not in cl:

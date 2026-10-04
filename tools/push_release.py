@@ -18,6 +18,7 @@ Every step reports what it did, and it stops at the first failure.
 import argparse, json, os, pathlib, shutil, subprocess, sys, tempfile, urllib.error, urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
+ROOT = HERE.parent
 OWNER, REPO = "sagielka", "ufiber-guide-wp"
 API = "https://api.github.com"
 
@@ -67,7 +68,7 @@ def main():
     if code == 200: sys.exit(f"   release {tag} already exists — use a higher version number")
 
     # 2. build the zip first, so nothing is pushed if the build fails
-    dist = HERE / "dist"
+    dist = ROOT / "dist"
     shutil.rmtree(dist, ignore_errors=True)
     print(f"2. building {tag} …")
     run([sys.executable, str(HERE / "build_release.py"), "--version", a.version, "--out", str(dist)])
@@ -80,32 +81,8 @@ def main():
         print("dry run: access and build are fine, nothing published")
         return
 
-    # 3. push the kit
-    with tempfile.TemporaryDirectory() as tmp:
-        work = pathlib.Path(tmp) / "repo"
-        remote = f"https://x-access-token:{token}@github.com/{OWNER}/{REPO}.git"
-        print("3. pushing the kit to main …")
-        run(["git", "clone", "--depth", "1", remote, str(work)], token=token)
-        for item in HERE.iterdir():
-            if item.name in {"dist", "__pycache__", ".git", "push_release.py"}: continue
-            dest = work / item.name
-            if item.is_dir():
-                shutil.rmtree(dest, ignore_errors=True); shutil.copytree(item, dest)
-            else:
-                shutil.copyfile(item, dest)
-        run(["git", "config", "user.email", "noreply@noga.com"], cwd=work)
-        run(["git", "config", "user.name", "UFIBER release"], cwd=work)
-        run(["git", "add", "-A"], cwd=work)
-        status = subprocess.run(["git", "status", "--porcelain"], cwd=work, capture_output=True, text=True).stdout
-        if status.strip():
-            run(["git", "commit", "-m", f"UFIBER Guide {a.version}"], cwd=work)
-            run(["git", "push", "origin", "HEAD:main"], cwd=work, token=token)
-            print(f"   pushed {len(status.strip().splitlines())} changed files")
-        else:
-            print("   nothing changed in the kit, skipping the commit")
-
-    # 4. release + asset
-    print(f"4. publishing release {tag} …")
+    # 3. release + asset
+    print(f"3. publishing release {tag} …")
     notes = a.notes or f"UFIBER Guide {a.version}. Install or update through WordPress."
     code, rel = api(f"/repos/{OWNER}/{REPO}/releases", token, "POST",
                     {"tag_name": tag, "name": a.version, "body": notes,
