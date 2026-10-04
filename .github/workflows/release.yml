@@ -1,0 +1,40 @@
+# Push a tag like v1.1.8 and GitHub builds noga-ufiber-guide-1.1.8.zip and attaches it
+# to a release. Sites running the plugin then offer that version automatically.
+#
+# The version in the tag must match the version committed in noga-ufiber-guide.php —
+# the update checker reads the header from the tagged commit, so the build fails fast
+# here rather than publishing a release no site can see.
+name: Build plugin release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check the tag matches the version in the plugin
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          SRC=$(grep -m1 -oP "Version:\s*\K[0-9.]+" noga-ufiber-guide.php)
+          echo "tag $TAG | plugin header $SRC"
+          if [ "$TAG" != "$SRC" ]; then
+            echo "::error::Tag v$TAG does not match the plugin header ($SRC). Commit the version bump, then tag."
+            exit 1
+          fi
+
+      - name: Build the zip
+        run: python3 tools/build_release.py --version "${GITHUB_REF_NAME#v}"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/noga-ufiber-guide-*.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
