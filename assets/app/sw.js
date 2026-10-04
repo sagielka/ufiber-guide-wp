@@ -2,7 +2,7 @@
    The guide is one self-contained file, so caching it is enough to work
    with no connection at all — which is the point on a shop floor.
    The cache name carries the build, so a new version replaces the old one. */
-const BUILD = 'ufiber-1.1.8';
+const BUILD = 'ufiber-__VERSION__';
 const FILES = ['./ufiber-guide.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

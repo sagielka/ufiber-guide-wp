@@ -112,7 +112,9 @@ def main():
         # copy would keep serving the old guide offline
         sw = work / "assets" / "app" / "sw.js"
         if sw.exists():
-            sw.write_text(sw.read_text(encoding="utf-8").replace("__VERSION__", a.version), encoding="utf-8")
+            txt = sw.read_text(encoding="utf-8")
+            txt = re.sub(r"const BUILD = 'ufiber-[^']*';", "const BUILD = 'ufiber-%s';" % a.version, txt, count=1)
+            sw.write_text(txt, encoding="utf-8")
 
         # 2. version numbers
         main_php = work / (SLUG + ".php")
