@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.28 – 2026-10-05
+- Reverts 1.1.27. The app content is identical to 1.1.26; the case-study additions have been removed.
+
 ## 1.1.27 – 2026-10-04
 - Case matches now show the grit one step coarser and one step finer, with the parameter change each needs, from the NOGA test records.
 
