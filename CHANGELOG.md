@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.27 – 2026-10-04
+- Case matches now show the grit one step coarser and one step finer, with the parameter change each needs, from the NOGA test records.
+
 ## 1.1.26 – 2026-10-04
 - Learn gained a section on reducing burr size at source: cutter condition, edge angle, cutter style, rotation direction, order of operations, and the effect of feed and depth.
 
