@@ -4,7 +4,7 @@ Tags: elementor, widget, deburring, ceramic fiber, tool selector
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 
 UFIBER tool selector, speeds & feeds, troubleshooter, XEBEC converter and product builder as an Elementor widget and shortcode.

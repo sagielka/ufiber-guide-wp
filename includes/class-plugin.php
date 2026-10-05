@@ -139,6 +139,7 @@ final class NUFG_Plugin {
 				// Both land in this site's own database; nothing goes anywhere else.
 				'api'   => rest_url( 'nufg/v1/' ),
 				'usage' => NUFG_Usage::enabled() ? 1 : 0,
+				'k'     => NUFG_Usage::token(),
 			),
 			NUFG_URL . 'assets/app/ufiber-guide.html'
 		);
