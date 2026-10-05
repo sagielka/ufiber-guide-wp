@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 – 2026-10-05
+- Usage rows are deleted automatically after one year, by a daily scheduled job. The admin screen says so, so export anything worth keeping.
+- The write endpoints now require a token this site issues for its own embedded guide, and are rate limited per visitor: 120 usage events and 10 shared applications an hour.
+
 ## 1.2.0 – 2026-10-05
 - Usage data, stored in your own site and nowhere else. Settings → UFIBER usage.
 - Structured usage events (task, material, tool family, item number) are written only when you switch collection on. They never contain anything a visitor typed.

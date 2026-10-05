@@ -57,13 +57,56 @@ final class NUFG_Usage {
 		update_option( self::OPT_DB, self::DB_VERSION );
 	}
 
+	const RETENTION_DAYS = 365;
+
+	/** Rows older than a year are deleted. Shared applications are kept too —
+	 *  if they are worth keeping, export them before they age out. */
+	public static function purge() {
+		global $wpdb;
+		$cut = gmdate( 'Y-m-d H:i:s', time() - self::RETENTION_DAYS * DAY_IN_SECONDS );
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . self::table() . ' WHERE created_at < %s', $cut ) );
+	}
+
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
+		add_action( 'nufg_usage_purge', array( __CLASS__, 'purge' ) );
+		if ( ! wp_next_scheduled( 'nufg_usage_purge' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'nufg_usage_purge' );
+		}
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ), 20 );
 	}
 
 	public static function enabled() {
 		return (bool) get_option( 'nufg_usage_enabled', 0 );
+	}
+
+	/** A token this site issues for its own embedded guide. Not a secret — it only
+	 *  proves the request came from a page this site rendered, which stops casual
+	 *  injection of made-up rows. */
+	public static function token() {
+		return wp_hash( 'nufg-usage|' . gmdate( 'Y-m-d' ) . '|' . wp_salt( 'nonce' ) );
+	}
+
+	private static function token_ok( $req ) {
+		$t = (string) $req->get_param( 'k' );
+		if ( hash_equals( self::token(), $t ) ) {
+			return true;
+		}
+		// a page opened just before midnight is still answered after it
+		$y = wp_hash( 'nufg-usage|' . gmdate( 'Y-m-d', time() - DAY_IN_SECONDS ) . '|' . wp_salt( 'nonce' ) );
+		return hash_equals( $y, $t );
+	}
+
+	/** Caps one visitor to a sane number of writes per hour. */
+	private static function rate_ok( $bucket, $limit ) {
+		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '0';
+		$key = 'nufg_rl_' . $bucket . '_' . md5( $ip );
+		$n   = (int) get_transient( $key );
+		if ( $n >= $limit ) {
+			return false;
+		}
+		set_transient( $key, $n + 1, HOUR_IN_SECONDS );
+		return true;
 	}
 
 	public static function routes() {
@@ -93,6 +136,9 @@ final class NUFG_Usage {
 		if ( ! self::enabled() ) {
 			return new WP_REST_Response( array( 'ok' => false, 'reason' => 'disabled' ), 200 );
 		}
+		if ( ! self::token_ok( $req ) || ! self::rate_ok( 'u', 120 ) ) {
+			return new WP_REST_Response( array( 'ok' => false, 'reason' => 'rejected' ), 200 );
+		}
 		global $wpdb;
 		$wpdb->insert( self::table(), array(
 			'created_at' => current_time( 'mysql' ),
@@ -114,6 +160,9 @@ final class NUFG_Usage {
 	/** An application somebody chose to send, with the text they approved. */
 	public static function rest_share( $req ) {
 		global $wpdb;
+		if ( ! self::token_ok( $req ) || ! self::rate_ok( 's', 10 ) ) {
+			return new WP_REST_Response( array( 'ok' => false, 'reason' => 'rejected' ), 429 );
+		}
 		$body = $req->get_param( 'body' );
 		$body = is_string( $body ) ? substr( wp_strip_all_tags( $body ), 0, 4000 ) : '';
 		if ( '' === trim( $body ) ) {
@@ -176,6 +225,7 @@ final class NUFG_Usage {
 			<?php endif; ?>
 			</p>
 
+			<p class="description">Rows are deleted automatically after one year. Export anything worth keeping.</p>
 			<form method="post"><?php wp_nonce_field( 'nufg_usage' ); ?>
 				<p><button class="button" name="nufg_usage_export" value="1">Download everything as CSV</button></p>
 			</form>
