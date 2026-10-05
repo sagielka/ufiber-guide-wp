@@ -874,6 +874,12 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   // RPM
   const row = sfRowOf(st); R.sfRow = row.id;
   const SFp = sfSurface({ row, dia, grit, mode });
+  // a brush wider than the surface covers it in one path and wears evenly
+  const face = Number(st.dims?.width) || 0;
+  if (face > 0) {
+    const want = [Math.round(face * 1.5), Math.round(face * 2)];
+    if (dia < face * 1.5) R.notes.push(`A brush about ${want[0]}\u2013${want[1]} mm wide would cover a ${face} mm surface in one path. Ø${dia} will need overlapping passes, and the overlap is where uneven wear starts.`);
+  }
   R.dataChecks = SFp.checks.filter(c => !c.startsWith("NOGA's material table"));
   let [lo, hi] = SF_SURF_WIN[dia];
   let rpm = SFp.rpm;
@@ -924,6 +930,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     { t: 'Why a Surface brush', d: 'It cuts with the fiber tips, so it deburrs and polishes faces and edges with controlled depth on a CNC or robot — repeatable, unlike hand tools.' },
     { t: `Why Ø${dia}`, d: `${widthTxt}. A brush 1.5–2× the width meets the edge squarely for the most cutting power and fewest passes.` },
     { t: `Why #${grit} (${q.color.toLowerCase()})`, d: gritWhy(st, grit, mode) },
+    { t: 'Which way to rotate', d: 'Up-cut matters most for burrs lying along the surface: the fiber tips lift them instead of folding them flat. For burrs standing up off the top face the rotation direction makes little difference.' },
     { t: 'Why these parameters', d: `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if burrs remain.` },
   ];
   R.watch = [
@@ -970,8 +977,8 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
     `Position above the ${main ? 'Ø' + main + ' ' : ''}main bore with the spindle stopped.`,
     'Insert the brush without rotation until its tip is 5 mm past the far side of the intersection.',
     `Start rotation (${rpm.toLocaleString()} RPM, clockwise) inside the bore.`,
-    `Pull back through the intersection to 5 mm before it${cross ? ` (stroke ${stroke} mm)` : ''} — this lifts burrs instead of pressing them flat.`,
-    'Push forward through the intersection to 5 mm past the far side.',
+    `Pull back through the intersection to 5 mm before it${cross ? ` (stroke ${stroke} mm)` : ''} — pulling back keeps burrs from being laid flat against the bore wall.`,
+    'Push forward through the intersection to 5 mm past the far side — this pass takes the burrs pointing the other way.',
     'Stop the spindle completely.',
     'Switch to counter-clockwise and repeat the pull-back and push-forward strokes.',
     'Stop rotation and withdraw the brush while stationary.',
@@ -1493,7 +1500,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.1.24';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.1.25';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2186,6 +2193,14 @@ const LEARN = [
   { t: 'How to maximize tool life', ic: GLYPH.fix || '', b: () => `<ul><li>Stay at or below the catalogue depth (0.5 mm deburring).</li><li>Use the fastest feed that still removes the burr.</li><li>Use coolant — wet machining improves life and finish.</li><li>Never let the side of the brush rub a wall or step.</li><li>Reset projection as it wears (max 10 mm from the sleeve).</li><li>For uneven or long runs, a floating damper keeps pressure constant.</li><li>Clean the brush: rinse and blow off sludge.</li></ul>` },
   { t: 'When to use a floating damper', ic: GLYPH.robot, b: () => `<p>A floating damper holds the brush on a spring so contact pressure stays constant.</p><ul><li><b>Robots</b> — path accuracy is lower than a machine tool.</li><li><b>Cast or uneven surfaces</b>, runout on gears and rings.</li><li><b>Long production runs</b> — it absorbs wear so you don't keep re-offsetting.</li></ul><p>BT30/BT40 types: 5 mm float, about 50 N, max 6,000 RPM. End types (Ø6 / Ø10 shank): 4 mm float, about 20 N, max 12,000 RPM.</p>` },
   { t: 'Point and End brush contact', ic: GLYPH.small, b: () => `<ul><li><b>Tip contact (axial)</b> — recess bottoms, small flat areas.</li><li><b>Side contact (radial)</b> — groove walls and bore walls, with light lateral pressure.</li><li><b>Angled contact</b> — corners and transitions; the 45° end brush reaches chamfers and recesses.</li><li><b>Avoid</b> forcing the fibers sideways against an edge: it bends them, lowers stability and wears the brush faster.</li><li>Grip the shank at least 20 mm, match the collet to the shank, keep runout low and never dwell at one point.</li><li>As the fibers wear and shorten, stiffness changes: re-check the process, reduce engagement, raise feed or go one grit finer. Clean off debris and coolant residue, and inspect tip, shank and runout before production.</li><li>Hand-held: start near 1,000 RPM and go up to 3,000 RPM at most. Electric drives only, no air tools.</li></ul>` },
+  { t: 'Technique that makes the difference', ic: GLYPH.face || I.check, b: () => `<ul>
+    <li><b>Pick a brush wider than the surface.</b> About 1.5 to 2 times the width of the face you are working lets one path cover it. Overlapping passes with a narrow brush wear it unevenly.</li>
+    <li><b>For the same cycle time, more passes beat a slower feed.</b> If the finish is not good enough, add a pass before you slow down — each pass takes the roughness down again, and two quick passes usually beat one slow one.</li>
+    <li><b>Rotation direction matters for side burrs.</b> Up-cut lifts a burr lying along the surface; down-cut can fold it flat against the part so it survives. For burrs standing off the top face it makes little difference.</li>
+    <li><b>Feed is the coarse adjustment.</b> To keep an edge sharper or to stretch tool life, raise the feed in large steps — hundreds of mm/min at a time — staying inside the range where the burr still comes off. Speed is the fine adjustment, in 10 to 20% steps.</li>
+    <li><b>Heavy burrs come off in stages.</b> Work toward the burr root over two or three passes rather than taking it in one. One deep pass wears the brush hard and can break fibers without removing the burr.</li>
+    <li><b>A worn brush is a different tool.</b> As the fibers shorten they get stiffer: more grinding power, less ability to follow a surface. Drop the depth, and the speed if needed, rather than pressing harder.</li>
+    <li><b>Wet beats dry</b> for both finish and tool life, where the machine allows it.</li></ul>` },
   { t: 'Turning the process up or down', ic: GLYPH.gauge || I.gauge, b: () => `<p>Four directions NOGA gives for a surface brush. Change one at a time and re-cut a test part.</p>
     <div class="scroll-x"><table class="tbl"><tr><th>Goal</th><th>Feed</th><th>Speed</th><th>Depth</th><th>What you get</th></tr>
     <tr><td><b>More deburring power</b></td><td>↓ lower</td><td>↑ higher</td><td>↑ deeper</td><td>More cutting action and burr removal, at the cost of brush wear and heat.</td></tr>
@@ -3676,7 +3691,8 @@ const ANSWERS = {
         `- **Raise the speed** toward ${A.n(hi)} RPM (you are at ${A.n(p.rpm)}).\n` +
         (p.feed ? `- **Slow the feed** by about 10%, to roughly ${A.feed(Math.round(p.feed * 0.9))}.\n` : '') +
         `- **Add one pass** (now ${p.passes}).\n` +
-        (A.isCross() ? `- Make sure the stroke clears the intersection by 5 mm on **both** sides, and that you run CW then CCW.\n`
+        (A.isCross() ? `- In a bore the order matters: take the **speed to its maximum first**, in steps of about 1,000 RPM, then **add passes**. Slowing the feed helps less here than on a face.\n` +
+          `- The stroke must clear the intersection by 5 mm on **both** sides, CW then CCW: the pull-back keeps burrs off the bore wall, the push-forward takes the ones pointing the other way.\n`
           : `- **Go slightly deeper**, up to the table maximum${p.engage?.max ? ` of ${A.len(p.engage.max)}` : ''}.\n`) +
         `- If it still will not cut, step one grit coarser to **#${coarser}**.\n\n` +
         `If the burr is thick or you cannot bend it with a fingernail, no brush will remove it. Cut it first with a chamfer pass or NOGA UBURR.`,
@@ -3705,6 +3721,7 @@ const ANSWERS = {
         (p.feed ? `- Use the **fastest feed** that still removes the burr — ${A.feed(p.feed)} is your starting value.\n` : '') +
         `- Do not exceed ${A.n(p.rpmMax)} RPM for this tool.\n` +
         `- Never side-load the brush or rub it along a wall.\n` +
+        (A.isCross() ? `- In a bore, trade speed for life: drop the RPM about 10%, or raise the feed about 10%, as long as the burr still comes off.\n` : '') +
         (p.projection ? `- Keep the projection short: ${p.projection}.\n` : '') +
         `- Wet machining improves both finish and life where your machine allows it.\n` +
         `- A floating damper keeps contact constant on uneven parts and stops the brush digging in.`,
