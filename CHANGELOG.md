@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.35 – 2026-10-05
+- The stroke figure now says where it comes from: the cross hole plus 5 mm clear on each side.
+
 ## 1.1.34 – 2026-10-05
 - Clarifying questions now follow the language of the job description. A Czech e-mail signature under an English request was switching the questions to Czech while the rest stayed English.
 - A cross-hole reading no longer shows a third diameter chip that just repeats the cross hole.
