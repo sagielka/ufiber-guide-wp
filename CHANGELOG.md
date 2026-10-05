@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.25 – 2026-10-04
+- Learn gained a technique section: sizing the brush to the surface, why more passes beat a slower feed, which way to rotate, and working a heavy burr down in stages.
+- Surface jobs now say when the chosen brush is narrower than the face.
+- Cross-hole advice is specific: take the speed to maximum first, then add passes, and the two stroke directions are explained.
+
 ## 1.1.24 – 2026-10-04
 - Corrected the finish advice: a faster feed does not give a finer finish. NOGA's polishing feed is below the deburring feed in every material row.
 - Learn gained the four ways to turn the process up or down, with the limits that cap each one.
