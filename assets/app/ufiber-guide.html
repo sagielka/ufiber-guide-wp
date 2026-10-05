@@ -1523,7 +1523,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.1.35';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.2.0';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -1943,7 +1943,46 @@ function saveDims() {
 function saveMachine() { if ($('#mRpm')) APP.ws.machine.maxRpm = parseFloat($('#mRpm').value) || null; }
 
 /* ---------- result ---------- */
-function computeRec() { dedupeDims(APP.ws); APP.rec = recommend(APP.ws); APP.matches = matchCases(APP.rec, APP.ws, CASES); return APP.rec; }
+function shareText() {
+  const st = APP.ws, r = APP.rec;
+  const d = st.dims || {};
+  const dims = Object.entries(d).filter(([, v]) => v != null).map(([k, v]) => `${k} ${v} mm`).join(', ');
+  return [
+    APP.askText ? `What I described: ${APP.askText}` : '',
+    `Job: ${st.task ? (TASKS[st.task]?.name || st.task) : 'not set'}${st.material ? ' in ' + (MATERIALS[st.material]?.name || st.material) : ''}`,
+    dims ? `Sizes: ${dims}` : '',
+    r ? `The guide suggested: ${r.sku} ${r.desc || ''}` : '',
+    '', 'What actually happened (please fill in):', '- Tool used:', '- Speed / feed:', '- Result:',
+  ].filter(Boolean).join('\n');
+}
+function openShare() {
+  const pre = shareText();
+  $('#shareBox').innerHTML = `
+    <div class="panel" style="padding:14px;margin-top:6px">
+      <b>This is exactly what will be sent</b>
+      <p class="tiny mu" style="margin:4px 0 8px">Nothing is sent until you press Send. Edit or delete anything you do not want to share — remove customer names and part numbers if they are confidential.</p>
+      <textarea id="shareT" class="inp" rows="9" style="width:100%;font-family:inherit">${esc(pre)}</textarea>
+      <input id="shareC" class="inp" style="width:100%;margin-top:8px" placeholder="Your name or e-mail, only if you want a reply (optional)">
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn" id="shareGo">Send to NOGA</button>
+        <button class="btn small" id="shareCancel">Cancel</button>
+        <span class="tiny mu" id="shareMsg"></span>
+      </div>
+    </div>`;
+  $('#shareGo').onclick = async () => {
+    const body = $('#shareT').value.trim();
+    if (!body) { $('#shareMsg').textContent = 'Nothing to send.'; return; }
+    $('#shareGo').disabled = true; $('#shareMsg').textContent = 'Sending…';
+    const ok = await USAGE.share(body, $('#shareC').value, APP.ws, APP.rec);
+    $('#shareBox').innerHTML = ok
+      ? '<p class="small">Sent — thank you. Real applications are what make the guide better.</p>'
+      : '<p class="small">That did not go through. Nothing was sent; you can copy the text and e-mail it instead.</p>';
+  };
+  $('#shareCancel').onclick = () => renderRec();
+}
+function computeRec() { dedupeDims(APP.ws); APP.rec = recommend(APP.ws); APP.matches = matchCases(APP.rec, APP.ws, CASES);
+  try { USAGE.track('recommendation', APP.ws, APP.rec); } catch (e) { }
+  return APP.rec; }
 function saveRecent(R) {
   const st = APP.ws; const label = `${TASKS[st.task]?.short || ''} · ${MATERIALS[st.material]?.name || ''}`.replace(' · ', ', ');
   let list = store.get('ufg_recent', []).filter(x => x.sku !== R.sku || x.label !== label);
@@ -2016,7 +2055,11 @@ function result() {
         const tried = [...new Set((APP.matches || []).flatMap(c => c.grits || []).filter(x => x && x !== g))];
         return (g && tried.length) ? `<div class="callout note" style="margin-bottom:10px">${I.info}<div><b>Tested applications used ${tried.map(x => '#' + x).join(' and ')}, not #${g}.</b><span class="small">#${g} is where the tables start you. A grit that has been proven on a part like yours is the better bet — cut a test part and let the result decide.</span></div></div>` : '';
       })()}
-      ${APP.matches.length ? `<div class="match">${APP.matches.map(c => `<div class="casemini"><div><span class="tested">${I.check} Similar application successfully tested</span><div style="font-weight:600;margin-top:2px">${esc(c.part)} <span class="muted small">· ${esc(c.mat)}</span></div><div class="small muted">${esc(c.tool.split(',')[0])}${c.rpm ? ` · ${fmtN(c.rpm)} RPM` : ''}${c.feed && c.feed > 1 ? ` · ${feedOut(c.feed)} ${feedU()}` : ''}</div>${c.after ? `<div class="small" style="margin-top:2px">${esc(c.after)}</div>` : ''}</div></div>`).join('')}</div>` : `<p class="muted small">No close match yet. That's normal for new applications — use the button below to share your results with NOGA.</p>`}
+      ${APP.matches.length ? `<div class="match">${APP.matches.map(c => `<div class="casemini"><div><span class="tested">${I.check} Similar application successfully tested</span><div style="font-weight:600;margin-top:2px">${esc(c.part)} <span class="muted small">· ${esc(c.mat)}</span></div><div class="small muted">${esc(c.tool.split(',')[0])}${c.rpm ? ` · ${fmtN(c.rpm)} RPM` : ''}${c.feed && c.feed > 1 ? ` · ${feedOut(c.feed)} ${feedU()}` : ''}</div>${c.after ? `<div class="small" style="margin-top:2px">${esc(c.after)}</div>` : ''}</div></div>`).join('')}</div>` : `<p class="muted small">No close match yet. That's normal for new applications.</p>`}
+      ${USAGE.available ? `<div id="shareBox" style="margin-top:12px">
+        <button class="btn small" id="shareOpen">Send this application to NOGA</button>
+        <span class="tiny mu" style="margin-left:8px">Helps NOGA improve the guide. You see exactly what is sent.</span>
+      </div>` : ''}
     </section>
   </div>
   <section class="panel adjust-panel" aria-labelledby="tAdj" style="margin-top:16px"><div class="panel-t"><h2 id="tAdj">Adjust the recommendation</h2>${adj ? '<button class="btn small" id="resetOv">Back to recommended</button>' : ''}</div>
@@ -2470,6 +2513,7 @@ document.addEventListener('click', e => {
   // result
   if (d.ovgrit) { APP.ws.override = { ...APP.ws.override, grit: +d.ovgrit, family: APP.ws.override.family || APP.rec.family, dia: APP.ws.override.dia || APP.rec.dia }; rerender(); return; }
   if (d.ovdia) { APP.ws.override = { ...APP.ws.override, dia: +d.ovdia, family: APP.ws.override.family || APP.rec.family, grit: APP.ws.override.grit || (APP.rec.family === 'diamond' ? APP.rec.grit.grit : APP.rec.grit.grit) }; rerender(); return; }
+  if (t.id === 'shareOpen') { openShare(); return; }
   if (t.id === 'resetOv') { APP.ws.override = {}; APP.ws.machine.uneven = false; rerender(); return; }
   if (d.alt) { const a = APP.rec.alts[+d.alt]; if (a.ext) return; if (a.setUneven) APP.ws.machine.uneven = true; if (a.ov) APP.ws.override = { ...a.ov }; rerender(); return; }
   if (t.id === 'cbNext' || t.id === 'cbPrev') { clearInterval(APP.cbTimer); APP.cbTimer = null; $('#cbPlay').innerHTML = `${I.play} Play`; APP.cbStep = (APP.cbStep + (t.id === 'cbNext' ? 1 : CB_PLAY.length - 1)) % CB_PLAY.length; cbApply(APP.cbStep); return; }
@@ -2791,6 +2835,62 @@ function xSetupState(o) {
   st.fromX = o.p.code;
   return st;
 }
+
+/* Usage data.
+   Two separate paths, deliberately different:
+
+   (a) track() sends structured fields only — which task, material, tool family,
+       which screen. It never sends anything the user typed. It only runs when
+       the host page supplied an endpoint AND switched collection on, so the
+       standalone app and the offline copy send nothing at all.
+
+   (b) shareApplication() sends the description the user chose to send, after
+       showing them exactly what will go and letting them edit it. Never automatic.
+
+   Both post to the WordPress site that embeds the guide, not to us. */
+const USAGE = (() => {
+  let api = null, on = false, sent = 0;
+  try {
+    const q = new URLSearchParams(location.search);
+    api = q.get('api') || null;
+    on = q.get('usage') === '1';
+    if (api && !/^https?:\/\//i.test(api)) api = null;        // only a real endpoint
+  } catch (e) { }
+
+  const post = (path, body) => {
+    if (!api) return Promise.resolve(false);
+    const url = api.replace(/\/$/, '') + '/' + path;
+    const data = JSON.stringify(body);
+    try {
+      if (path === 'usage' && navigator.sendBeacon) {         // never blocks the page
+        return Promise.resolve(navigator.sendBeacon(url, new Blob([data], { type: 'application/json' })));
+      }
+    } catch (e) { }
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: data, keepalive: true })
+      .then(r => r.ok).catch(() => false);
+  };
+
+  // the structured shape of a recommendation — no free text ever enters here
+  const fields = (st, rec) => ({
+    task: st?.task || '', material: st?.material || '',
+    family: rec?.family || '', sku: rec?.sku || '',
+    grit: rec?.grit?.grit ? String(rec.grit.grit) : '',
+    dims: st?.dims ? Object.entries(st.dims).filter(([, v]) => v != null).map(([k, v]) => k + ':' + v).join(' ') : '',
+    lang: (navigator.language || '').slice(0, 8),
+  });
+
+  const track = (event, st, rec) => {
+    if (!on || !api || sent > 200) return;                    // a cap, so a stuck page cannot flood
+    sent++;
+    post('usage', Object.assign({ event: String(event).slice(0, 40) }, fields(st, rec)));
+  };
+
+  const share = (body, contact, st, rec) =>
+    post('share', Object.assign({ body: String(body).slice(0, 4000), contact: String(contact || '').slice(0, 190) }, fields(st, rec)));
+
+  return { track, share, get available() { return !!api; }, get collecting() { return on && !!api; } };
+})();
+if (typeof module !== 'undefined') module.exports = { USAGE };
 
 /* Outlook .msg reader.
    A .msg is an OLE compound file, not text. Reading it as text produces numbers

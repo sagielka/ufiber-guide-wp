@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 – 2026-10-05
+- Usage data, stored in your own site and nowhere else. Settings → UFIBER usage.
+- Structured usage events (task, material, tool family, item number) are written only when you switch collection on. They never contain anything a visitor typed.
+- A "Send this application to NOGA" button lets someone share a description deliberately: the exact text is shown first and can be edited, and nothing is sent until they press Send.
+- The standalone and offline copies send nothing at all.
+
 ## 1.1.35 – 2026-10-05
 - The stroke figure now says where it comes from: the cross hole plus 5 mm clear on each side.
 

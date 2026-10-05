@@ -40,6 +40,9 @@ final class NUFG_Plugin {
 		load_plugin_textdomain( 'noga-ufiber-guide', false, dirname( plugin_basename( NUFG_FILE ) ) . '/languages' );
 
 		add_shortcode( 'ufiber_guide', array( $this, 'shortcode' ) );
+		require_once NUFG_DIR . 'includes/class-usage.php';
+		NUFG_Usage::install();
+		NUFG_Usage::init();
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ), 5 );
 		add_action( 'admin_notices', array( $this, 'maybe_notice' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( NUFG_FILE ), array( $this, 'action_links' ) );
@@ -132,6 +135,10 @@ final class NUFG_Plugin {
 				'units' => $units,
 				'brand' => $brand,
 				'ver'   => NUFG_VERSION,
+				// where the guide may post usage events and shared applications.
+				// Both land in this site's own database; nothing goes anywhere else.
+				'api'   => rest_url( 'nufg/v1/' ),
+				'usage' => NUFG_Usage::enabled() ? 1 : 0,
 			),
 			NUFG_URL . 'assets/app/ufiber-guide.html'
 		);
