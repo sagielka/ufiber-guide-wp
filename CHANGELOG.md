@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.29 – 2026-10-05
+- Added the UF2670 aluminum cross-hole application: Ø7 #1000 through a Ø12.4 mm bore, 68 mm deep, at 6,000 RPM and 480 mm/min.
+
 ## 1.1.28 – 2026-10-05
 - Reverts 1.1.27. The app content is identical to 1.1.26; the case-study additions have been removed.
 
