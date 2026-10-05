@@ -1181,8 +1181,20 @@ const MAT_WORDS = [
   [/\b(peek|delrin|pom|nylon|pa6|abs|plastic|composite|cfrp|gfrp|resin|acetal|ptfe|pp\b)\b/i, 'plastic'],
   [/\b(steel|4140|1045|s45c|scm|en8|en24|1018|a36|carbon)\b/i, 'carbon'],
 ];
+/* Email signatures are full of numbers that look like material grades: a phone
+   number +420 777 868 697 reads as 420 stainless. Strip the parts of a message
+   that never describe a job before any grade matching happens. */
+function scrubContact(s) {
+  return String(s)
+    .replace(/[\w.+-]+@[\w.-]+\.\w+/g, ' ')                       // e-mail addresses
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, ' ')                  // links
+    .replace(/(?:^|\n)\s*(?:tel|phone|mobil|mobile|fax|cell|t|m|p)\s*[:.]?\s*[+\d][\d\s().\-]{6,}/gi, ' ')
+    .replace(/\+\d[\d\s().\-]{6,}/g, ' ')                          // +420 777 868 697
+    .replace(/\b\d{3}[\s.\-]\d{3}[\s.\-]\d{3,4}\b/g, ' ')          // 777 868 697
+    .replace(/\b\d{4,}\b(?=\s*(?:street|st\.|ave|road|rd\.|zip|postal))/gi, ' ');
+}
 function parseText(text) {
-  const t = ' ' + text.replace(/,/g, '.') + ' ';
+  const t = ' ' + scrubContact(text).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
   // material
   for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
@@ -1260,7 +1272,7 @@ function parseText(text) {
   return out;
 }
 
-if (typeof module !== 'undefined') module.exports = { recommend, parseText, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
+if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
 
 /* ============================================================
    UFIBER speeds & feeds engine
@@ -1500,7 +1512,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.1.30';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.1.32';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2768,6 +2780,121 @@ function xSetupState(o) {
   return st;
 }
 
+/* Outlook .msg reader.
+   A .msg is an OLE compound file, not text. Reading it as text produces numbers
+   that are not in the message, so the guide parses the container properly and
+   pulls out the subject and body streams. If that fails it says so rather than
+   guessing. */
+function msgRead(buf) {
+  const d = new DataView(buf), u8 = new Uint8Array(buf);
+  if (buf.byteLength < 512) return null;
+  // signature D0 CF 11 E0 A1 B1 1A E1
+  const sig = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+  for (let i = 0; i < 8; i++) if (u8[i] !== sig[i]) return null;
+
+  const secShift = d.getUint16(0x1e, true), miniShift = d.getUint16(0x20, true);
+  const secSize = 1 << secShift, miniSize = 1 << miniShift;
+  const dirStart = d.getUint32(0x30, true);
+  const miniCutoff = d.getUint32(0x38, true) || 4096;
+  const miniFatStart = d.getUint32(0x3c, true);
+  const difatStart = d.getUint32(0x44, true), difatCount = d.getUint32(0x48, true);
+  const off = (s) => (s + 1) * secSize;
+  const ENDOFCHAIN = 0xfffffffe, FREESECT = 0xffffffff;
+
+  // the FAT sector list: 109 entries in the header, then the DIFAT chain
+  const fatSectors = [];
+  for (let i = 0; i < 109; i++) {
+    const v = d.getUint32(0x4c + i * 4, true);
+    if (v === FREESECT || v === ENDOFCHAIN) break;
+    fatSectors.push(v);
+  }
+  let ds = difatStart;
+  for (let n = 0; n < difatCount && ds !== ENDOFCHAIN && ds !== FREESECT; n++) {
+    const base = off(ds), per = secSize / 4 - 1;
+    for (let i = 0; i < per; i++) {
+      const v = d.getUint32(base + i * 4, true);
+      if (v !== FREESECT && v !== ENDOFCHAIN) fatSectors.push(v);
+    }
+    ds = d.getUint32(base + per * 4, true);
+  }
+  const fatPer = secSize / 4;
+  const fat = (s) => {
+    const idx = Math.floor(s / fatPer), rem = s % fatPer;
+    if (idx >= fatSectors.length) return ENDOFCHAIN;
+    return d.getUint32(off(fatSectors[idx]) + rem * 4, true);
+  };
+  const chain = (start, limit = 1 << 20) => {
+    const out = []; let s = start, guard = 0;
+    while (s !== ENDOFCHAIN && s !== FREESECT && guard++ < limit) { out.push(s); s = fat(s); }
+    return out;
+  };
+  const readChain = (start, size) => {
+    const secs = chain(start), out = new Uint8Array(secs.length * secSize);
+    secs.forEach((s, i) => out.set(u8.subarray(off(s), off(s) + secSize), i * secSize));
+    return out.subarray(0, size == null ? out.length : size);
+  };
+
+  // directory entries
+  const dirBytes = readChain(dirStart);
+  const dv = new DataView(dirBytes.buffer, dirBytes.byteOffset, dirBytes.byteLength);
+  const entries = [];
+  for (let p = 0; p + 128 <= dirBytes.length; p += 128) {
+    const nameLen = dv.getUint16(p + 0x40, true);
+    if (!nameLen) { entries.push(null); continue; }
+    let name = '';
+    for (let i = 0; i < nameLen - 2; i += 2) name += String.fromCharCode(dv.getUint16(p + i, true));
+    entries.push({ name, type: dv.getUint8(p + 0x42), start: dv.getUint32(p + 0x74, true), size: dv.getUint32(p + 0x78, true) });
+  }
+  const root = entries.find(e => e && e.type === 5);
+  if (!root) return null;
+
+  // small streams live inside the root's mini stream
+  let miniData = null, miniFat = null;
+  const getMini = () => {
+    if (!miniData) miniData = readChain(root.start, root.size);
+    if (!miniFat) miniFat = readChain(miniFatStart);
+    return true;
+  };
+  const readStream = (e) => {
+    if (e.size >= miniCutoff) return readChain(e.start, e.size);
+    getMini();
+    const mv = new DataView(miniFat.buffer, miniFat.byteOffset, miniFat.byteLength);
+    const out = new Uint8Array(Math.ceil(e.size / miniSize) * miniSize);
+    let s = e.start, i = 0, guard = 0;
+    while (s !== ENDOFCHAIN && s !== FREESECT && guard++ < 1 << 20) {
+      out.set(miniData.subarray(s * miniSize, s * miniSize + miniSize), i * miniSize);
+      i++;
+      const idx = s * 4;
+      s = idx + 4 <= miniFat.length ? mv.getUint32(idx, true) : ENDOFCHAIN;
+    }
+    return out.subarray(0, e.size);
+  };
+  const find = (suffix) => entries.find(e => e && e.type === 2 && e.name.indexOf(suffix) >= 0);
+  const text = (e) => {
+    if (!e) return '';
+    const b = readStream(e);
+    if (e.name.slice(-4) === '001F') {                       // UTF-16LE
+      let s = '';
+      for (let i = 0; i + 1 < b.length; i += 2) s += String.fromCharCode(b[i] | (b[i + 1] << 8));
+      return s;
+    }
+    let s = '';                                              // 8-bit
+    for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+    return s;
+  };
+  const subject = text(find('__substg1.0_0037001F')) || text(find('__substg1.0_0037001E'));
+  let body = text(find('__substg1.0_1000001F')) || text(find('__substg1.0_1000001E'));
+  if (!body) {                                               // fall back to the RTF-less HTML body
+    const h = find('__substg1.0_1013001F') || find('__substg1.0_10130102');
+    if (h) body = text(h).replace(/<[^>]+>/g, ' ');
+  }
+  const clean = (s) => s.replace(/\u0000/g, '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
+  const out = { subject: clean(subject), body: clean(body) };
+  if (!out.subject && !out.body) return null;
+  return out;
+}
+if (typeof module !== 'undefined') module.exports = { msgRead };
+
 /* ============================================================
    UFIBER Guide — drop a customer email or drawing
    Local first: .eml/.msg/.txt/.html and PDF text are read in the
@@ -2821,14 +2948,14 @@ function parseEml(raw) {
   return res;
 }
 function msgText(buf) {
-  // Outlook .msg is a compound binary file; pull readable UTF-16 and ASCII runs.
-  const u8 = new Uint8Array(buf); const runs = []; let cur = '';
-  for (let i = 0; i + 1 < u8.length; i += 2) { const c = u8[i] | (u8[i + 1] << 8); if ((c >= 32 && c < 0xD800 && c !== 0xFFFE) || c === 10 || c === 13 || c === 9) cur += String.fromCharCode(c); else { if (cur.trim().length > 24) runs.push(cur); cur = ''; } }
-  if (cur.trim().length > 24) runs.push(cur);
-  let a = ''; const ascii = []; for (let i = 0; i < u8.length; i++) { const c = u8[i]; if ((c >= 32 && c < 127) || c === 10 || c === 13) a += String.fromCharCode(c); else { if (a.trim().length > 40) ascii.push(a); a = ''; } }
-  const all = runs.concat(ascii).map(s => s.replace(/\s+\n/g, '\n').trim()).filter(s => /[a-z]{3,}/i.test(s) && !/^[A-Za-z0-9+/=]{40,}$/.test(s));
-  const uniq = [...new Set(all)].sort((x, y) => y.length - x.length);
-  return uniq.slice(0, 12).join('\n\n').slice(0, 8000);
+  // A .msg is an OLE compound file. Parse the container and take the real
+  // subject and body; scraping the raw bytes invents numbers that are not in
+  // the message, which is worse than reading nothing.
+  try {
+    const m = msgRead(buf);
+    if (m && (m.body || m.subject)) return ((m.subject ? 'Subject: ' + m.subject + '\n\n' : '') + m.body).slice(0, 8000);
+  } catch (e) { }
+  return '';
 }
 function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('load ' + src)); document.head.appendChild(s); }); }
 async function pdfLib() {
@@ -2892,7 +3019,8 @@ async function addFiles(fileList) {
         if (e.files.length) { renderAttach(); await addFiles(e.files); }
       } else if (entry.kind === 'msg') {
         const t = msgText(await f.arrayBuffer()); D.text += `EMAIL (Outlook .msg)\n${t}\n\n`;
-        entry.status = 'Email text extracted. Attachments inside .msg aren\'t opened — drop the drawing file too.';
+        entry.status = t ? 'Email text extracted. Attachments inside .msg aren\'t opened — drop the drawing file too.'
+          : 'This .msg could not be read. Paste the email text into the box instead — guessing from the file would invent numbers.';
       } else if (entry.kind === 'html') { D.text += htmlText(await f.text()) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'text') { D.text += (await f.text()).slice(0, 20000) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'pdf') {
@@ -3583,6 +3711,12 @@ const NLU = (() => {
 
   /* ---------- confidence floors (tuned on the dev split) ---------- */
   const TH = { intent: 0.30, task: 0.45, feature: 0.45, material: 0.45, sub: 0.55, burr: 0.50, machine: 0.50, numrole: 0.40 };
+  // Material and machine change every number downstream, so the model only
+  // supplies them when it is confident AND the text actually mentions one.
+  const EVID = {
+    material: /\b(steel|stainless|inox|sus\d|aisi|din|alumini?um|alu\b|ally?|cast iron|ductile|grey iron|gg\d|brass|bronze|copper|titanium|inconel|hastelloy|monel|nickel|super ?alloy|hardened|hrc|carbide|plastic|resin|composite|peek|abs\b|nylon)/i,
+    machine: /\b(cnc|machining cent|mill|lathe|turning|robot|cobot|hand ?held|hand tool|grinder|spindle|vmc|hmc|swiss|live tool)/i,
+  };
   const val = (r, h) => (r.p >= (TH[h] || 0) && r.label !== '_none') ? r.label : null;
 
   /* ---------- public: understand one message ---------- */
@@ -3606,6 +3740,9 @@ const NLU = (() => {
 
   /* ---------- turn a prediction into app state ---------- */
   function toState(text, st) {
+    // signatures carry phone numbers and domains like cncbastards.cz; they are
+    // not a description of the job, so they must not count as evidence
+    const ev = typeof scrubContact === 'function' ? scrubContact(text) : text;
     const p = predict(text);
     if (!p) return null;
     st = st || newState();
@@ -3614,11 +3751,11 @@ const NLU = (() => {
     if (!st.task && p.task && TASKS[p.task]) { st.task = p.task; if (TASKS[p.task].feature) st.feature = TASKS[p.task].feature; }
     if (!st.feature && p.feature && FEATURES[p.feature] && !TASKS[st.task]?.feature) st.feature = p.feature;
     if (!st.feature && st.task) st.feature = SUGGEST_FEATURE[st.task] || null;
-    if (!st.material && p.material && MATERIALS[p.material]) { st.material = p.material; st.sub = null; }
+    if (!st.material && p.material && MATERIALS[p.material] && EVID.material.test(ev)) { st.material = p.material; st.sub = null; }
     if (st.material && !st.sub && p.sub && MATERIALS[st.material].subs && MATERIALS[st.material].subs[p.sub]) st.sub = p.sub;
     if (st.sub && !(MATERIALS[st.material]?.subs || {})[st.sub]) st.sub = null;   // never leave a sub from another material
     if (p.burr && !APP.parsed?.burr) { st.burr = p.burr; APP.parsed = { ...(APP.parsed || {}), burr: p.burr }; }
-    if (p.machine && MACHINES[p.machine] && !APP.parsed?.machine) { st.machine.type = p.machine; APP.parsed = { ...(APP.parsed || {}), machine: { type: p.machine } }; }
+    if (p.machine && MACHINES[p.machine] && !APP.parsed?.machine && EVID.machine.test(ev)) { st.machine.type = p.machine; APP.parsed = { ...(APP.parsed || {}), machine: { type: p.machine } }; }
     const dims = {};
     for (const n of p.nums) {
       if (!n.role || !isFinite(n.value) || n.value <= 0) continue;
