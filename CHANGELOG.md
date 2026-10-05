@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.26 – 2026-10-04
+- Learn gained a section on reducing burr size at source: cutter condition, edge angle, cutter style, rotation direction, order of operations, and the effect of feed and depth.
+
 ## 1.1.25 – 2026-10-04
 - Learn gained a technique section: sizing the brush to the surface, why more passes beat a slower feed, which way to rotate, and working a heavy burr down in stages.
 - Surface jobs now say when the chosen brush is narrower than the face.
