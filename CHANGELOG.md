@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.30 – 2026-10-05
+- The grit chart is now presented as a starting point, and a result proven on a part takes precedence over it.
+- When a tested application in the same material used a different grit from the recommendation, the result says so.
+
 ## 1.1.29 – 2026-10-05
 - Added the UF2670 aluminum cross-hole application: Ø7 #1000 through a Ø12.4 mm bore, 68 mm deep, at 6,000 RPM and 480 mm/min.
 
