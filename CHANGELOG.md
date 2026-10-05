@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.32 – 2026-10-05
+- Outlook .msg files are now parsed properly. They were read as raw bytes, which produced bore diameters that were not in the message at all.
+- Phone numbers, e-mail addresses and web domains in a signature no longer count as job details: +420 was being read as 420 stainless, and a cncbastards.cz address as a CNC machine.
+- The model no longer supplies a material or machine unless the text actually mentions one. An empty chip you can tap beats a wrong value that changes every speed.
+
 ## 1.1.30 – 2026-10-05
 - The grit chart is now presented as a starting point, and a result proven on a part takes precedence over it.
 - When a tested application in the same material used a different grit from the recommendation, the result says so.
