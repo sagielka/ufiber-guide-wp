@@ -968,7 +968,7 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
   const stroke = cross ? cross + 10 : null;
   R.params = {
     rpm, rpmLo: SFc.newRpm || rpm, rpmHi: Math.min(round((SFc.newRpm || rpm) * 1.25, 100), C.max), rpmMax: C.max, feed, feedRange: SFc.feedRange,
-    engage: { label: 'Stroke', value: stroke ? stroke : 'Ø + 10', unit: 'mm', note: 'No depth of cut — the fibers expand into the bore. Travel 5 mm past each side of the intersection.' },
+    engage: { label: 'Stroke', value: stroke ? stroke : 'Ø + 10', unit: 'mm', note: stroke ? `Axial travel through the intersection: the ${cross} mm cross hole plus 5 mm clear on each side. There is no depth of cut — the fibers expand outward by centrifugal force.` : 'Axial travel: the cross hole plus 5 mm clear on each side. No depth of cut — the fibers expand outward by centrifugal force.' },
     passes, direction: 'CW, then CCW (stop between)', projection: null, coolant: SFc.cool || mat.coolant,
   };
   const depth = Number(st.dims?.depth) || null;
@@ -1022,7 +1022,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   let rpm = sfSurface({ row, dia: size, grit, mode }).rpm;
   if (maxRpm && rpm > maxRpm) { rpm = maxRpm; R.warnings.push({ t: 'Lower spindle speed', d: 'The brush will expand less. Add passes or try #1000 for more bite.' }); }
   const stroke = cross ? cross + 10 : null;
-  R.params = { rpm, rpmLo: S.rpm[0], rpmHi: S.rpm[1], rpmMax: S.rpm[1], feed: (mode === 'polish' ? row.C.feedP : row.C.feedD)[0], engage: { label: 'Stroke', value: stroke || 'Ø + 10', unit: 'mm', note: 'Fibers expand into the bore by centrifugal force; no depth of cut.' }, passes: mode === 'polish' ? row.C.passP.replace('-', '–') : row.C.passD.replace('-', '–'), direction: 'CW, then CCW (stop between)', coolant: SF_COOL[row.C.cool] };
+  R.params = { rpm, rpmLo: S.rpm[0], rpmHi: S.rpm[1], rpmMax: S.rpm[1], feed: (mode === 'polish' ? row.C.feedP : row.C.feedD)[0], engage: { label: 'Stroke', value: stroke || 'Ø + 10', unit: 'mm', note: stroke ? `Axial travel through the intersection: the ${cross} mm cross hole plus 5 mm clear on each side. The fibers expand outward by centrifugal force, so there is no depth of cut.` : 'Axial travel: the cross hole plus 5 mm clear on each side. The fibers expand outward by centrifugal force, so there is no depth of cut.' }, passes: mode === 'polish' ? row.C.passP.replace('-', '–') : row.C.passD.replace('-', '–'), direction: 'CW, then CCW (stop between)', coolant: SF_COOL[row.C.cool] };
   R.steps = [
     `Remove the sleeve, mount the brush on the shank with its two set screws, and position above the ${main ? 'Ø' + main + ' ' : ''}bore with the spindle stopped.`,
     'Insert without rotation until the brush tip is 5 mm past the far side of the intersection.',
@@ -1523,7 +1523,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.1.34';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.1.35';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
