@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.34 – 2026-10-05
+- Clarifying questions now follow the language of the job description. A Czech e-mail signature under an English request was switching the questions to Czech while the rest stayed English.
+- A cross-hole reading no longer shows a third diameter chip that just repeats the cross hole.
+
 ## 1.1.32 – 2026-10-05
 - Outlook .msg files are now parsed properly. They were read as raw bytes, which produced bore diameters that were not in the message at all.
 - Phone numbers, e-mail addresses and web domains in a signature no longer count as job details: +420 was being read as 420 stainless, and a cncbastards.cz address as a CNC machine.
