@@ -42,11 +42,13 @@ class NUFG_Settings {
 	/** The key is written encrypted and never read back into the page. */
 	public static function save_key( $v ) {
 		$v = is_string( $v ) ? trim( $v ) : '';
+		// The nonce for this form was already checked by options.php before any
+		// sanitize callback runs.
+		if ( ! empty( $_POST['nufg_ai_key_clear'] ) || '__clear__' === $v ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return '';
+		}
 		if ( '' === $v ) {
 			return (string) get_option( NUFG_AI::KEY_OPTION, '' );   // left blank: keep what is there
-		}
-		if ( '__clear__' === $v ) {
-			return '';
 		}
 		// One check, and only one: Anthropic's own documentation says a console key
 		// starts with sk-ant-. Earlier releases guessed at the rest of the format
@@ -292,7 +294,10 @@ class NUFG_Settings {
 								<p><code>define( 'NUFG_CLAUDE_API_KEY', 'sk-ant-...' );</code></p>
 								<p><label><?php esc_html_e( 'Workspace ID', 'noga-ufiber-guide' ); ?>
 									<input type="text" class="regular-text" name="nufg_ai_workspace" value="<?php echo esc_attr( get_option( 'nufg_ai_workspace', '' ) ); ?>" placeholder="<?php esc_attr_e( 'only if the key spans several workspaces', 'noga-ufiber-guide' ); ?>"></label></p>
-								<p class="description"><?php esc_html_e( 'To remove the saved key, type __clear__ in the box and save. If the site\'s salts are ever changed, the saved key stops working and has to be entered again.', 'noga-ufiber-guide' ); ?></p>
+								<?php if ( '' !== $hint ) : ?>
+									<p><label><input type="checkbox" name="nufg_ai_key_clear" value="1"> <?php esc_html_e( 'Remove the saved key when I save', 'noga-ufiber-guide' ); ?></label></p>
+								<?php endif; ?>
+								<p class="description"><?php esc_html_e( 'If the site\'s salts are ever changed, the saved key stops working and has to be entered again.', 'noga-ufiber-guide' ); ?></p>
 								<?php if ( ! NUFG_AI::can_store() ) : ?>
 									<p class="description"><strong><?php esc_html_e( 'This server has no encryption support, so a key cannot be saved here. Use wp-config.php.', 'noga-ufiber-guide' ); ?></strong></p>
 								<?php endif; ?>

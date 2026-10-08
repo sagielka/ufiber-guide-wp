@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.8 – 2026-10-08
+- Removing the saved API key is a checkbox now, instead of typing __clear__ into
+  the key box. Typing a magic word was never a reasonable way to ask for that.
+
 ## 1.3.7 – 2026-10-08
 - The tool a customer names is no longer read as their part. "a 3/8 inch hone
   with ceramic abrasive fiber" was setting the workpiece material to carbide and
