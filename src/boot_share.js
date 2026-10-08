@@ -1,0 +1,1 @@
+try{const st=SHARE.fromUrl(); if(st){APP.ws=st; APP.parsed={shared:true}; APP.view='result';}}catch(e){}
