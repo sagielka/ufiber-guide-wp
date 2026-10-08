@@ -156,6 +156,43 @@ function aiContext() {
   };
   return JSON.stringify(ctx);
 }
+/* The hard facts the model is allowed to state, read straight out of the same
+   tables the engine uses. Written by hand they drift: a table changes, the
+   sentence describing it does not, and the model confidently quotes a figure
+   the app no longer uses. Generated, that cannot happen. */
+function productFacts() {
+  const r = (a) => a[0] === a[1] ? String(a[0]) : a[0] + '\u2013' + a[1];
+  const surf = Object.keys(SURFACE).map(Number).sort((x, y) => x - y);
+  const cross = Object.keys(CROSS).map(Number).sort((x, y) => x - y);
+  const point = Object.keys(POINT).map(Number).sort((x, y) => x - y);
+  const disc = Object.keys(DISC).map(Number).sort((x, y) => x - y);
+  const grits = GRITS.map(g => g.grit);
+  const L = SURFACE_LIMITS;
+  const lines = [];
+
+  lines.push(`Surface brush: Ø${surf.join(', Ø')} mm. Grits #${grits.join(', #')}. Speed window per diameter: ` +
+    surf.map(d => `Ø${d} ${fmtN(SURFACE[d].rpm[0])}\u2013${fmtN(SURFACE[d].rpm[1])}`).join(', ') + ' RPM.');
+  lines.push(`Surface limits: depth of cut ${L.docPolish} polishing / ${L.docDeburr} deburring / ${L.docMax} mm absolute maximum; projection from the sleeve ${L.projMax} mm maximum; feed ${fmtN(L.feedMax)} mm/min maximum.`);
+  lines.push('Each surface brush has one sleeve and its own shanks: ' +
+    surf.map(d => `Ø${d} sleeve ${SURFACE[d].sleeve[0]}` + (SURFACE[d].shanks && SURFACE[d].shanks.length ? ', shanks ' + SURFACE[d].shanks.map(x => x[0]).join('/') : ', no shank')).join('; ') + '.');
+
+  lines.push('Cross-hole brush: ' + cross.map(d => {
+    const c = CROSS[d];
+    const g = c.grits ? ` (grits #${c.grits.join(', #')} only)` : '';
+    return `Ø${d} for bores Ø${r(c.pilot)}${c.pilotFine && String(c.pilotFine) !== String(c.pilot) ? ` coarse / Ø${r(c.pilotFine)} fine` : ''}, max ${fmtN(c.max)} RPM, Ø${c.ds} shank${g}`;
+  }).join('; ') + '. Stroke = the cross hole plus 5 mm clear on each side. No depth of cut: the fibers expand by centrifugal force.');
+
+  lines.push(`Point brush: Ø${point.join(', Ø')} mm, max ${fmtN(MAX_RPM.point)} RPM. End brush: Ø5 mm flat or 90° angled, max ${fmtN(MAX_RPM.end)} RPM. Neither is for air tools.`);
+  lines.push(`Ceramic fiber disc: Ø${disc.join(', Ø')} mm, 0.8 mm thick, grits #${DISC_GRITS.join(', #')} only, max ${fmtN(MAX_RPM.disc)} RPM and run ${fmtN(MAX_RPM.discRun[0])}\u2013${fmtN(MAX_RPM.discRun[1])}. Mounts on shank UF7030 (Ø3) or UF7023 (Ø2.35). Electric spindle only, never an air tool; dress with a diamond dressing tool.`);
+  lines.push('Ceramic diamond stone: Ø1\u20133 mm, grits ' + STONE_GRITS.map(g => '#' + g.grit + ' ' + g.color).join(', ') + ', max ' + fmtN(MAX_RPM.stone) + ' RPM.');
+  lines.push('Fiber colour by grit: ' + GRITS.map(g => '#' + g.grit + ' ' + g.color).join(', ') + '.');
+
+  const acc = Object.keys(ACCESSORIES);
+  lines.push(`Item numbers that are not brushes (${acc.length}): ` + acc.map(k => k + ' ' + ACCESSORIES[k][0]).join('; ') + '.');
+  return lines.join('\n- ');
+}
+const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u2014 these figures are authoritative:\n- ' + productFacts();
+
 const AI_RULES = `UFIBER rules you can rely on:
 - Surface brushes Ø6–100 cut with the fiber tips; depth of cut 0.2 polishing / 0.5 deburring / 1.2 mm absolute max; projection ≤10 mm from the sleeve; feed ≤2,000 mm/min; up-cut against side burrs; never side-load or rub walls.
 - Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush.
@@ -244,6 +281,7 @@ async function askClaude(question) {
   const intro = `You are the UFIBER application-engineer assistant inside the NOGA MT "UFIBER Guide" app. The user is a machinist, application engineer or distributor.
 Answer in the user's language. Be concise and practical (under 150 words unless asked for more), shop-floor tone, short bullets when listing steps.
 NEVER invent RPM, feed, depth, item numbers or test results. Use only values in SETUP_CONTEXT or returned by your tools${APP.sampleTools ? '; call try_setup or speeds_feeds to get numbers for any alternative, and propose_change whenever you recommend changing the setup' : ''}. If something needs a NOGA engineering review, say so plainly. Mention known NOGA data conflicts only when relevant.
+${AI_FACTS()}
 ${AI_RULES}
 material_rows (NOGA table rows for speeds_feeds): ${SF_ROWS.map(r => r.id + '=' + r.iso + ' ' + sfLabel(r)).join('; ')}
 SETUP_CONTEXT: ${aiContext()}`;

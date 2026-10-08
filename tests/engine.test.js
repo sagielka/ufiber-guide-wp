@@ -12,8 +12,12 @@ const load = (f) => fs.readFileSync(path.join(SRC, f), 'utf8').replace(/if \(typ
 const ctx = { console, module: { exports: {} }, navigator: { language: 'en' }, location: { search: '' } };
 vm.createContext(ctx);
 vm.runInContext(
-  [load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js')].join('\n') +
-  '\n;globalThis.__E = { parseText, recommend, scrubContact, scrubToolWords, dedupeDims, msgRead, NLU, skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {}, machine: { type: "mc", maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} }) };',
+  [load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js')].join('\n') +
+  '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;' +
+  '\n;globalThis.__E = { parseText, recommend, scrubContact, scrubToolWords, dedupeDims, msgRead, NLU,' +
+  ' skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
+  ' newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {},' +
+  ' machine: { type: "mc", maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} }) };',
   ctx
 );
 const E = ctx.__E;
@@ -104,6 +108,20 @@ ok('a .msg that is not an OLE file is refused rather than guessed at',
   E.NLU.load && ok('the model is optional, and absent here', true);
   const p = E.parseText('something about a part with no material named at all');
   ok('no material is guessed from a sentence that names none', !p.material, p.material);
+}
+
+/* ---- the facts handed to the AI are read from the tables, not written out ---- */
+{
+  const facts = ctx.__F ? ctx.__F() : null;
+  if (facts) {
+    ok('the facts quote the real Ø25 speed window',
+      facts.includes(`${E.SURFACE[25].rpm[0].toLocaleString('en-US')}\u2013${E.SURFACE[25].rpm[1].toLocaleString('en-US')}`), facts.slice(0, 80));
+    ok('the facts quote the real disc grits', facts.includes('#' + E.DISC_GRITS.join(', #')));
+    ok('the facts quote the real depth limit', facts.includes(String(E.SURFACE_LIMITS.docMax)));
+    ok('the facts name every accessory', E.ACCESSORIES && facts.includes('UF9999') && facts.includes('UF7023'));
+    ok('a brush with no shank says so rather than trailing off', !/shanks ;/.test(facts));
+    ok('the point and end ceilings come from one constant', facts.includes(E.MAX_RPM.point.toLocaleString('en-US')));
+  }
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

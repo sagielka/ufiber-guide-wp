@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.0 – 2026-10-08
+- The AI now works from the product data itself. Every diameter, grit, speed
+  window, limit and accessory it is allowed to state is generated from the same
+  tables the recommendation uses, so the two cannot disagree. Written out by
+  hand, a figure quietly survives the table that produced it being changed.
+- Speed ceilings for the point brush, end brush, disc, diamond stone and E-Pack
+  are named once and read from there by both the engine and the AI.
+
 ## 1.4.0 – 2026-10-08
 - A Clear button on Find a tool. Until now the only way to start a different job
   was to reload the page, and anything read from the last one quietly stayed.
