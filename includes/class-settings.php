@@ -48,31 +48,27 @@ class NUFG_Settings {
 		if ( '__clear__' === $v ) {
 			return '';
 		}
-		// Do not try to validate the shape of a credential. Keys change format,
-		// and guessing at one refuses perfectly good keys while a wrong one still
-		// looks right. Clean the paste, keep what is left, and let the Test button
-		// below say what Anthropic actually thinks of it.
-		$raw = $v;
-		$v   = str_replace( array( "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xEF\xBB\xBF", "\xC2\xA0" ), '', $v );
-		$v   = preg_replace( '/\s+/', '', $v );
-		if ( preg_match( '/sk-[\x21-\x7E]{20,}?(?=[\x27"`;,)\]]|$)/', $v, $m ) ) {
-			$v = $m[0];                    // pulled out of a define(...) line or quotes
+		// One check, and only one: Anthropic's own documentation says a console key
+		// starts with sk-ant-. Earlier releases guessed at the rest of the format
+		// and refused good keys; dropping every check instead let the error message
+		// shown just above this field be saved as the key. Documented prefix, no
+		// opinion about anything after it.
+		$v = str_replace( array( "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xEF\xBB\xBF", "\xC2\xA0" ), '', $v );
+		$v = preg_replace( '/\s+/', '', $v );
+		if ( preg_match( '/sk-ant-[\x21-\x7E]{20,}?(?=[\x27"`;,)\]]|$)/', $v, $m ) ) {
+			$v = $m[0];
 		} else {
-			$v = trim( $v, "'\"`" );       // just strip quotes and take it as given
-		}
-		if ( strlen( $v ) < 20 || strlen( $v ) > 400 ) {
 			add_settings_error(
 				'nufg',
 				'nufg_key',
 				sprintf(
 					/* translators: %d: number of characters received */
-					__( 'That does not look like a key: %d characters arrived after cleaning. Paste just the key, nothing around it.', 'noga-ufiber-guide' ),
+					__( 'No key was found in that: %d characters arrived, and none of them were a key starting sk-ant-. Make sure you are pasting the key itself and not a message from this page. The key is shown once, when you create it at console.anthropic.com.', 'noga-ufiber-guide' ),
 					strlen( $v )
 				)
 			);
 			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
 		}
-		unset( $raw );
 		$enc = NUFG_AI::encrypt( $v );
 		if ( '' === $enc ) {
 			add_settings_error( 'nufg', 'nufg_key', __( 'This server cannot encrypt the key, so it was not saved. Put it in wp-config.php instead.', 'noga-ufiber-guide' ) );

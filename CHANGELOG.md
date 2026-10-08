@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.6 – 2026-10-08
+- The key box checks one thing again: that a key starting sk-ant- is present,
+  which is what Anthropic's documentation states. 1.3.4 removed every check
+  after two releases had refused valid keys, and the result was that the error
+  message displayed above the box could itself be saved as the key.
+- The rejection message no longer reads like something to paste back in.
+
 ## 1.3.5 – 2026-10-08
 - A rejected key now reports how long the key it sent was, and its first and
   last characters, so it can be compared with the console. A key that arrived
