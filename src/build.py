@@ -32,6 +32,7 @@ JS_ORDER = [
     'ui4.js',      # Replace XEBEC
     'usage.js',    # structured usage events and deliberate sharing
     'msg.js',      # Outlook .msg reader
+    'aiserver.js', # the same AI interface, served by the host site
     'ui5.js',      # dropping in a customer email or drawing
     'ui6.js',      # Speeds and feeds tab
     'ui7.js',      # the AI layer

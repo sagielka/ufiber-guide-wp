@@ -43,6 +43,8 @@ final class NUFG_Plugin {
 		require_once NUFG_DIR . 'includes/class-usage.php';
 		NUFG_Usage::install();
 		NUFG_Usage::init();
+		require_once NUFG_DIR . 'includes/class-ai.php';
+		NUFG_AI::init();
 		add_action( 'wp_enqueue_scripts', array( $this, 'register_assets' ), 5 );
 		add_action( 'admin_notices', array( $this, 'maybe_notice' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( NUFG_FILE ), array( $this, 'action_links' ) );
@@ -140,6 +142,7 @@ final class NUFG_Plugin {
 				'api'   => rest_url( 'nufg/v1/' ),
 				'usage' => NUFG_Usage::enabled() ? 1 : 0,
 				'k'     => NUFG_Usage::token(),
+				'ai'    => NUFG_AI::available() ? 1 : 0,
 			),
 			NUFG_URL . 'assets/app/ufiber-guide.html'
 		);
