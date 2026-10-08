@@ -57,6 +57,9 @@ class NUFG_Settings {
 		// opinion about anything after it.
 		$v = str_replace( array( "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xEF\xBB\xBF", "\xC2\xA0" ), '', $v );
 		$v = preg_replace( '/\s+/', '', $v );
+		// Curly quotes arrive when a key is pasted out of a document or a chat.
+		// They are not part of any key, and left in they stop the match entirely.
+		$v = str_replace( array( "\xE2\x80\x9C", "\xE2\x80\x9D", "\xE2\x80\x98", "\xE2\x80\x99", "\xC2\xAB", "\xC2\xBB" ), '', $v );
 		if ( preg_match( '/sk-ant-[\x21-\x7E]{20,}?(?=[\x27"`;,)\]]|$)/', $v, $m ) ) {
 			$v = $m[0];
 		} else {
