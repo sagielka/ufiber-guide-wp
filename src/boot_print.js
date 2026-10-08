@@ -1,0 +1,4 @@
+
+document.getElementById('printDate').textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+document.getElementById('foot').innerHTML = `<span><b>UFIBER Guide</b> v${APP_VERSION}</span><span class="sep">·</span><span>build ${APP_BUILT}</span><span class="sep">·</span><span>${NLU.ready ? 'offline model included' : 'offline model unavailable'}</span><span class="sep">·</span><span>Parameters from NOGA MT published data — validate on a test part</span>`;
+document.getElementById('tabbar').innerHTML = [['#/','find','Find',I.find],['#/speeds','speeds','Speeds',I.gauge],['#/fix','fix','Fix',I.fix],['#/replace','replace','XEBEC',I.swap]].map(([h,k,l,ic])=>`<a href="${h}" data-navk="${k}">${ic}<span>${l}</span></a>`).join('') + `<button data-more aria-label="More: Learn, Products">${I.more}<span>More</span></button>`;

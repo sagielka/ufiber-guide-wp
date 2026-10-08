@@ -1,0 +1,1 @@
+try{NLU.load(NLU_MODEL)}catch(e){}
