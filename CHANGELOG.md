@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.5 – 2026-10-08
+- A rejected key now reports how long the key it sent was, and its first and
+  last characters, so it can be compared with the console. A key that arrived
+  incomplete looks identical to one that is simply wrong, until you can see it.
+- Added an optional Workspace ID, which Anthropic requires for a key that spans
+  more than one workspace.
+- The test request and the live one now build their headers the same way, so a
+  passing test means the real calls will work too.
+
 ## 1.3.4 – 2026-10-08
 - The key box no longer judges what a key should look like. Two releases spent
   refusing valid keys on the strength of a guessed format; the format is not

@@ -54,11 +54,7 @@ final class NUFG_AI {
 		}
 		$res = wp_remote_post( self::ENDPOINT, array(
 			'timeout' => 20,
-			'headers' => array(
-				'content-type'      => 'application/json',
-				'x-api-key'         => $key,
-				'anthropic-version' => self::API_VERSION,
-			),
+			'headers' => self::headers(),
 			'body'    => wp_json_encode( array(
 				'model'      => self::model(),
 				'max_tokens' => 4,
@@ -93,7 +89,16 @@ final class NUFG_AI {
 		} elseif ( 429 === $code ) {
 			$msg = __( 'The key works but the account is rate limited or out of credit.', 'noga-ufiber-guide' );
 		}
-		return array( false, sprintf( 'HTTP %d. %s', $code, $msg ) );
+		$k = self::key();
+		return array( false, sprintf(
+			/* translators: 1: HTTP status, 2: message, 3: key length, 4: last four characters, 5: first characters */
+			__( 'HTTP %1$d. %2$s (the key sent was %3$d characters, starting %5$s and ending %4$s — compare that with the console; if it differs, the paste was incomplete.)', 'noga-ufiber-guide' ),
+			$code,
+			$msg,
+			strlen( $k ),
+			substr( $k, -4 ),
+			substr( $k, 0, 11 )
+		) );
 	}
 
 	public static function handle_test() {
@@ -175,6 +180,27 @@ final class NUFG_AI {
 		return is_string( $plain ) ? $plain : '';   // salts rotated: treated as no key
 	}
 
+	/** Only needed for a key that spans several workspaces. */
+	private static function workspace() {
+		if ( defined( 'NUFG_CLAUDE_WORKSPACE_ID' ) && is_string( NUFG_CLAUDE_WORKSPACE_ID ) ) {
+			return trim( NUFG_CLAUDE_WORKSPACE_ID );
+		}
+		return (string) get_option( 'nufg_ai_workspace', '' );
+	}
+
+	private static function headers() {
+		$h = array(
+			'content-type'      => 'application/json',
+			'x-api-key'         => self::key(),
+			'anthropic-version' => self::API_VERSION,
+		);
+		$w = self::workspace();
+		if ( '' !== $w ) {
+			$h['anthropic-workspace-id'] = $w;
+		}
+		return $h;
+	}
+
 	private static function model() {
 		if ( defined( 'NUFG_CLAUDE_MODEL' ) && is_string( NUFG_CLAUDE_MODEL ) && NUFG_CLAUDE_MODEL !== '' ) {
 			return NUFG_CLAUDE_MODEL;
@@ -223,11 +249,7 @@ final class NUFG_AI {
 
 		$res = wp_remote_post( self::ENDPOINT, array(
 			'timeout' => self::TIMEOUT,
-			'headers' => array(
-				'content-type'      => 'application/json',
-				'x-api-key'         => self::key(),
-				'anthropic-version' => self::API_VERSION,
-			),
+			'headers' => self::headers(),
 			'body'    => wp_json_encode( $body ),
 		) );
 

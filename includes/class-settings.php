@@ -29,6 +29,7 @@ class NUFG_Settings {
 		// Two plain on/off switches, kept outside the main options array so they
 		// read cheaply from the front end on every page view.
 		register_setting( 'nufg', 'nufg_usage_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
+		register_setting( 'nufg', 'nufg_ai_workspace', array( 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => '' ) );
 		register_setting( 'nufg', NUFG_AI::KEY_OPTION, array( 'type' => 'string', 'sanitize_callback' => array( __CLASS__, 'save_key' ), 'default' => '' ) );
 		register_setting( 'nufg', 'nufg_ai_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
 		register_setting(
@@ -293,6 +294,8 @@ class NUFG_Settings {
 									<?php esc_html_e( 'Saved encrypted, using this site\'s own salts from wp-config.php — a stolen database alone cannot read it. Anyone who can run code on this site still can, so the safer place is wp-config.php itself:', 'noga-ufiber-guide' ); ?>
 								</p>
 								<p><code>define( 'NUFG_CLAUDE_API_KEY', 'sk-ant-...' );</code></p>
+								<p><label><?php esc_html_e( 'Workspace ID', 'noga-ufiber-guide' ); ?>
+									<input type="text" class="regular-text" name="nufg_ai_workspace" value="<?php echo esc_attr( get_option( 'nufg_ai_workspace', '' ) ); ?>" placeholder="<?php esc_attr_e( 'only if the key spans several workspaces', 'noga-ufiber-guide' ); ?>"></label></p>
 								<p class="description"><?php esc_html_e( 'To remove the saved key, type __clear__ in the box and save. If the site\'s salts are ever changed, the saved key stops working and has to be entered again.', 'noga-ufiber-guide' ); ?></p>
 								<?php if ( ! NUFG_AI::can_store() ) : ?>
 									<p class="description"><strong><?php esc_html_e( 'This server has no encryption support, so a key cannot be saved here. Use wp-config.php.', 'noga-ufiber-guide' ); ?></strong></p>
