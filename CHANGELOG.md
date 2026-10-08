@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.4 – 2026-10-08
+- The key box no longer judges what a key should look like. Two releases spent
+  refusing valid keys on the strength of a guessed format; the format is not
+  ours to guess. The paste is cleaned and kept.
+- A "Test the API key" button sends one tiny request and reports exactly what
+  Anthropic answers — key rejected, wrong model name, out of credit, or working.
+  That is the only check that means anything.
+
 ## 1.3.3 – 2026-10-08
 - Fixed properly: a single byte that is not valid UTF-8 anywhere in the pasted
   text made the key search return nothing, so a perfectly good key was refused.
