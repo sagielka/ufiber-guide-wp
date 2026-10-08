@@ -527,6 +527,9 @@ const SURFACE = {
   60:  { dd: '60', dc: 'D060', L: 75, rpm: [1800, 2400],  sleeve: ['UF5560', 'UF-FS-60-C12-L145'],  ds: 12, shanks: [['UF5005', 'UF-S-L050-DS13-C12', 'Ø12 chuck']] },
   100: { dd: '00', dc: 'D100', L: 75, rpm: [1000, 1400],  sleeve: ['UF5500', 'UF-FS-100-C16-L155'], ds: 16, shanks: [['UF5006', 'UF-S-L050-DS16-C16', 'Ø16 chuck']] },
 };
+/* Speed ceilings that live outside the per-diameter tables. Named once so the
+   engine and the facts handed to the AI cannot disagree about them. */
+const MAX_RPM = { point: 12000, end: 12000, disc: 9000, discRun: [6000, 8000], stone: 60000, stoneTypical: 30000, epack: 30000 };
 const SURFACE_LIMITS = { docPolish: 0.2, docDeburr: 0.5, docMax: 1.2, feedMax: 2000, projMax: 10 };
 
 const CROSS = {
@@ -1055,7 +1058,7 @@ function finishPoint(R, st, size, grit, mat, mode, machine, maxRpm, ctx = {}) {
   const row = sfRowOf(st); R.sfRow = row.id;
   const SFq = sfPoint({ row, dia: size, mode, hand, maxRpm });
   R.notes.push(...SFq.notes);
-  R.params = { rpm: SFq.rpm, rpmLo: SFq.rpmRange[0], rpmHi: SFq.rpmRange[1], rpmMax: 12000, feed: SFq.feed, feedRange: SFq.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFq.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact. Never force the fibers sideways.' : `NOGA table ${SFq.engRange[0]}–${SFq.engRange[1]} mm — fiber deflection, not material removed.` }, passes: SFq.passes, direction: 'Either; reverse for burrs pushed into a slot', coolant: SFq.cool };
+  R.params = { rpm: SFq.rpm, rpmLo: SFq.rpmRange[0], rpmHi: SFq.rpmRange[1], rpmMax: MAX_RPM.point, feed: SFq.feed, feedRange: SFq.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFq.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact. Never force the fibers sideways.' : `NOGA table ${SFq.engRange[0]}–${SFq.engRange[1]} mm — fiber deflection, not material removed.` }, passes: SFq.passes, direction: 'Either; reverse for burrs pushed into a slot', coolant: SFq.cool };
   R.steps = [hand ? 'Set the E-Pack speed and start rotation before touching the part.' : 'Start rotation clear of the part.', 'Touch on lightly with the brush tip, perpendicular to the surface where possible.', ctx.groove ? `Follow the groove centerline; the Ø${size} brush leaves clearance in your ${ctx.groove} mm groove.` : 'Follow the edge or feature with steady motion.', 'Make a return pass in the opposite direction.', 'Lift off before stopping.'];
   R.why = [
     { t: 'Why a Point brush', d: 'Ø1–3 mm fiber bundles reach narrow slots, small holes and fine details that larger brushes can\'t.' },
@@ -1079,7 +1082,7 @@ function finishEnd(R, st, grit, mat, mode, machine, maxRpm, angled, ctx = {}) {
   const row = sfRowOf(st); R.sfRow = row.id;
   const SFe = sfEnd({ row, mode, hand, maxRpm });
   R.notes.push(...SFe.notes); R.dataChecks = SFe.checks;
-  R.params = { rpm: SFe.rpm, rpmLo: SFe.rpmRange[0], rpmHi: SFe.rpmRange[1], rpmMax: 12000, feed: SFe.feed, feedRange: SFe.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFe.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact.' : `NOGA table ${SFe.engRange[0]}–${SFe.engRange[1]} mm — start at the low end.` }, passes: SFe.passes, direction: 'Either', coolant: SFe.cool };
+  R.params = { rpm: SFe.rpm, rpmLo: SFe.rpmRange[0], rpmHi: SFe.rpmRange[1], rpmMax: MAX_RPM.end, feed: SFe.feed, feedRange: SFe.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFe.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact.' : `NOGA table ${SFe.engRange[0]}–${SFe.engRange[1]} mm — start at the low end.` }, passes: SFe.passes, direction: 'Either', coolant: SFe.cool };
   R.steps = ['Start rotation clear of the part.', 'Bring the brush face onto the surface with light contact.', angled ? 'Use the pointed tip to reach into corners and along sharp edges.' : 'Move steadily along the edge or across the area.', 'Return pass in the opposite direction.', 'Lift off before stopping.'];
   R.why = [
     { t: `Why an End brush${angled ? ' (angled)' : ''}`, d: angled ? 'The 90° pointed tip gets into corners and tight recesses for selective deburring.' : 'Ø5 flat face gives even contact on small faces and edges — the go-to hand tool, also usable on CNC.' },
@@ -1295,7 +1298,7 @@ function parseText(text) {
   return out;
 }
 
-if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, scrubToolWords, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
+if (typeof module !== 'undefined') module.exports = { recommend, parseText, MAX_RPM, scrubContact, scrubToolWords, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
 
 /* ============================================================
    UFIBER speeds & feeds engine
@@ -1535,7 +1538,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.4.0';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.5.0';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3660,6 +3663,43 @@ function aiContext() {
   };
   return JSON.stringify(ctx);
 }
+/* The hard facts the model is allowed to state, read straight out of the same
+   tables the engine uses. Written by hand they drift: a table changes, the
+   sentence describing it does not, and the model confidently quotes a figure
+   the app no longer uses. Generated, that cannot happen. */
+function productFacts() {
+  const r = (a) => a[0] === a[1] ? String(a[0]) : a[0] + '\u2013' + a[1];
+  const surf = Object.keys(SURFACE).map(Number).sort((x, y) => x - y);
+  const cross = Object.keys(CROSS).map(Number).sort((x, y) => x - y);
+  const point = Object.keys(POINT).map(Number).sort((x, y) => x - y);
+  const disc = Object.keys(DISC).map(Number).sort((x, y) => x - y);
+  const grits = GRITS.map(g => g.grit);
+  const L = SURFACE_LIMITS;
+  const lines = [];
+
+  lines.push(`Surface brush: Ø${surf.join(', Ø')} mm. Grits #${grits.join(', #')}. Speed window per diameter: ` +
+    surf.map(d => `Ø${d} ${fmtN(SURFACE[d].rpm[0])}\u2013${fmtN(SURFACE[d].rpm[1])}`).join(', ') + ' RPM.');
+  lines.push(`Surface limits: depth of cut ${L.docPolish} polishing / ${L.docDeburr} deburring / ${L.docMax} mm absolute maximum; projection from the sleeve ${L.projMax} mm maximum; feed ${fmtN(L.feedMax)} mm/min maximum.`);
+  lines.push('Each surface brush has one sleeve and its own shanks: ' +
+    surf.map(d => `Ø${d} sleeve ${SURFACE[d].sleeve[0]}` + (SURFACE[d].shanks && SURFACE[d].shanks.length ? ', shanks ' + SURFACE[d].shanks.map(x => x[0]).join('/') : ', no shank')).join('; ') + '.');
+
+  lines.push('Cross-hole brush: ' + cross.map(d => {
+    const c = CROSS[d];
+    const g = c.grits ? ` (grits #${c.grits.join(', #')} only)` : '';
+    return `Ø${d} for bores Ø${r(c.pilot)}${c.pilotFine && String(c.pilotFine) !== String(c.pilot) ? ` coarse / Ø${r(c.pilotFine)} fine` : ''}, max ${fmtN(c.max)} RPM, Ø${c.ds} shank${g}`;
+  }).join('; ') + '. Stroke = the cross hole plus 5 mm clear on each side. No depth of cut: the fibers expand by centrifugal force.');
+
+  lines.push(`Point brush: Ø${point.join(', Ø')} mm, max ${fmtN(MAX_RPM.point)} RPM. End brush: Ø5 mm flat or 90° angled, max ${fmtN(MAX_RPM.end)} RPM. Neither is for air tools.`);
+  lines.push(`Ceramic fiber disc: Ø${disc.join(', Ø')} mm, 0.8 mm thick, grits #${DISC_GRITS.join(', #')} only, max ${fmtN(MAX_RPM.disc)} RPM and run ${fmtN(MAX_RPM.discRun[0])}\u2013${fmtN(MAX_RPM.discRun[1])}. Mounts on shank UF7030 (Ø3) or UF7023 (Ø2.35). Electric spindle only, never an air tool; dress with a diamond dressing tool.`);
+  lines.push('Ceramic diamond stone: Ø1\u20133 mm, grits ' + STONE_GRITS.map(g => '#' + g.grit + ' ' + g.color).join(', ') + ', max ' + fmtN(MAX_RPM.stone) + ' RPM.');
+  lines.push('Fiber colour by grit: ' + GRITS.map(g => '#' + g.grit + ' ' + g.color).join(', ') + '.');
+
+  const acc = Object.keys(ACCESSORIES);
+  lines.push(`Item numbers that are not brushes (${acc.length}): ` + acc.map(k => k + ' ' + ACCESSORIES[k][0]).join('; ') + '.');
+  return lines.join('\n- ');
+}
+const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u2014 these figures are authoritative:\n- ' + productFacts();
+
 const AI_RULES = `UFIBER rules you can rely on:
 - Surface brushes Ø6–100 cut with the fiber tips; depth of cut 0.2 polishing / 0.5 deburring / 1.2 mm absolute max; projection ≤10 mm from the sleeve; feed ≤2,000 mm/min; up-cut against side burrs; never side-load or rub walls.
 - Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush.
@@ -3748,6 +3788,7 @@ async function askClaude(question) {
   const intro = `You are the UFIBER application-engineer assistant inside the NOGA MT "UFIBER Guide" app. The user is a machinist, application engineer or distributor.
 Answer in the user's language. Be concise and practical (under 150 words unless asked for more), shop-floor tone, short bullets when listing steps.
 NEVER invent RPM, feed, depth, item numbers or test results. Use only values in SETUP_CONTEXT or returned by your tools${APP.sampleTools ? '; call try_setup or speeds_feeds to get numbers for any alternative, and propose_change whenever you recommend changing the setup' : ''}. If something needs a NOGA engineering review, say so plainly. Mention known NOGA data conflicts only when relevant.
+${AI_FACTS()}
 ${AI_RULES}
 material_rows (NOGA table rows for speeds_feeds): ${SF_ROWS.map(r => r.id + '=' + r.iso + ' ' + sfLabel(r)).join('; ')}
 SETUP_CONTEXT: ${aiContext()}`;

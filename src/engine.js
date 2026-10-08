@@ -38,6 +38,9 @@ const SURFACE = {
   60:  { dd: '60', dc: 'D060', L: 75, rpm: [1800, 2400],  sleeve: ['UF5560', 'UF-FS-60-C12-L145'],  ds: 12, shanks: [['UF5005', 'UF-S-L050-DS13-C12', 'Ø12 chuck']] },
   100: { dd: '00', dc: 'D100', L: 75, rpm: [1000, 1400],  sleeve: ['UF5500', 'UF-FS-100-C16-L155'], ds: 16, shanks: [['UF5006', 'UF-S-L050-DS16-C16', 'Ø16 chuck']] },
 };
+/* Speed ceilings that live outside the per-diameter tables. Named once so the
+   engine and the facts handed to the AI cannot disagree about them. */
+const MAX_RPM = { point: 12000, end: 12000, disc: 9000, discRun: [6000, 8000], stone: 60000, stoneTypical: 30000, epack: 30000 };
 const SURFACE_LIMITS = { docPolish: 0.2, docDeburr: 0.5, docMax: 1.2, feedMax: 2000, projMax: 10 };
 
 const CROSS = {
@@ -566,7 +569,7 @@ function finishPoint(R, st, size, grit, mat, mode, machine, maxRpm, ctx = {}) {
   const row = sfRowOf(st); R.sfRow = row.id;
   const SFq = sfPoint({ row, dia: size, mode, hand, maxRpm });
   R.notes.push(...SFq.notes);
-  R.params = { rpm: SFq.rpm, rpmLo: SFq.rpmRange[0], rpmHi: SFq.rpmRange[1], rpmMax: 12000, feed: SFq.feed, feedRange: SFq.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFq.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact. Never force the fibers sideways.' : `NOGA table ${SFq.engRange[0]}–${SFq.engRange[1]} mm — fiber deflection, not material removed.` }, passes: SFq.passes, direction: 'Either; reverse for burrs pushed into a slot', coolant: SFq.cool };
+  R.params = { rpm: SFq.rpm, rpmLo: SFq.rpmRange[0], rpmHi: SFq.rpmRange[1], rpmMax: MAX_RPM.point, feed: SFq.feed, feedRange: SFq.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFq.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact. Never force the fibers sideways.' : `NOGA table ${SFq.engRange[0]}–${SFq.engRange[1]} mm — fiber deflection, not material removed.` }, passes: SFq.passes, direction: 'Either; reverse for burrs pushed into a slot', coolant: SFq.cool };
   R.steps = [hand ? 'Set the E-Pack speed and start rotation before touching the part.' : 'Start rotation clear of the part.', 'Touch on lightly with the brush tip, perpendicular to the surface where possible.', ctx.groove ? `Follow the groove centerline; the Ø${size} brush leaves clearance in your ${ctx.groove} mm groove.` : 'Follow the edge or feature with steady motion.', 'Make a return pass in the opposite direction.', 'Lift off before stopping.'];
   R.why = [
     { t: 'Why a Point brush', d: 'Ø1–3 mm fiber bundles reach narrow slots, small holes and fine details that larger brushes can\'t.' },
@@ -590,7 +593,7 @@ function finishEnd(R, st, grit, mat, mode, machine, maxRpm, angled, ctx = {}) {
   const row = sfRowOf(st); R.sfRow = row.id;
   const SFe = sfEnd({ row, mode, hand, maxRpm });
   R.notes.push(...SFe.notes); R.dataChecks = SFe.checks;
-  R.params = { rpm: SFe.rpm, rpmLo: SFe.rpmRange[0], rpmHi: SFe.rpmRange[1], rpmMax: 12000, feed: SFe.feed, feedRange: SFe.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFe.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact.' : `NOGA table ${SFe.engRange[0]}–${SFe.engRange[1]} mm — start at the low end.` }, passes: SFe.passes, direction: 'Either', coolant: SFe.cool };
+  R.params = { rpm: SFe.rpm, rpmLo: SFe.rpmRange[0], rpmHi: SFe.rpmRange[1], rpmMax: MAX_RPM.end, feed: SFe.feed, feedRange: SFe.feedRange, engage: { label: hand ? 'Contact' : 'Engagement', value: hand ? 'Light' : SFe.eng, unit: hand ? '' : 'mm', note: hand ? 'Light, controlled contact.' : `NOGA table ${SFe.engRange[0]}–${SFe.engRange[1]} mm — start at the low end.` }, passes: SFe.passes, direction: 'Either', coolant: SFe.cool };
   R.steps = ['Start rotation clear of the part.', 'Bring the brush face onto the surface with light contact.', angled ? 'Use the pointed tip to reach into corners and along sharp edges.' : 'Move steadily along the edge or across the area.', 'Return pass in the opposite direction.', 'Lift off before stopping.'];
   R.why = [
     { t: `Why an End brush${angled ? ' (angled)' : ''}`, d: angled ? 'The 90° pointed tip gets into corners and tight recesses for selective deburring.' : 'Ø5 flat face gives even contact on small faces and edges — the go-to hand tool, also usable on CNC.' },
@@ -806,5 +809,5 @@ function parseText(text) {
   return out;
 }
 
-if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, scrubToolWords, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
+if (typeof module !== 'undefined') module.exports = { recommend, parseText, MAX_RPM, scrubContact, scrubToolWords, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
 
