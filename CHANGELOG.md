@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.2 – 2026-10-08
+- Fixed: a pasted API key was rejected when it carried an invisible character,
+  a smart quote, or the whole define(...) line from the instructions. The key is
+  now taken out of whatever was pasted, and a key already saved survives a bad
+  paste instead of being wiped.
+
 ## 1.3.1 – 2026-10-08
 - The API key can now be entered on the settings screen, for sites where
   wp-config.php cannot be edited. It is stored encrypted with this site's own

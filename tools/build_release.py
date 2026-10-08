@@ -11,7 +11,7 @@ Writes into ./dist:
   update.json                       the manifest the plugin checks; upload it next to the zip (only with --base-url)
 Nothing is uploaded for you. See README.md.
 """
-import argparse, datetime, hashlib, html, json, pathlib, re, shutil, sys, tempfile, zipfile
+import argparse, subprocess, datetime, hashlib, html, json, pathlib, re, shutil, sys, tempfile, zipfile
 
 SLUG = "noga-ufiber-guide"
 HERE = pathlib.Path(__file__).resolve().parent
@@ -75,8 +75,16 @@ def main():
         if f.exists():
             t = f.read_text(encoding="utf-8")
             f.write_text(re.sub(r"^Stable tag:.*$", "Stable tag: " + a.version, t, count=1, flags=re.M), encoding="utf-8")
-        f = src / "assets" / "app" / "ufiber-guide.html"
+        # The app is generated from src/. Stamp the source and rebuild, so the
+        # two never drift: stamping only the built file would make
+        # "python3 src/build.py --check" fail on the very next release.
+        f = src / "src" / "ui1.js"
         if f.exists() and not a.app:
+            t = f.read_text(encoding="utf-8")
+            f.write_text(re.sub(r"(const APP_VERSION = ')[^']*(')", r"\g<1>" + a.version + r"\g<2>", t, count=1), encoding="utf-8")
+            subprocess.run([sys.executable, str(src / "src" / "build.py")], check=True, cwd=str(src))
+        elif (src / "assets" / "app" / "ufiber-guide.html").exists() and not a.app:
+            f = src / "assets" / "app" / "ufiber-guide.html"
             t = f.read_text(encoding="utf-8")
             f.write_text(re.sub(r"(const APP_VERSION = ')[^']*(')", r"\g<1>" + a.version + r"\g<2>", t, count=1), encoding="utf-8")
     stamp_source()
