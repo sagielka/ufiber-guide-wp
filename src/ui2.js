@@ -90,7 +90,8 @@ function renderUnderstood() {
   el.innerHTML = `<div class="understood fade-in"><b>${APP.doc?.ai ? 'Here\'s what Claude read' : 'Here\'s what I understood'}</b> <span class="tiny">— tap anything to change it</span>
     <div class="u-list">${chips.join('')}</div>${smartBlock()}${pick}
     <div class="row" style="margin-top:12px">${missing ? `<span class="small muted">${APP.smart.busy ? 'Claude is filling in the gaps…' : 'One more answer and you\'re set.'}</span>` : `<button class="btn primary" id="goRes">Show my setup ${I.arrow}</button>`}
-    <button class="btn ghost small" id="goWiz">Refine step by step</button></div></div>`;
+    <button class="btn ghost small" id="goWiz">Refine step by step</button>
+    <button class="btn ghost small" id="goClear" title="Empty the box and forget everything read so far">Clear</button></div></div>`;
 }
 function doAsk(text, opt = {}) {
   APP.askText = text;
@@ -215,6 +216,21 @@ function openShare() {
       : '<p class="small">That did not go through. Nothing was sent; you can copy the text and e-mail it instead.</p>';
   };
   $('#shareCancel').onclick = () => renderRec();
+}
+/* Start again. Everything read from the text, the attachments and the AI goes;
+   the machine and the unit setting stay, because those describe the shop rather
+   than this one job. */
+function clearAsk() {
+  APP.smart.ctl?.abort();
+  const machine = APP.ws?.machine;
+  APP.ws = newState();
+  if (machine) APP.ws.machine = machine;
+  APP.askText = ''; APP.parsed = null; APP.editKey = null; APP.rec = null; APP.matches = [];
+  APP.nlu = null; APP.doc = null;
+  APP.smart = { busy: false, err: null, summary: '', questions: [], checked: false, snap: null, ctl: null };
+  const ta = $('#askT'); if (ta) { ta.value = ''; }
+  rerender();
+  const again = $('#askT'); if (again) again.focus();
 }
 function computeRec() { dedupeDims(APP.ws); APP.rec = recommend(APP.ws); APP.matches = matchCases(APP.rec, APP.ws, CASES);
   try { USAGE.track('recommendation', APP.ws, APP.rec); } catch (e) { }
