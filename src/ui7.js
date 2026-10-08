@@ -28,6 +28,11 @@ Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters
 Materials: 304/316/A2/A4 → stainless aust; 17-4/420/410 → stainless mart; 6061/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
 Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root.
 Phrases about the CURRENT process ("today we deburr by hand") are not the target machine.
+THE TOOL IS NOT THE PART. A customer often names a tool they already have or want: a brush, hone, stone, 3/8" hone, "ceramic abrasive fiber", a grit number, an item code.
+  - Its SIZE is never a part dimension. "a 3/8 inch hone" says nothing about the bore; leave "main" null and ask.
+  - Its MATERIAL is never the part material. "ceramic fiber brush", "diamond stone", "carbide burr" describe the tool; leave "material" null and ask what the part is made of.
+  - Only sizes and materials stated as belonging to the WORKPIECE go in "dims" and "material".
+Do not put the same number in two fields. If only one diameter is stated, it is "main"; leave "cross" null unless a second, intersecting hole is actually described.
 Task meanings: ${Object.entries(TASKS).map(([k, t]) => k + ' = ' + t.name).join('; ')}.
 Feature meanings: ${Object.entries(FEATURES).map(([k, f]) => k + ' = ' + f).join('; ')}.`;
 }
