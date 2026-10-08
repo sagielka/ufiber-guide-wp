@@ -47,31 +47,31 @@ class NUFG_Settings {
 		if ( '__clear__' === $v ) {
 			return '';
 		}
-		// Pasting rarely gives a clean key: smart quotes, a zero-width character,
-		// the whole define(...) line from the instructions, or a stray byte that
-		// is not valid UTF-8. Pull the key out of whatever arrived. Deliberately
-		// byte-wise, with no /u modifier: on invalid UTF-8 a /u pattern returns
-		// null, which silently turned a good key into "no key found".
+		// Do not try to validate the shape of a credential. Keys change format,
+		// and guessing at one refuses perfectly good keys while a wrong one still
+		// looks right. Clean the paste, keep what is left, and let the Test button
+		// below say what Anthropic actually thinks of it.
 		$raw = $v;
 		$v   = str_replace( array( "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xEF\xBB\xBF", "\xC2\xA0" ), '', $v );
-		$v   = preg_replace( '/\s+/', '', $v );   // a key never contains a space, but a copy of one can be wrapped
-		if ( preg_match( '/sk-[A-Za-z0-9_\-]{20,}/', $v, $m ) ) {
-			$v = $m[0];
+		$v   = preg_replace( '/\s+/', '', $v );
+		if ( preg_match( '/sk-[\x21-\x7E]{20,}?(?=[\x27"`;,)\]]|$)/', $v, $m ) ) {
+			$v = $m[0];                    // pulled out of a define(...) line or quotes
 		} else {
-			// Say what actually arrived. "0 characters" means the field was empty
-			// or the browser overwrote it; a short value usually means autofill
-			// put a saved password in instead of the key.
+			$v = trim( $v, "'\"`" );       // just strip quotes and take it as given
+		}
+		if ( strlen( $v ) < 20 || strlen( $v ) > 400 ) {
 			add_settings_error(
 				'nufg',
 				'nufg_key',
 				sprintf(
 					/* translators: %d: number of characters received */
-					__( 'No API key found in what was pasted (%d characters arrived). A key looks like sk-ant-… and is about a hundred characters long. If that says 0, the box was empty when you saved — some browsers overwrite a password box with a saved password, so paste the key again just before pressing Save.', 'noga-ufiber-guide' ),
-					strlen( (string) $raw )
+					__( 'That does not look like a key: %d characters arrived after cleaning. Paste just the key, nothing around it.', 'noga-ufiber-guide' ),
+					strlen( $v )
 				)
 			);
 			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
 		}
+		unset( $raw );
 		$enc = NUFG_AI::encrypt( $v );
 		if ( '' === $enc ) {
 			add_settings_error( 'nufg', 'nufg_key', __( 'This server cannot encrypt the key, so it was not saved. Put it in wp-config.php instead.', 'noga-ufiber-guide' ) );
@@ -277,6 +277,11 @@ class NUFG_Settings {
 							<p class="description"><?php esc_html_e( 'Each reading is a paid request, capped at 20 an hour per visitor. The guide works without this; it falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
 
 							<h4 style="margin-bottom:4px"><?php esc_html_e( 'API key', 'noga-ufiber-guide' ); ?></h4>
+							<?php $t = get_transient( 'nufg_ai_test_result' ); if ( $t ) : delete_transient( 'nufg_ai_test_result' ); ?>
+								<div class="notice inline <?php echo $t['ok'] ? 'notice-success' : 'notice-error'; ?>" style="margin:6px 0">
+									<p><?php echo esc_html( $t['msg'] ); ?></p>
+								</div>
+							<?php endif; ?>
 							<?php if ( $fixed ) : ?>
 								<p><?php printf( esc_html__( 'Set in wp-config.php (%s). That is the safest place; this screen cannot change it.', 'noga-ufiber-guide' ), '<code>' . esc_html( $hint ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
 							<?php else : ?>
@@ -308,6 +313,15 @@ class NUFG_Settings {
 				</table>
 				<?php submit_button(); ?>
 			</form>
+
+			<?php if ( '' !== NUFG_AI::key_hint() ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:-12px">
+					<input type="hidden" name="action" value="nufg_ai_test">
+					<?php wp_nonce_field( 'nufg_ai_test' ); ?>
+					<?php submit_button( __( 'Test the API key', 'noga-ufiber-guide' ), 'secondary', 'submit', false ); ?>
+					<span class="description" style="margin-left:8px"><?php esc_html_e( 'Sends one tiny request and reports exactly what Anthropic answers. Save the key first.', 'noga-ufiber-guide' ); ?></span>
+				</form>
+			<?php endif; ?>
 
 			<?php if ( $active ) : ?>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">

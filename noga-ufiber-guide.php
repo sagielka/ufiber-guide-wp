@@ -3,7 +3,7 @@
  * Plugin Name:       NOGA MT – UFIBER Guide for Elementor
  * Plugin URI:        https://www.noga.com/nogamt/ufiber-ceramic-brush/
  * Description:       The UFIBER Guide for your website: tool selector, speeds &amp; feeds, troubleshooter, XEBEC converter and product builder. Adds an Elementor widget and a [ufiber_guide] shortcode, and updates itself from your update source.
- * Version:           1.3.3
+ * Version:           1.3.4
  * Requires at least: 5.8
  * Requires PHP:      7.4
  * Author:            NOGA MT
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'NUFG_VERSION', '1.3.3' );
+define( 'NUFG_VERSION', '1.3.4' );
 define( 'NUFG_FILE', __FILE__ );
 define( 'NUFG_DIR', plugin_dir_path( __FILE__ ) );
 define( 'NUFG_URL', plugin_dir_url( __FILE__ ) );

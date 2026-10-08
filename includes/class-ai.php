@@ -39,6 +39,72 @@ final class NUFG_AI {
 
 	public static function init() {
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
+		add_action( 'admin_post_nufg_ai_test', array( __CLASS__, 'handle_test' ) );
+	}
+
+	/**
+	 * Ask Anthropic whether the key works, and report what it actually said.
+	 * Guessing at the shape of a key refuses good ones and accepts bad ones;
+	 * one real call settles it.
+	 */
+	public static function test() {
+		$key = self::key();
+		if ( '' === $key ) {
+			return array( false, __( 'No key is set.', 'noga-ufiber-guide' ) );
+		}
+		$res = wp_remote_post( self::ENDPOINT, array(
+			'timeout' => 20,
+			'headers' => array(
+				'content-type'      => 'application/json',
+				'x-api-key'         => $key,
+				'anthropic-version' => self::API_VERSION,
+			),
+			'body'    => wp_json_encode( array(
+				'model'      => self::model(),
+				'max_tokens' => 4,
+				'messages'   => array( array( 'role' => 'user', 'content' => 'Reply with the word ok.' ) ),
+			) ),
+		) );
+		if ( is_wp_error( $res ) ) {
+			return array( false, sprintf(
+				/* translators: %s: error text from the server */
+				__( 'This site could not reach Anthropic: %s', 'noga-ufiber-guide' ),
+				$res->get_error_message()
+			) );
+		}
+		$code = (int) wp_remote_retrieve_response_code( $res );
+		$body = json_decode( wp_remote_retrieve_body( $res ), true );
+		if ( 200 === $code ) {
+			return array( true, sprintf(
+				/* translators: %s: model name */
+				__( 'The key works. Answered by %s.', 'noga-ufiber-guide' ),
+				isset( $body['model'] ) ? $body['model'] : self::model()
+			) );
+		}
+		$msg = isset( $body['error']['message'] ) ? $body['error']['message'] : '';
+		if ( 401 === $code ) {
+			$msg = __( 'Anthropic rejected the key. Check it was copied whole and has not been deleted in the console.', 'noga-ufiber-guide' );
+		} elseif ( 400 === $code && false !== stripos( $msg, 'model' ) ) {
+			$msg = sprintf(
+				/* translators: %s: model name */
+				__( 'The key is accepted but the model name is not: %s', 'noga-ufiber-guide' ),
+				self::model()
+			);
+		} elseif ( 429 === $code ) {
+			$msg = __( 'The key works but the account is rate limited or out of credit.', 'noga-ufiber-guide' );
+		}
+		return array( false, sprintf( 'HTTP %d. %s', $code, $msg ) );
+	}
+
+	public static function handle_test() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Not allowed.', 'noga-ufiber-guide' ) );
+		}
+		check_admin_referer( 'nufg_ai_test' );
+		list( $ok, $msg ) = self::test();
+		set_transient( 'nufg_ai_test_result', array( 'ok' => $ok, 'msg' => $msg ), 120 );
+		wp_safe_redirect( admin_url( 'options-general.php?page=nufg' ) );
+		exit;
 	}
 
 	/** Configured means: a key exists and the setting is on. */
