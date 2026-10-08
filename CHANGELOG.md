@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.7 – 2026-10-08
+- The tool a customer names is no longer read as their part. "a 3/8 inch hone
+  with ceramic abrasive fiber" was setting the workpiece material to carbide and
+  the bore to 203 mm, because 3/8 was read as 8 inches and the brush's ceramic
+  as the part's material. Both now stay empty and are asked about instead.
+- Fractions are no longer split: the denominator of 3/8 is not a measurement.
+- The AI is told the same thing: a named brush, hone or stone describes the
+  tool, and its size and material never belong to the part.
+
 ## 1.3.6 – 2026-10-08
 - The key box checks one thing again: that a key starting sk-ant- is present,
   which is what Anthropic's documentation states. 1.3.4 removed every check

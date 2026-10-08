@@ -712,8 +712,17 @@ function dedupeDims(st) {
   if (st.task === 'crosshole' && d.hole != null && (d.hole === d.cross || d.hole === d.main)) delete d.hole;
   return st;
 }
+/* A customer naming the tool they want is not describing their part. "ceramic
+   fiber brush", "diamond stone", "carbide burr" all used to set the workpiece
+   material, so a stainless part became carbide because of the brush. Take those
+   phrases out before anything looks for a material. */
+function scrubToolWords(s) {
+  return String(s)
+    .replace(/\b(ceramic|diamond|carbide|abrasive|nylon|aluminium oxide|aluminum oxide|silicon carbide|cbn)[\w\s-]{0,24}?(fib(?:er|re)s?|brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|tool|bristle)/gi, ' ')
+    .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
+}
 function parseText(text) {
-  const t = ' ' + scrubContact(text).replace(/,/g, '.') + ' ';
+  const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
   // material
   for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
@@ -746,6 +755,9 @@ function parseText(text) {
     const after = t.slice(m.index + raw.length, m.index + raw.length + 40).toLowerCase();
     const before = t.slice(Math.max(0, m.index - 30), m.index).toLowerCase();
     if (/^\s*(rpm|min|hrc|%|µ|um|x)/.test(after) || /(ra\s*$|rz\s*$)/.test(before)) continue;
+    // 3/8" is one fractional size, not the number 8. Reading the denominator as
+    // inches turned a 3/8 inch brush into a 203 mm feature.
+    if (/\d\s*\/\s*$/.test(before)) continue;
     if (/\b(304|316|6061|7075|2024|4140|1045|718|625|420|410|440|390|12)\b/.test(String(v)) && !/[øØ⌀]|mm|dia/.test(raw + after.slice(0, 4))) { if (!/mm/.test(after.slice(0, 4))) continue; }
     const hasMark = /[øØ⌀]|dia|mm|"/.test(raw) || /^\s*mm/.test(after);
     if (!hasMark) continue;
@@ -794,5 +806,5 @@ function parseText(text) {
   return out;
 }
 
-if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
+if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, scrubToolWords, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
 

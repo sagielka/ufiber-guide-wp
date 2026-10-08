@@ -1201,8 +1201,17 @@ function dedupeDims(st) {
   if (st.task === 'crosshole' && d.hole != null && (d.hole === d.cross || d.hole === d.main)) delete d.hole;
   return st;
 }
+/* A customer naming the tool they want is not describing their part. "ceramic
+   fiber brush", "diamond stone", "carbide burr" all used to set the workpiece
+   material, so a stainless part became carbide because of the brush. Take those
+   phrases out before anything looks for a material. */
+function scrubToolWords(s) {
+  return String(s)
+    .replace(/\b(ceramic|diamond|carbide|abrasive|nylon|aluminium oxide|aluminum oxide|silicon carbide|cbn)[\w\s-]{0,24}?(fib(?:er|re)s?|brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|tool|bristle)/gi, ' ')
+    .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
+}
 function parseText(text) {
-  const t = ' ' + scrubContact(text).replace(/,/g, '.') + ' ';
+  const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
   // material
   for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
@@ -1235,6 +1244,9 @@ function parseText(text) {
     const after = t.slice(m.index + raw.length, m.index + raw.length + 40).toLowerCase();
     const before = t.slice(Math.max(0, m.index - 30), m.index).toLowerCase();
     if (/^\s*(rpm|min|hrc|%|µ|um|x)/.test(after) || /(ra\s*$|rz\s*$)/.test(before)) continue;
+    // 3/8" is one fractional size, not the number 8. Reading the denominator as
+    // inches turned a 3/8 inch brush into a 203 mm feature.
+    if (/\d\s*\/\s*$/.test(before)) continue;
     if (/\b(304|316|6061|7075|2024|4140|1045|718|625|420|410|440|390|12)\b/.test(String(v)) && !/[øØ⌀]|mm|dia/.test(raw + after.slice(0, 4))) { if (!/mm/.test(after.slice(0, 4))) continue; }
     const hasMark = /[øØ⌀]|dia|mm|"/.test(raw) || /^\s*mm/.test(after);
     if (!hasMark) continue;
@@ -1283,7 +1295,7 @@ function parseText(text) {
   return out;
 }
 
-if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
+if (typeof module !== 'undefined') module.exports = { recommend, parseText, scrubContact, scrubToolWords, dedupeDims, matchCases, GRITS, SURFACE, CROSS, MATERIALS, TASKS, FEATURES, MACHINES, skuSurface, skuCross, skuPoint, skuEnd, skuDisc, DISC_GRITS, discGrit, ACCESSORIES, skuStone, STONE_GRITS, DAMPER };
 
 /* ============================================================
    UFIBER speeds & feeds engine
@@ -1523,7 +1535,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.3.6';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.3.7';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3503,6 +3515,11 @@ Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters
 Materials: 304/316/A2/A4 → stainless aust; 17-4/420/410 → stainless mart; 6061/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
 Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root.
 Phrases about the CURRENT process ("today we deburr by hand") are not the target machine.
+THE TOOL IS NOT THE PART. A customer often names a tool they already have or want: a brush, hone, stone, 3/8" hone, "ceramic abrasive fiber", a grit number, an item code.
+  - Its SIZE is never a part dimension. "a 3/8 inch hone" says nothing about the bore; leave "main" null and ask.
+  - Its MATERIAL is never the part material. "ceramic fiber brush", "diamond stone", "carbide burr" describe the tool; leave "material" null and ask what the part is made of.
+  - Only sizes and materials stated as belonging to the WORKPIECE go in "dims" and "material".
+Do not put the same number in two fields. If only one diameter is stated, it is "main"; leave "cross" null unless a second, intersecting hole is actually described.
 Task meanings: ${Object.entries(TASKS).map(([k, t]) => k + ' = ' + t.name).join('; ')}.
 Feature meanings: ${Object.entries(FEATURES).map(([k, f]) => k + ' = ' + f).join('; ')}.`;
 }
