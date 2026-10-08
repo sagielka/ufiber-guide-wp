@@ -191,6 +191,22 @@ function productFacts() {
   lines.push(`Item numbers that are not brushes (${acc.length}): ` + acc.map(k => k + ' ' + ACCESSORIES[k][0]).join('; ') + '.');
   return lines.join('\n- ');
 }
+/* The whole tested library, one line each. The matcher surfaces the closest few
+   on screen; the model gets all of them, so it can answer "has anyone run this
+   in cast iron?" from real results rather than from the tables alone. Kept to
+   what was measured: tool, speed, feed, outcome. */
+function caseIndex() {
+  return CASES.map(c => {
+    const bits = [c.part, c.mat, c.fam, String(c.tool || '').split('/')[0].trim()];
+    if (c.grits && c.grits.length) bits.push('#' + c.grits.join('/#'));
+    if (c.rpm) bits.push(fmtN(c.rpm) + ' rpm');
+    if (c.feed && c.feed > 1) bits.push(fmtN(c.feed) + ' mm/min');
+    if (c.doc) bits.push(c.doc + ' mm doc');
+    return '- ' + bits.filter(Boolean).join(' | ');
+  }).join('\n');
+}
+const AI_CASES = () => `Tested applications (${CASES.length}), from NOGA and reference work. These are measured results, not table values: when one of them disagrees with the tables, say so and prefer the tested figure, naming the case.\n` + caseIndex();
+
 const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u2014 these figures are authoritative:\n- ' + productFacts();
 
 const AI_RULES = `UFIBER rules you can rely on:
@@ -282,6 +298,7 @@ async function askClaude(question) {
 Answer in the user's language. Be concise and practical (under 150 words unless asked for more), shop-floor tone, short bullets when listing steps.
 NEVER invent RPM, feed, depth, item numbers or test results. Use only values in SETUP_CONTEXT or returned by your tools${APP.sampleTools ? '; call try_setup or speeds_feeds to get numbers for any alternative, and propose_change whenever you recommend changing the setup' : ''}. If something needs a NOGA engineering review, say so plainly. Mention known NOGA data conflicts only when relevant.
 ${AI_FACTS()}
+${AI_CASES()}
 ${AI_RULES}
 material_rows (NOGA table rows for speeds_feeds): ${SF_ROWS.map(r => r.id + '=' + r.iso + ' ' + sfLabel(r)).join('; ')}
 SETUP_CONTEXT: ${aiContext()}`;

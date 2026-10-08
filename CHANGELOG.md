@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1 – 2026-10-08
+- The AI now sees all 67 tested applications, not only the few the matcher put
+  on screen, so it can answer from a real result in a material the tables alone
+  would only reason about.
+- It is told plainly that a measured result outranks the tables, and to name the
+  case when the two disagree.
+
 ## 1.5.0 – 2026-10-08
 - The AI now works from the product data itself. Every diameter, grit, speed
   window, limit and accessory it is allowed to state is generated from the same
