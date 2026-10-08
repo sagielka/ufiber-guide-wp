@@ -46,11 +46,67 @@ final class NUFG_AI {
 		return self::key() !== '' && (bool) get_option( 'nufg_ai_enabled', 0 );
 	}
 
+	const KEY_OPTION = 'nufg_ai_key';
+
+	/**
+	 * wp-config.php wins. Failing that, a key saved in the settings screen, which
+	 * is stored encrypted: the encryption key comes from this site's own salts,
+	 * which live in wp-config.php and are not in the database. So a stolen
+	 * database dump alone yields nothing usable.
+	 *
+	 * It is still weaker than the constant. Anyone who can run PHP on this site
+	 * can decrypt it, and rotating the salts makes the saved key unreadable — it
+	 * then reads as absent and has to be entered again.
+	 */
 	private static function key() {
-		if ( defined( 'NUFG_CLAUDE_API_KEY' ) && is_string( NUFG_CLAUDE_API_KEY ) ) {
+		if ( defined( 'NUFG_CLAUDE_API_KEY' ) && is_string( NUFG_CLAUDE_API_KEY ) && '' !== trim( NUFG_CLAUDE_API_KEY ) ) {
 			return trim( NUFG_CLAUDE_API_KEY );
 		}
-		return '';
+		return self::decrypt( (string) get_option( self::KEY_OPTION, '' ) );
+	}
+
+	/** True when the key comes from wp-config.php, which cannot be edited here. */
+	public static function key_is_constant() {
+		return defined( 'NUFG_CLAUDE_API_KEY' ) && is_string( NUFG_CLAUDE_API_KEY ) && '' !== trim( NUFG_CLAUDE_API_KEY );
+	}
+
+	/** For the settings screen: enough to recognise the key, never the key. */
+	public static function key_hint() {
+		$k = self::key();
+		return '' === $k ? '' : '…' . substr( $k, -4 );
+	}
+
+	public static function can_store() {
+		return function_exists( 'openssl_encrypt' ) && function_exists( 'random_bytes' );
+	}
+
+	private static function secret() {
+		return hash( 'sha256', wp_salt( 'auth' ) . '|nufg-ai-key', true );
+	}
+
+	public static function encrypt( $plain ) {
+		if ( '' === $plain || ! self::can_store() ) {
+			return '';
+		}
+		try {
+			$iv = random_bytes( 16 );
+		} catch ( Exception $e ) {
+			return '';
+		}
+		$c = openssl_encrypt( $plain, 'aes-256-cbc', self::secret(), OPENSSL_RAW_DATA, $iv );
+		return false === $c ? '' : 'v1:' . base64_encode( $iv . $c );
+	}
+
+	private static function decrypt( $stored ) {
+		if ( '' === $stored || 0 !== strpos( $stored, 'v1:' ) || ! self::can_store() ) {
+			return '';
+		}
+		$raw = base64_decode( substr( $stored, 3 ), true );
+		if ( false === $raw || strlen( $raw ) <= 16 ) {
+			return '';
+		}
+		$plain = openssl_decrypt( substr( $raw, 16 ), 'aes-256-cbc', self::secret(), OPENSSL_RAW_DATA, substr( $raw, 0, 16 ) );
+		return is_string( $plain ) ? $plain : '';   // salts rotated: treated as no key
 	}
 
 	private static function model() {

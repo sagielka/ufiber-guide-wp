@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.1 – 2026-10-08
+- The API key can now be entered on the settings screen, for sites where
+  wp-config.php cannot be edited. It is stored encrypted with this site's own
+  salts, so a stolen database alone cannot read it, and it is never shown back
+  in the page — only the last four characters.
+- wp-config.php still wins where it is set, and is still the safer place.
+
 ## 1.3.0 – 2026-10-08
 - The guide's AI features now work on your own site. Until now the summary, the
   follow-up questions and reading a customer e-mail or drawing only ran inside
