@@ -47,8 +47,18 @@ class NUFG_Settings {
 		if ( '__clear__' === $v ) {
 			return '';
 		}
-		if ( 0 !== strpos( $v, 'sk-' ) ) {
-			add_settings_error( 'nufg', 'nufg_key', __( 'That does not look like an API key. It should start with sk-.', 'noga-ufiber-guide' ) );
+		// Pasting rarely gives a clean key: smart quotes, a zero-width character,
+		// or the whole define(...) line from the instructions. Take the key out of
+		// whatever arrived rather than rejecting the person for it.
+		$v = preg_replace( '/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $v );
+		if ( preg_match( '/sk-[A-Za-z0-9_\-]{20,}/', $v, $m ) ) {
+			$v = $m[0];
+		} else {
+			add_settings_error(
+				'nufg',
+				'nufg_key',
+				__( 'No API key found in what was pasted. It looks like sk-ant-… and is about a hundred characters long. Copy it straight from console.anthropic.com — a key is only shown once, so if it has been lost, create a new one.', 'noga-ufiber-guide' )
+			);
 			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
 		}
 		$enc = NUFG_AI::encrypt( $v );
