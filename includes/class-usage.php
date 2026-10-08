@@ -87,7 +87,7 @@ final class NUFG_Usage {
 		return wp_hash( 'nufg-usage|' . gmdate( 'Y-m-d' ) . '|' . wp_salt( 'nonce' ) );
 	}
 
-	private static function token_ok( $req ) {
+	public static function token_ok( $req ) {
 		$t = (string) $req->get_param( 'k' );
 		if ( hash_equals( self::token(), $t ) ) {
 			return true;
@@ -98,7 +98,7 @@ final class NUFG_Usage {
 	}
 
 	/** Caps one visitor to a sane number of writes per hour. */
-	private static function rate_ok( $bucket, $limit ) {
+	public static function rate_ok( $bucket, $limit ) {
 		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '0';
 		$key = 'nufg_rl_' . $bucket . '_' . md5( $ip );
 		$n   = (int) get_transient( $key );

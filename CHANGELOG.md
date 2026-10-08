@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0 – 2026-10-08
+- The guide's AI features now work on your own site. Until now the summary, the
+  follow-up questions and reading a customer e-mail or drawing only ran inside
+  the claude.ai preview; on a real site that code returned immediately and
+  visitors saw none of it. A new endpoint in the plugin is that missing bridge.
+- Switch it on under Settings -> UFIBER Guide, once an API key is set in
+  wp-config.php. The key is never read from the database.
+- Without a key, over the hourly cap, or with the network down, the guide falls
+  back to its offline model and the visitor sees no error.
+- The model reads language and explains. Speeds, feeds and item numbers still
+  come from the guide's own tables, and it is given no way to change them.
+- The app source is now in the repository under src/, with a build that
+  reproduces the shipped file byte for byte.
+
 ## 1.2.1 – 2026-10-05
 - Usage rows are deleted automatically after one year, by a daily scheduled job. The admin screen says so, so export anything worth keeping.
 - The write endpoints now require a token this site issues for its own embedded guide, and are rate limited per visitor: 120 usage events and 10 shared applications an hour.

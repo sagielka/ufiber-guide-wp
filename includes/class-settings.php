@@ -26,11 +26,19 @@ class NUFG_Settings {
 	}
 
 	public static function register() {
+		// Two plain on/off switches, kept outside the main options array so they
+		// read cheaply from the front end on every page view.
+		register_setting( 'nufg', 'nufg_usage_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
+		register_setting( 'nufg', 'nufg_ai_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
 		register_setting(
 			'nufg',
 			NUFG_Plugin::OPTION,
 			array( 'type' => 'array', 'sanitize_callback' => array( __CLASS__, 'sanitize' ), 'default' => NUFG_Plugin::defaults() )
 		);
+	}
+
+	public static function bool( $v ) {
+		return empty( $v ) ? 0 : 1;
 	}
 
 	public static function sanitize( $in ) {
@@ -211,6 +219,36 @@ class NUFG_Settings {
 								?></p>
 							<?php endif; ?>
 							<p class="description"><?php esc_html_e( 'WordPress checks twice a day. When a newer version exists it appears under Dashboard → Updates and Plugins, where you can also switch on automatic updates for this plugin.', 'noga-ufiber-guide' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'AI and usage data', 'noga-ufiber-guide' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Reading with AI', 'noga-ufiber-guide' ); ?></th>
+						<td>
+							<?php $has_key = defined( 'NUFG_CLAUDE_API_KEY' ) && NUFG_CLAUDE_API_KEY; ?>
+							<label><input type="checkbox" name="nufg_ai_enabled" value="1" <?php checked( get_option( 'nufg_ai_enabled', 0 ), 1 ); ?> <?php disabled( ! $has_key ); ?>>
+								<?php esc_html_e( 'Let the guide read a customer e-mail or drawing, summarise it and ask follow-up questions.', 'noga-ufiber-guide' ); ?></label>
+							<?php if ( $has_key ) : ?>
+								<p class="description"><?php esc_html_e( 'An API key is configured. Each reading is a paid request, capped at 20 an hour per visitor. The guide still works without this; it simply falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
+							<?php else : ?>
+								<p class="description"><strong><?php esc_html_e( 'No API key, so this cannot be switched on.', 'noga-ufiber-guide' ); ?></strong>
+								<?php esc_html_e( 'Add this line to wp-config.php, above the line that says "stop editing":', 'noga-ufiber-guide' ); ?></p>
+								<p><code>define( 'NUFG_CLAUDE_API_KEY', 'sk-ant-...' );</code></p>
+								<p class="description"><?php esc_html_e( 'Keep the key in wp-config.php rather than the database, where it would end up in every backup and export.', 'noga-ufiber-guide' ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Usage data', 'noga-ufiber-guide' ); ?></th>
+						<td>
+							<label><input type="checkbox" name="nufg_usage_enabled" value="1" <?php checked( get_option( 'nufg_usage_enabled', 0 ), 1 ); ?>>
+								<?php esc_html_e( 'Record which jobs people look up: task, material, tool family and item number.', 'noga-ufiber-guide' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Never anything a visitor typed, and stored in this site only. Applications people deliberately send are always kept, whether this is on or off. Rows are deleted after a year.', 'noga-ufiber-guide' ); ?>
+								<a href="<?php echo esc_url( admin_url( 'options-general.php?page=nufg-usage' ) ); ?>"><?php esc_html_e( 'See what has been collected', 'noga-ufiber-guide' ); ?></a>
+								<?php esc_html_e( 'Check your privacy policy covers this before switching it on.', 'noga-ufiber-guide' ); ?></p>
 						</td>
 					</tr>
 				</table>

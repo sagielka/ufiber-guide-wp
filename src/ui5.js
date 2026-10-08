@@ -10,8 +10,13 @@ APP.doc = null; // { files:[{name,kind,status,thumb}], text, images:[Blob], subj
 APP.sample = null; APP.sampleImages = null;
 (async () => {
   try {
-    if (!window.claude || !claude.use) return;
-    const s = await claude.use('sample'); if (!s) return;
+    // Inside the claude.ai preview Claude is reachable directly. On a real site
+    // it is not, so the host page's own endpoint stands in. Neither available
+    // means the guide runs on its offline model alone, with nothing to report.
+    let s = null;
+    if (window.claude && claude.use) s = await claude.use('sample').catch(() => null);
+    if (!s && typeof AISERVER !== 'undefined' && AISERVER.ready) s = AISERVER.sample;
+    if (!s) return;
     APP.sample = s;
     const lim = await s.limits().catch(() => null);
     APP.sampleImages = lim && lim.images ? lim.images : null;
