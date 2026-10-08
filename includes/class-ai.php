@@ -92,7 +92,7 @@ final class NUFG_AI {
 		$k = self::key();
 		return array( false, sprintf(
 			/* translators: 1: HTTP status, 2: message, 3: key length, 4: last four characters, 5: first characters */
-			__( 'HTTP %1$d. %2$s (the key sent was %3$d characters, starting %5$s and ending %4$s — compare that with the console; if it differs, the paste was incomplete.)', 'noga-ufiber-guide' ),
+			__( 'HTTP %1$d. %2$s The key that was sent is %3$d characters long, starts %5$s and ends %4$s. Compare that with the console: a different length means the paste was incomplete, and anything not starting sk-ant- means the box holds something other than a key.', 'noga-ufiber-guide' ),
 			$code,
 			$msg,
 			strlen( $k ),
