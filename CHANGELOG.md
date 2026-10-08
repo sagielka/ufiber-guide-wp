@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.3 – 2026-10-08
+- Fixed properly: a single byte that is not valid UTF-8 anywhere in the pasted
+  text made the key search return nothing, so a perfectly good key was refused.
+  The search is now byte-wise, ignores line breaks, and the error says how many
+  characters actually arrived — 0 means the box was empty when you saved.
+- The key box now asks browsers not to autofill it with a saved password.
+
 ## 1.3.2 – 2026-10-08
 - Fixed: a pasted API key was rejected when it carried an invisible character,
   a smart quote, or the whole define(...) line from the instructions. The key is

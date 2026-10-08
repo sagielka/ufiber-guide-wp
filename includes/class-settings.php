@@ -48,16 +48,27 @@ class NUFG_Settings {
 			return '';
 		}
 		// Pasting rarely gives a clean key: smart quotes, a zero-width character,
-		// or the whole define(...) line from the instructions. Take the key out of
-		// whatever arrived rather than rejecting the person for it.
-		$v = preg_replace( '/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $v );
+		// the whole define(...) line from the instructions, or a stray byte that
+		// is not valid UTF-8. Pull the key out of whatever arrived. Deliberately
+		// byte-wise, with no /u modifier: on invalid UTF-8 a /u pattern returns
+		// null, which silently turned a good key into "no key found".
+		$raw = $v;
+		$v   = str_replace( array( "\xE2\x80\x8B", "\xE2\x80\x8C", "\xE2\x80\x8D", "\xEF\xBB\xBF", "\xC2\xA0" ), '', $v );
+		$v   = preg_replace( '/\s+/', '', $v );   // a key never contains a space, but a copy of one can be wrapped
 		if ( preg_match( '/sk-[A-Za-z0-9_\-]{20,}/', $v, $m ) ) {
 			$v = $m[0];
 		} else {
+			// Say what actually arrived. "0 characters" means the field was empty
+			// or the browser overwrote it; a short value usually means autofill
+			// put a saved password in instead of the key.
 			add_settings_error(
 				'nufg',
 				'nufg_key',
-				__( 'No API key found in what was pasted. It looks like sk-ant-… and is about a hundred characters long. Copy it straight from console.anthropic.com — a key is only shown once, so if it has been lost, create a new one.', 'noga-ufiber-guide' )
+				sprintf(
+					/* translators: %d: number of characters received */
+					__( 'No API key found in what was pasted (%d characters arrived). A key looks like sk-ant-… and is about a hundred characters long. If that says 0, the box was empty when you saved — some browsers overwrite a password box with a saved password, so paste the key again just before pressing Save.', 'noga-ufiber-guide' ),
+					strlen( (string) $raw )
+				)
 			);
 			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
 		}
@@ -272,7 +283,7 @@ class NUFG_Settings {
 								<?php if ( '' !== $hint ) : ?>
 									<p><?php printf( esc_html__( 'A key is saved here (%s). Leave the box empty to keep it.', 'noga-ufiber-guide' ), '<code>' . esc_html( $hint ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
 								<?php endif; ?>
-								<p><input type="password" class="regular-text" name="<?php echo esc_attr( NUFG_AI::KEY_OPTION ); ?>" value="" autocomplete="off" spellcheck="false" placeholder="sk-ant-..."></p>
+								<p><input type="password" class="regular-text" name="<?php echo esc_attr( NUFG_AI::KEY_OPTION ); ?>" value="" autocomplete="new-password" data-lpignore="true" spellcheck="false" placeholder="sk-ant-..."></p>
 								<p class="description">
 									<?php esc_html_e( 'Saved encrypted, using this site\'s own salts from wp-config.php — a stolen database alone cannot read it. Anyone who can run code on this site still can, so the safer place is wp-config.php itself:', 'noga-ufiber-guide' ); ?>
 								</p>
