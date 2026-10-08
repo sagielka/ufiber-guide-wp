@@ -12,8 +12,9 @@ const load = (f) => fs.readFileSync(path.join(SRC, f), 'utf8').replace(/if \(typ
 const ctx = { console, module: { exports: {} }, navigator: { language: 'en' }, location: { search: '' } };
 vm.createContext(ctx);
 vm.runInContext(
-  [load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js')].join('\n') +
-  '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;' +
+  [fs.readFileSync(path.join(SRC, 'cases_block.txt'), 'utf8'),
+   load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js')].join('\n') +
+  '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;\n;globalThis.__C = typeof AI_CASES === "function" ? AI_CASES : null;\n;globalThis.__CASES = typeof CASES !== "undefined" ? CASES : [];' +
   '\n;globalThis.__E = { parseText, recommend, scrubContact, scrubToolWords, dedupeDims, msgRead, NLU,' +
   ' skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
   ' newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {},' +
@@ -121,6 +122,19 @@ ok('a .msg that is not an OLE file is refused rather than guessed at',
     ok('the facts name every accessory', E.ACCESSORIES && facts.includes('UF9999') && facts.includes('UF7023'));
     ok('a brush with no shank says so rather than trailing off', !/shanks ;/.test(facts));
     ok('the point and end ceilings come from one constant', facts.includes(E.MAX_RPM.point.toLocaleString('en-US')));
+  }
+}
+
+/* ---- the tested library reaches the model whole ---- */
+{
+  const cases = ctx.__C ? ctx.__C() : null;
+  const all = ctx.__CASES || [];
+  if (cases && all.length) {
+    ok('every tested application is listed', cases.split('\n').length - 1 === all.length, { lines: cases.split('\n').length - 1, cases: all.length });
+    const withRpm = all.filter(c => c.rpm)[0];
+    ok('a case keeps its measured speed', cases.includes(withRpm.rpm.toLocaleString('en-US') + ' rpm'), withRpm.rpm);
+    ok('the model is told a tested result outranks the tables', /prefer the tested figure/.test(cases));
+    ok('the index stays small enough to send every turn', cases.length < 20000, cases.length);
   }
 }
 
