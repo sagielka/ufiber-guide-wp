@@ -29,12 +29,34 @@ class NUFG_Settings {
 		// Two plain on/off switches, kept outside the main options array so they
 		// read cheaply from the front end on every page view.
 		register_setting( 'nufg', 'nufg_usage_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
+		register_setting( 'nufg', NUFG_AI::KEY_OPTION, array( 'type' => 'string', 'sanitize_callback' => array( __CLASS__, 'save_key' ), 'default' => '' ) );
 		register_setting( 'nufg', 'nufg_ai_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
 		register_setting(
 			'nufg',
 			NUFG_Plugin::OPTION,
 			array( 'type' => 'array', 'sanitize_callback' => array( __CLASS__, 'sanitize' ), 'default' => NUFG_Plugin::defaults() )
 		);
+	}
+
+	/** The key is written encrypted and never read back into the page. */
+	public static function save_key( $v ) {
+		$v = is_string( $v ) ? trim( $v ) : '';
+		if ( '' === $v ) {
+			return (string) get_option( NUFG_AI::KEY_OPTION, '' );   // left blank: keep what is there
+		}
+		if ( '__clear__' === $v ) {
+			return '';
+		}
+		if ( 0 !== strpos( $v, 'sk-' ) ) {
+			add_settings_error( 'nufg', 'nufg_key', __( 'That does not look like an API key. It should start with sk-.', 'noga-ufiber-guide' ) );
+			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
+		}
+		$enc = NUFG_AI::encrypt( $v );
+		if ( '' === $enc ) {
+			add_settings_error( 'nufg', 'nufg_key', __( 'This server cannot encrypt the key, so it was not saved. Put it in wp-config.php instead.', 'noga-ufiber-guide' ) );
+			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
+		}
+		return $enc;
 	}
 
 	public static function bool( $v ) {
@@ -228,16 +250,27 @@ class NUFG_Settings {
 					<tr>
 						<th scope="row"><?php esc_html_e( 'Reading with AI', 'noga-ufiber-guide' ); ?></th>
 						<td>
-							<?php $has_key = defined( 'NUFG_CLAUDE_API_KEY' ) && NUFG_CLAUDE_API_KEY; ?>
-							<label><input type="checkbox" name="nufg_ai_enabled" value="1" <?php checked( get_option( 'nufg_ai_enabled', 0 ), 1 ); ?> <?php disabled( ! $has_key ); ?>>
+							<?php $hint = NUFG_AI::key_hint(); $fixed = NUFG_AI::key_is_constant(); ?>
+							<label><input type="checkbox" name="nufg_ai_enabled" value="1" <?php checked( get_option( 'nufg_ai_enabled', 0 ), 1 ); ?> <?php disabled( '' === $hint ); ?>>
 								<?php esc_html_e( 'Let the guide read a customer e-mail or drawing, summarise it and ask follow-up questions.', 'noga-ufiber-guide' ); ?></label>
-							<?php if ( $has_key ) : ?>
-								<p class="description"><?php esc_html_e( 'An API key is configured. Each reading is a paid request, capped at 20 an hour per visitor. The guide still works without this; it simply falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Each reading is a paid request, capped at 20 an hour per visitor. The guide works without this; it falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
+
+							<h4 style="margin-bottom:4px"><?php esc_html_e( 'API key', 'noga-ufiber-guide' ); ?></h4>
+							<?php if ( $fixed ) : ?>
+								<p><?php printf( esc_html__( 'Set in wp-config.php (%s). That is the safest place; this screen cannot change it.', 'noga-ufiber-guide' ), '<code>' . esc_html( $hint ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
 							<?php else : ?>
-								<p class="description"><strong><?php esc_html_e( 'No API key, so this cannot be switched on.', 'noga-ufiber-guide' ); ?></strong>
-								<?php esc_html_e( 'Add this line to wp-config.php, above the line that says "stop editing":', 'noga-ufiber-guide' ); ?></p>
+								<?php if ( '' !== $hint ) : ?>
+									<p><?php printf( esc_html__( 'A key is saved here (%s). Leave the box empty to keep it.', 'noga-ufiber-guide' ), '<code>' . esc_html( $hint ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
+								<?php endif; ?>
+								<p><input type="password" class="regular-text" name="<?php echo esc_attr( NUFG_AI::KEY_OPTION ); ?>" value="" autocomplete="off" spellcheck="false" placeholder="sk-ant-..."></p>
+								<p class="description">
+									<?php esc_html_e( 'Saved encrypted, using this site\'s own salts from wp-config.php — a stolen database alone cannot read it. Anyone who can run code on this site still can, so the safer place is wp-config.php itself:', 'noga-ufiber-guide' ); ?>
+								</p>
 								<p><code>define( 'NUFG_CLAUDE_API_KEY', 'sk-ant-...' );</code></p>
-								<p class="description"><?php esc_html_e( 'Keep the key in wp-config.php rather than the database, where it would end up in every backup and export.', 'noga-ufiber-guide' ); ?></p>
+								<p class="description"><?php esc_html_e( 'To remove the saved key, type __clear__ in the box and save. If the site\'s salts are ever changed, the saved key stops working and has to be entered again.', 'noga-ufiber-guide' ); ?></p>
+								<?php if ( ! NUFG_AI::can_store() ) : ?>
+									<p class="description"><strong><?php esc_html_e( 'This server has no encryption support, so a key cannot be saved here. Use wp-config.php.', 'noga-ufiber-guide' ); ?></strong></p>
+								<?php endif; ?>
 							<?php endif; ?>
 						</td>
 					</tr>
