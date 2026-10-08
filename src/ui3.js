@@ -396,6 +396,7 @@ document.addEventListener('click', e => {
   // result
   if (d.ovgrit) { APP.ws.override = { ...APP.ws.override, grit: +d.ovgrit, family: APP.ws.override.family || APP.rec.family, dia: APP.ws.override.dia || APP.rec.dia }; rerender(); return; }
   if (d.ovdia) { APP.ws.override = { ...APP.ws.override, dia: +d.ovdia, family: APP.ws.override.family || APP.rec.family, grit: APP.ws.override.grit || (APP.rec.family === 'diamond' ? APP.rec.grit.grit : APP.rec.grit.grit) }; rerender(); return; }
+  if (t.id === 'goClear') { clearAsk(); return; }
   if (t.id === 'shareOpen') { openShare(); return; }
   if (t.id === 'resetOv') { APP.ws.override = {}; APP.ws.machine.uneven = false; rerender(); return; }
   if (d.alt) { const a = APP.rec.alts[+d.alt]; if (a.ext) return; if (a.setUneven) APP.ws.machine.uneven = true; if (a.ov) APP.ws.override = { ...a.ov }; rerender(); return; }

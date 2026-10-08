@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 – 2026-10-08
+- A Clear button on Find a tool. Until now the only way to start a different job
+  was to reload the page, and anything read from the last one quietly stayed.
+- It empties the box and forgets the job, the attachments and the AI reading,
+  but keeps the machine and the unit setting: those describe the shop, not the
+  job in front of you.
+
 ## 1.3.8 – 2026-10-08
 - Removing the saved API key is a checkbox now, instead of typing __clear__ into
   the key box. Typing a magic word was never a reasonable way to ask for that.
