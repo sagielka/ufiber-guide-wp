@@ -71,6 +71,7 @@ final class NUFG_AI {
 		$code = (int) wp_remote_retrieve_response_code( $res );
 		$body = json_decode( wp_remote_retrieve_body( $res ), true );
 		if ( 200 === $code ) {
+			self::record( $body, 'read' );   // the test costs money too, so it counts
 			return array( true, sprintf(
 				/* translators: %s: model name */
 				__( 'The key works. Answered by %s.', 'noga-ufiber-guide' ),
@@ -208,6 +209,108 @@ final class NUFG_AI {
 		return self::DEFAULT_MODEL;
 	}
 
+	const SPEND_OPTION = 'nufg_ai_spend';
+
+	/**
+	 * Published list prices in US dollars per million tokens, checked against
+	 * Anthropic's pricing page on 2026-10-09. They change, and an account can
+	 * have its own terms, so what this screen shows is an estimate and says so.
+	 * The console is the only place that knows what was actually billed.
+	 *
+	 * A model that is not listed here still has its tokens counted; only the
+	 * money is left out, because a guessed rate is worse than no figure.
+	 */
+	private static function price( $model ) {
+		$rates = array(
+			'claude-haiku-5-5'  => array( 0.10, 0.50 ),
+			'claude-haiku-4-5'  => array( 1.00, 5.00 ),
+			'claude-sonnet-5-5' => array( 2.00, 10.00 ),
+			'claude-sonnet-5'   => array( 2.00, 10.00 ),
+			'claude-sonnet-4-5' => array( 3.00, 15.00 ),
+			'claude-opus-5'     => array( 5.00, 25.00 ),
+		);
+		foreach ( $rates as $name => $r ) {
+			if ( 0 === strpos( (string) $model, $name ) ) {
+				return $r;
+			}
+		}
+		return null;
+	}
+
+	/** Tokens actually reported by the API, kept per calendar month. */
+	private static function record( $data, $kind ) {
+		if ( ! isset( $data['usage'] ) || ! is_array( $data['usage'] ) ) {
+			return;
+		}
+		$u     = $data['usage'];
+		$in    = (int) ( isset( $u['input_tokens'] ) ? $u['input_tokens'] : 0 )
+			+ (int) ( isset( $u['cache_creation_input_tokens'] ) ? $u['cache_creation_input_tokens'] : 0 )
+			+ (int) ( isset( $u['cache_read_input_tokens'] ) ? $u['cache_read_input_tokens'] : 0 );
+		$out   = (int) ( isset( $u['output_tokens'] ) ? $u['output_tokens'] : 0 );
+		$model = isset( $data['model'] ) ? (string) $data['model'] : self::model();
+		$month = gmdate( 'Y-m' );
+
+		$all = get_option( self::SPEND_OPTION, array() );
+		if ( ! is_array( $all ) ) {
+			$all = array();
+		}
+		if ( ! isset( $all[ $month ] ) ) {
+			$all[ $month ] = array( 'calls' => 0, 'in' => 0, 'out' => 0, 'models' => array(), 'reads' => 0, 'chats' => 0 );
+		}
+		$m = &$all[ $month ];
+		$m['calls']++;
+		$m['in']  += $in;
+		$m['out'] += $out;
+		$m[ 'chat' === $kind ? 'chats' : 'reads' ]++;
+		if ( ! isset( $m['models'][ $model ] ) ) {
+			$m['models'][ $model ] = array( 'in' => 0, 'out' => 0 );
+		}
+		$m['models'][ $model ]['in']  += $in;
+		$m['models'][ $model ]['out'] += $out;
+		unset( $m );
+
+		// Thirteen months is enough to see a year and compare with the same
+		// month last year; beyond that it is just an option growing forever.
+		if ( count( $all ) > 13 ) {
+			krsort( $all );
+			$all = array_slice( $all, 0, 13, true );
+		}
+		update_option( self::SPEND_OPTION, $all, false );
+	}
+
+	/** What the settings screen shows: a month, costed where the rate is known. */
+	public static function spend( $month = null ) {
+		$month = $month ? $month : gmdate( 'Y-m' );
+		$all   = get_option( self::SPEND_OPTION, array() );
+		if ( ! is_array( $all ) || ! isset( $all[ $month ] ) ) {
+			return null;
+		}
+		$m    = $all[ $month ];
+		$cost = 0.0;
+		$partial = false;
+		foreach ( $m['models'] as $name => $t ) {
+			$r = self::price( $name );
+			if ( ! $r ) {
+				$partial = true;
+				continue;
+			}
+			$cost += ( $t['in'] / 1000000 ) * $r[0] + ( $t['out'] / 1000000 ) * $r[1];
+		}
+		$m['month']        = $month;
+		$m['cost']         = $cost;
+		$m['cost_partial'] = $partial;
+		return $m;
+	}
+
+	public static function months() {
+		$all = get_option( self::SPEND_OPTION, array() );
+		if ( ! is_array( $all ) ) {
+			return array();
+		}
+		krsort( $all );
+		return array_keys( $all );
+	}
+
 	public static function routes() {
 		register_rest_route( 'nufg/v1', '/ai', array(
 			'methods'             => 'POST',
@@ -273,6 +376,7 @@ final class NUFG_AI {
 		if ( '' === $text ) {
 			return self::no( 'empty' );
 		}
+		self::record( $data, $req->get_param( 'turns' ) ? 'chat' : 'read' );
 		return new WP_REST_Response( array(
 			'ok'        => true,
 			'text'      => $text,
