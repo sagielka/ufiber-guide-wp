@@ -308,6 +308,65 @@ class NUFG_Settings {
 						</td>
 					</tr>
 					<tr>
+						<th scope="row"><?php esc_html_e( 'AI usage this month', 'noga-ufiber-guide' ); ?></th>
+						<td>
+							<?php
+							$spend  = NUFG_AI::spend();
+							$months = NUFG_AI::months();
+							if ( ! $spend ) :
+								?>
+								<p><?php esc_html_e( 'No AI requests yet this month.', 'noga-ufiber-guide' ); ?></p>
+							<?php else : ?>
+								<p style="font-size:15px">
+									<strong><?php echo esc_html( number_format_i18n( $spend['calls'] ) ); ?></strong> <?php esc_html_e( 'requests', 'noga-ufiber-guide' ); ?>
+									<span class="description">(<?php printf(
+										/* translators: 1: number of document readings, 2: number of chat replies */
+										esc_html__( '%1$s readings, %2$s chat replies', 'noga-ufiber-guide' ),
+										esc_html( number_format_i18n( $spend['reads'] ) ),
+										esc_html( number_format_i18n( $spend['chats'] ) )
+									); ?>)</span>
+									&nbsp;·&nbsp;
+									<strong><?php echo esc_html( number_format_i18n( $spend['in'] ) ); ?></strong> <?php esc_html_e( 'tokens in', 'noga-ufiber-guide' ); ?>,
+									<strong><?php echo esc_html( number_format_i18n( $spend['out'] ) ); ?></strong> <?php esc_html_e( 'out', 'noga-ufiber-guide' ); ?>
+								</p>
+								<p style="font-size:15px">
+									<?php esc_html_e( 'Estimated cost:', 'noga-ufiber-guide' ); ?>
+									<strong>$<?php echo esc_html( number_format( $spend['cost'], 2 ) ); ?></strong>
+									<?php if ( $spend['cost_partial'] ) : ?>
+										<span class="description"><?php esc_html_e( '(some of it unpriced: a model in use is not in the rate list)', 'noga-ufiber-guide' ); ?></span>
+									<?php endif; ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'The token counts are what Anthropic reported for each request, so they are exact. The money is an estimate at published list prices and does not know about your account\'s own terms, taxes or free credit.', 'noga-ufiber-guide' ); ?>
+									<a href="https://platform.claude.com/settings/usage" target="_blank" rel="noopener"><?php esc_html_e( 'Your console shows what was actually billed', 'noga-ufiber-guide' ); ?></a>.
+								</p>
+								<?php if ( count( $months ) > 1 ) : ?>
+									<table class="widefat striped" style="max-width:560px;margin-top:10px">
+										<thead><tr>
+											<th><?php esc_html_e( 'Month', 'noga-ufiber-guide' ); ?></th>
+											<th><?php esc_html_e( 'Requests', 'noga-ufiber-guide' ); ?></th>
+											<th><?php esc_html_e( 'Tokens', 'noga-ufiber-guide' ); ?></th>
+											<th><?php esc_html_e( 'Estimated', 'noga-ufiber-guide' ); ?></th>
+										</tr></thead>
+										<tbody>
+										<?php foreach ( $months as $mk ) :
+											$row = NUFG_AI::spend( $mk );
+											if ( ! $row ) { continue; } ?>
+											<tr>
+												<td><?php echo esc_html( $mk ); ?></td>
+												<td><?php echo esc_html( number_format_i18n( $row['calls'] ) ); ?></td>
+												<td><?php echo esc_html( number_format_i18n( $row['in'] + $row['out'] ) ); ?></td>
+												<td>$<?php echo esc_html( number_format( $row['cost'], 2 ) ); ?></td>
+											</tr>
+										<?php endforeach; ?>
+										</tbody>
+									</table>
+									<p class="description"><?php esc_html_e( 'The last 13 months are kept.', 'noga-ufiber-guide' ); ?></p>
+								<?php endif; ?>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
 						<th scope="row"><?php esc_html_e( 'Usage data', 'noga-ufiber-guide' ); ?></th>
 						<td>
 							<label><input type="checkbox" name="nufg_usage_enabled" value="1" <?php checked( get_option( 'nufg_usage_enabled', 0 ), 1 ); ?>>

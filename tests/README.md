@@ -15,6 +15,7 @@ easy to write.
 |---|---|
 | `engine.test.js` | reading a customer's words into a job, and the item numbers that come out |
 | `key.test.php` | storing the API key, and every way a paste actually arrives |
+| `spend.test.php` | counting what the AI actually cost, and refusing to invent a price |
 | `browser.test.py` | the page as a person meets it, with the AI endpoint mocked |
 
 The build check in `run.py` is the quiet one that matters most: it fails if

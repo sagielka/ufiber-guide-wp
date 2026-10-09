@@ -58,6 +58,7 @@ php_syntax()
 run('Build matches the sources', [sys.executable, 'src/build.py', '--check'])
 run('Engine and reading', ['node', 'tests/engine.test.js'], skip_if_missing='node')
 run('Settings and the API key', ['php', 'tests/key.test.php'], skip_if_missing='php')
+run('AI spend accounting', ['php', 'tests/spend.test.php'], skip_if_missing='php')
 run('Browser', [sys.executable, 'tests/browser.test.py'])
 
 print('\n' + '=' * 52)

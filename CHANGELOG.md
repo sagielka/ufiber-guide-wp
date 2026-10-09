@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0 – 2026-10-09
+- Settings now shows what the AI has cost: requests this month, split between
+  document readings and chat replies, the exact token counts Anthropic reported,
+  and an estimated cost at published list prices.
+- A month-by-month table appears once there is more than one month, and the last
+  thirteen are kept.
+- The tokens are exact; the money is an estimate and says so, with a link to the
+  console, which is the only place that knows what was actually billed. A model
+  whose rate is not known still has its tokens counted but is never given an
+  invented price.
+
 ## 1.5.1 – 2026-10-08
 - The AI now sees all 67 tested applications, not only the few the matcher put
   on screen, so it can answer from a real result in a material the tables alone
