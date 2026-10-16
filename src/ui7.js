@@ -131,7 +131,7 @@ function answerOffline(i, value) {
 function smartBlock() {
   const S = APP.smart; if (!APP.sample && !S.checked) return offlineQuestions();
   let h = '';
-  if (S.busy) h += `<div class="ai-line"><span class="spinner sm" aria-hidden="true"></span><span class="small">Claude is checking your description…</span><button class="btn ghost small" id="smartStop">Stop</button></div>`;
+  if (S.busy) h += `<div class="ai-line"><span class="spinner sm" aria-hidden="true"></span><span class="small">Checking the details…</span><button class="btn ghost small" id="smartStop">Stop</button></div>`;
   if (S.checked && S.summary) h += `<div class="ai-line"><span class="ai-badge">AI</span><span class="small" dir="auto">“${esc(S.summary)}”</span></div>`;
   if (S.err) h += `<p class="tiny" style="margin:6px 0 0">${esc(S.err)}</p>`;
   S.questions.forEach((q, i) => {

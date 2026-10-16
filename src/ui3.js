@@ -349,13 +349,20 @@ document.addEventListener('click', e => {
   // units
   if (d.unit) { APP.units = d.unit; store.set('ufg_units', APP.units); document.querySelectorAll('[data-unit]').forEach(b => b.setAttribute('aria-pressed', b.dataset.unit === APP.units)); rerender(); return; }
   // home
-  if (t.id === 'askGo' && !($('#askT')?.value || '').trim()) {
-    const el = $('#understood');
+  if (t.id === 'askGo' && t.dataset.mode === 'go') { go('result'); return; }
+  if (t.id === 'askGo' && !($('#askT')?.value || '').trim() && !APP.doc?.files?.length) {
+    const el = $('#understood'); parkGo();
     if (el) el.innerHTML = `<div class="understood fade-in" role="status"><b>Tell me about the part first.</b> <span class="small">A few words is enough — the material, where the burr is, and the hole sizes if you know them. Or pick a task below.</span></div>`;
     $('#askT')?.focus();
     return;
   }
-  if (t.id === 'askGo') { const v = $('#askT').value.trim(); if (!v) { $('#askT').focus(); return; } doAsk(v); return; }
+  if (t.id === 'askGo') {
+    const v = $('#askT').value.trim(); if (!v && !APP.doc?.files?.length) { $('#askT').focus(); return; }
+    // One button: with an email or drawing attached, Claude reads the whole thing
+    // (text + drawing images). The local parser fills the chips instantly meanwhile.
+    if (APP.doc?.files?.length && APP.sample) { if (v) doAsk(v, { ai: false }); aiRead(); return; }
+    doAsk(v); return;
+  }
   if (d.ex) { $('#askT').value = EXAMPLES[+d.ex]; doAsk(EXAMPLES[+d.ex], { ai: false }); return; }
   if (d.task && t.classList.contains('tile') && !d.pick) { APP.ws = newState(); APP.ws.task = d.task; if (TASKS[d.task].feature) APP.ws.feature = TASKS[d.task].feature; APP.wizI = 1; go('find'); return; }
   if (d.recent) { const r = store.get('ufg_recent', [])[+d.recent]; if (r) { APP.ws = r.st; go('result'); } return; }
@@ -396,7 +403,7 @@ document.addEventListener('click', e => {
   // result
   if (d.ovgrit) { APP.ws.override = { ...APP.ws.override, grit: +d.ovgrit, family: APP.ws.override.family || APP.rec.family, dia: APP.ws.override.dia || APP.rec.dia }; rerender(); return; }
   if (d.ovdia) { APP.ws.override = { ...APP.ws.override, dia: +d.ovdia, family: APP.ws.override.family || APP.rec.family, grit: APP.ws.override.grit || (APP.rec.family === 'diamond' ? APP.rec.grit.grit : APP.rec.grit.grit) }; rerender(); return; }
-  if (t.id === 'goClear') { clearAsk(); return; }
+  if (t.id === 'goClear' || t.classList.contains('ask-clear')) { clearAsk(); return; }
   if (t.id === 'shareOpen') { openShare(); return; }
   if (t.id === 'resetOv') { APP.ws.override = {}; APP.ws.machine.uneven = false; rerender(); return; }
   if (d.alt) { const a = APP.rec.alts[+d.alt]; if (a.ext) return; if (a.setUneven) APP.ws.machine.uneven = true; if (a.ov) APP.ws.override = { ...a.ov }; rerender(); return; }
@@ -405,6 +412,14 @@ document.addEventListener('click', e => {
     if (APP.cbTimer) { clearInterval(APP.cbTimer); APP.cbTimer = null; t.innerHTML = `${I.play} Play`; return; }
     t.innerHTML = `${I.pause} Pause`; APP.cbStep = 0; cbApply(0);
     APP.cbTimer = setInterval(() => { APP.cbStep++; if (APP.cbStep > CB_PLAY.length - 1) { clearInterval(APP.cbTimer); APP.cbTimer = null; $('#cbPlay').innerHTML = `${I.play} Replay`; return; } cbApply(APP.cbStep); }, 1700); return;
+  }
+  if (t.id === 'shareTop') {
+    const url = SHARE.link(); if (!url) return;
+    const label = `${I.link} Share link`;
+    if (navigator.share && matchMedia('(pointer:coarse)').matches) {
+      navigator.share({ title: 'UFIBER starting setup', text: (APP.rec?.sku ? APP.rec.sku + ' — ' : '') + 'UFIBER starting setup', url }).catch(e => { if (!e || e.name !== 'AbortError') copyText(url, t, label); });
+    } else copyText(url, t, label);
+    return;
   }
   if (t.id === 'copyLink') {
     const url = SHARE.link();

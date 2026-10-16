@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.1 – 2026-10-16
+- One main button on Find a tool. It reads the description or the attached
+  email, then turns into "Show my setup" once nothing is missing. The separate
+  "Read with Claude" and "Show my setup" buttons are gone.
+- Once the job is read, the button and Clear move under "Here's what I
+  understood", next to the chips they act on. Clear is now a real button
+  instead of faint text.
+- No more "Claude is reading…" or "Read by Claude" lines; the button shows
+  "Reading…" while it works.
+- A Share link button at the top of "Your starting setup": it copies a link to
+  the exact setup, or opens the share menu on a phone.
+- "Cross hole Ø10 into Ø16.5 bore" read the bore as Ø10: the offline model
+  overwrote the sizes the keyword reading had right. The keyword sizes now win.
+  The app's own first example had the same fault.
+
 ## 1.6.0 – 2026-10-09
 - Settings now shows what the AI has cost: requests this month, split between
   document readings and chat replies, the exact token counts Anthropic reported,

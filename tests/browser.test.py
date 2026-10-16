@@ -82,16 +82,38 @@ async def main():
             state = await page.evaluate("() => JSON.stringify({m: APP.ws.material, t: APP.ws.task, d: APP.ws.dims})")
             ok('the offline model reads a job', '"m":"stainless"' in state and '"t":"crosshole"' in state, state)
 
-            await page.click('#goRes')
+            # --- one main button (1.6.1): it reads, then it becomes "Show my setup" under the chips ---
+            label = (await page.locator('#askGo').inner_text()).strip()
+            ok('after reading, the one button offers the setup', label.startswith('Show my setup'), label)
+            ok('the button sits under what was understood',
+               await page.evaluate("() => !!document.querySelector('#understood #askGo')"))
+            ok('there is no second setup button', await page.locator('#goRes').count() == 0)
+            await page.type('#askT', ' x')
+            label = (await page.locator('#askGo').inner_text()).strip()
+            ok('editing the text asks for a new reading', label.startswith('Read my application'), label)
+            await page.click('#askGo')
+            await page.wait_for_timeout(500)
+
+            await page.click('#askGo')
             await page.wait_for_timeout(900)
             sku = (await page.locator('.sku').first.inner_text()).strip()
             ok('a recommendation is produced', sku.startswith('UF'), sku)
+            ok('the setup can be shared from the top', await page.locator('#shareTop').count() == 1)
+
+            # --- sizes (1.6.1): the offline model must not overwrite what the keywords read ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(400)
+            dims = await page.evaluate(
+                "() => { doAsk('Light burrs on cross hole Ø10 into Ø16.5 bore, 4140 steel', {ai:false});"
+                " return JSON.stringify(APP.ws.dims); }")
+            ok('cross hole Ø10 into a Ø16.5 bore keeps the bore', '"main":16.5' in dims and '"cross":10' in dims, dims)
 
             # --- Clear (1.4.0) ---
             await page.evaluate("() => go('')")
             await page.wait_for_timeout(400)
+            await page.evaluate("() => doAsk('deburr cross holes in 316L, 20 mm bore, 8 mm cross hole', {ai:false})")
             await page.evaluate("() => { APP.ws.machine.type = 'lathe'; APP.ws.machine.maxRpm = 8000; }")
-            await page.click('#goClear')
+            await page.click('#understood .ask-clear')
             await page.wait_for_timeout(500)
             after = await page.evaluate(
                 "() => JSON.stringify({m: APP.ws.material, d: APP.ws.dims,"
