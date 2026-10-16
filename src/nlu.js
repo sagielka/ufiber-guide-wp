@@ -158,7 +158,8 @@ const NLU = (() => {
       else if (n.role === 'ra') { dims.ra = n.value; APP.parsed = { ...(APP.parsed || {}), ra: n.value }; }
       else if (['main', 'cross', 'depth', 'width', 'groove', 'hole'].includes(n.role)) { if (dims[n.role] === undefined && n.value < 2000) dims[n.role] = n.value; }
     }
-    Object.assign(st.dims, dims);
+    // keyword sizes win: "cross hole Ø10 into Ø16.5 bore" must not become bore Ø10
+    for (const [k, v] of Object.entries(dims)) if (st.dims[k] === undefined) st.dims[k] = v;
     // Cross-hole work needs two diameters. If the model only placed one, fall back to
     // the plain reading: the brush enters the larger hole, the smaller one crosses it.
     if (st.task === 'crosshole' && !(st.dims.main && st.dims.cross)) {

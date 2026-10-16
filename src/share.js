@@ -56,6 +56,7 @@ const SHARE = (() => {
       const base = APP.hostUrl.split('#')[0];
       return base + '#ufiber=' + token;
     }
+    if (inFrame() && !EMB) return 'https://www.noga.com/nogamt/ufiber/ai-assistant/#ufiber=' + token;
     return location.origin + location.pathname + '#setup=' + token;
   }
   /** Read a setup out of the address on startup. */

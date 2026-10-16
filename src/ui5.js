@@ -164,7 +164,7 @@ For this customer material, "questions" are what is still unknown and worth aski
 CUSTOMER MATERIAL:
 """
 ${D.text.slice(0, 14000) || '(no text — images only)'}
-"""`;
+"""${(() => { const u = ($('#askT')?.value || '').trim(); return u && u !== excerpt(D) ? `\n\nNOTES TYPED BY THE USER (take these as correct where they differ):\n"""\n${u.slice(0, 3000)}\n"""` : ''; })()}`;
   try {
     const r = await APP.sample.json(prompt, { images: imgs.length ? imgs : undefined, signal: aiCtl.signal });
     applyAi(r);
@@ -172,7 +172,7 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.' }[e && e.code];
     D.aiErr = msg === undefined ? 'Something went wrong reading the document. Try again.' : msg;
     if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null;
-  } finally { D.aiBusy = false; renderAttach(); }
+  } finally { D.aiBusy = false; renderAttach(); updateGo(); }
 }
 function applyAi(r) {
   const D = APP.doc; if (!r || typeof r !== 'object') { D.aiErr = 'No usable answer. Try again.'; return; }
@@ -192,16 +192,15 @@ function docSummaryText() {
 
 /* ---------- UI ---------- */
 function renderAttach() {
-  const el = $('#attach'); if (!el) return;
+  const el = $('#attach'); if (!el) return; updateGo();
   const D = APP.doc; if (!D || !D.files.length) { el.innerHTML = ''; return; }
   const canAi = !!APP.sample; const hasImg = D.images.length > 0; const imgOk = !!APP.sampleImages;
   const busy = D.aiBusy;
   el.innerHTML = `<div class="attach fade-in">
     <div class="att-files">${D.files.map(f => `<div class="att-file${f.err ? ' err' : ''}">${f.thumb ? `<img src="${f.thumb}" alt="">` : `<span class="att-ic">${f.kind === 'eml' || f.kind === 'msg' ? I.mail : I.cases}</span>`}<div><b>${esc(f.name)}</b><div class="tiny">${esc(f.status)}</div></div></div>`).join('')}<button class="btn ghost small" id="attClear">Remove all</button></div>
-    ${canAi ? `<div class="att-ai">${busy ? `<div class="row"><span class="spinner" aria-hidden="true"></span><span><b>Claude is reading ${hasImg && imgOk ? 'the email and drawing' : 'the document'}…</b><br><span class="tiny">Usually 20–60 seconds.</span></span><button class="btn small" id="aiStop">Stop</button></div>`
-      : `<div class="row" style="justify-content:space-between"><span class="small">${D.ai ? 'Read by Claude — check the details below.' : (hasImg && !D.text.trim() ? 'Drawings and photos need Claude to read them.' : 'Quick local reading done. Claude can read the full email' + (hasImg ? ' and the drawing' : '') + ' for more detail.')}</span><button class="btn ${D.ai ? '' : 'primary'} small" id="aiGo">${I.find} ${D.ai ? 'Read again' : 'Read with Claude'}</button></div>${hasImg && !imgOk ? '<p class="tiny" style="margin:6px 0 0">This view can\'t send images to Claude — only the text will be read.</p>' : ''}`}
+    ${canAi && !busy && (D.aiErr || (hasImg && !imgOk)) ? `<div class="att-ai">${hasImg && !imgOk ? '<p class="tiny" style="margin:6px 0 0">This view can\'t send images to Claude — only the text will be read.</p>' : ''}
       ${D.aiErr ? `<div class="callout warn">${I.warn}<div>${esc(D.aiErr)}</div></div>` : ''}</div>`
-      : (hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
+      : (!canAi && hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
     ${D.ai ? `<div class="att-res">${D.ai.summary ? `<p style="margin:0 0 8px"><b>Customer need:</b> ${esc(D.ai.summary)}</p>` : ''}
       ${D.ai.callouts.length ? `<div class="tiny" style="margin-top:6px">From the email / drawing</div><ul class="watch" style="margin-top:4px">${D.ai.callouts.map(c => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${esc(c)}</span></li>`).join('')}</ul>` : ''}
       ${D.ai.questions.length ? `<div class="tiny" style="margin-top:10px">Still unknown — ask the customer</div><ul class="watch" style="margin-top:4px">${D.ai.questions.map(c => `<li>${I.info.replace('<svg', '<svg style="color:var(--warn)"')}<span>${esc(c)}</span></li>`).join('')}</ul><button class="btn ghost small" id="copyQs" style="margin-top:6px">${I.copy} Copy questions</button>` : ''}</div>` : ''}

@@ -26,7 +26,7 @@ function home() {
         <textarea id="askT" placeholder="e.g. ${esc(EXAMPLES[0])}">${esc(APP.askText || '')}</textarea>
         <div class="dropzone" aria-hidden="true"><div>${I.clip}<b>Drop the customer's email or drawing</b><span>.eml · .msg · .txt · PDF · PNG · JPG</span></div></div>
         <div class="ask-bar"><label class="btn ghost small att-btn" for="askFile">${I.clip} Attach email or drawing</label><input type="file" id="askFile" class="sr" multiple accept=".eml,.msg,.txt,.htm,.html,.pdf,image/*,message/rfc822">
-          <button class="btn primary" id="askGo">${I.find} Read my application</button></div>
+          <span id="goHome"><div class="row" id="goGroup"><button class="btn small ask-clear" id="askClear2" title="Empty the box and forget everything read so far">${I.x} Clear</button><button class="btn primary" id="askGo">${I.find} Read my application</button></div></span></div>
       </div>
       <p class="tiny" style="margin:8px 2px 0" id="askTip">${APP.sample ? 'Type it in any language, paste it, or drag in a customer email or drawing. Claude reads it and asks only what\'s missing.' : 'Type it, paste it, or drag in a customer email or drawing. Screenshots can be pasted straight into the box.'}</p>
       <div class="examples" aria-label="Examples">${EXAMPLES.slice(1).map((e, i) => `<button class="chip" data-ex="${i + 1}">${esc(e.length > 54 ? e.slice(0, 52) + '…' : e)}</button>`).join('')}</div>
@@ -64,7 +64,7 @@ function labelOf(k, st) {
   return null;
 }
 function renderUnderstood() {
-  const el = $('#understood'); if (!el || !APP.parsed) return;
+  const el = $('#understood'); if (!el || !APP.parsed) return; parkGo();
   const st = APP.ws;
   const chips = [];
   const add = (key, label, val, miss) => chips.push(`<button class="u-chip${miss ? ' miss' : ''}" data-edit="${key}">${label}: <b>${esc(val || 'not found')}</b></button>`);
@@ -87,12 +87,34 @@ function renderUnderstood() {
   if (picker === 'task') pick = `<p class="small" style="margin:12px 0 0"><b>What do you need to do?</b></p><div class="mini-tiles">${Object.entries(TASKS).map(([k, t]) => `<button class="chip${st.task === k ? ' on' : ''}" data-set="task" data-v="${k}">${t.short}</button>`).join('')}</div>`;
   if (picker === 'material') pick = `<p class="small" style="margin:12px 0 0"><b>Which material?</b></p><div class="mini-tiles">${Object.entries(MATERIALS).map(([k, m]) => `<button class="chip${st.material === k ? ' on' : ''}" data-set="material" data-v="${k}">${m.name}</button>`).join('')}</div>`;
   if (picker === 'feature') pick = `<p class="small" style="margin:12px 0 0"><b>Where is the feature?</b></p><div class="mini-tiles">${Object.entries(FEATURES).filter(([k]) => k !== 'cross' && k !== 'bore').map(([k, f]) => `<button class="chip${st.feature === k ? ' on' : ''}" data-set="feature" data-v="${k}">${f}</button>`).join('')}</div>`;
-  el.innerHTML = `<div class="understood fade-in"><b>${APP.doc?.ai ? 'Here\'s what Claude read' : 'Here\'s what I understood'}</b> <span class="tiny">— tap anything to change it</span>
+  el.innerHTML = `<div class="understood fade-in"><b>Here's what I understood</b> <span class="tiny">— tap anything to change it</span>
     <div class="u-list">${chips.join('')}</div>${smartBlock()}${pick}
-    <div class="row" style="margin-top:12px">${missing ? `<span class="small muted">${APP.smart.busy ? 'Claude is filling in the gaps…' : 'One more answer and you\'re set.'}</span>` : `<button class="btn primary" id="goRes">Show my setup ${I.arrow}</button>`}
+    <div class="row" style="margin-top:12px">${missing ? `<span class="small muted">${APP.smart.busy ? 'Filling in the gaps…' : 'One more answer and you\'re set.'}</span>` : ''}
     <button class="btn ghost small" id="goWiz">Refine step by step</button>
-    <button class="btn ghost small" id="goClear" title="Empty the box and forget everything read so far">Clear</button></div></div>`;
+    <span id="goSlot" style="margin-left:auto"></span></div></div>`;
+  const g = $('#goGroup'), slot = $('#goSlot'); if (g && slot) slot.appendChild(g);
+  updateGo();
 }
+// One main button: "Read my application" until the reading is complete, then "Show my setup".
+function missingField(st) { return !st ? 'task' : (!st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null))); }
+function goMode() {
+  const D = APP.doc, hasDoc = !!D?.files?.length;
+  if (hasDoc && D.aiBusy) return 'busy';
+  if (!APP.parsed || !APP.ws || missingField(APP.ws)) return 'read';
+  const typed = ($('#askT')?.value || '').trim();
+  if (typed !== (APP.askText || '').trim()) return 'read';          // text changed since the last reading
+  if (hasDoc && APP.sample && !D.ai) return 'read';                 // attached email not yet read by Claude
+  return 'go';
+}
+// put the button group back in the ask box before the panel is rebuilt or emptied
+function parkGo() { const g = $('#goGroup'), home = $('#goHome'); if (g && home && g.parentNode !== home) home.appendChild(g); }
+function updateGo() {
+  const b = $('#askGo'); if (!b) return; const m = goMode();
+  if (b.dataset.mode === m) return; b.dataset.mode = m;
+  b.disabled = m === 'busy';
+  b.innerHTML = m === 'go' ? `Show my setup ${I.arrow}` : m === 'busy' ? `<span class="spinner sm" aria-hidden="true"></span> Reading…` : `${I.find} Read my application`;
+}
+document.addEventListener('input', e => { if (e.target.id === 'askT') updateGo(); });
 function doAsk(text, opt = {}) {
   APP.askText = text;
   APP.smart.ctl?.abort(); APP.smart = { busy: false, err: null, summary: '', questions: [], checked: false, snap: null, ctl: null };
@@ -221,7 +243,7 @@ function openShare() {
    the machine and the unit setting stay, because those describe the shop rather
    than this one job. */
 function clearAsk() {
-  APP.smart.ctl?.abort();
+  APP.smart.ctl?.abort(); aiCtl?.abort();
   const machine = APP.ws?.machine;
   APP.ws = newState();
   if (machine) APP.ws.machine = machine;
@@ -253,7 +275,7 @@ function result() {
   const diasAvail = R.family === 'surface' || R.family === 'shank' ? [6, 15, 25, 40, 60, 100] : R.family === 'crosshole' ? [1.5, 3, 5, 7, 11] : R.family === 'point' ? [1, 1.5, 2, 2.5, 3] : R.family === 'disc' ? [13, 19, 22, 25, 30] : [];
   return `<div class="res-top">
     <div><p class="tiny" style="margin:0"><a href="#/find" data-nav="edit">← Edit answers</a></p><h1 class="h2" style="font-size:34px;margin-top:4px">Your starting setup</h1><p class="muted" style="margin:4px 0 0">${esc(summary)}</p></div>
-    <div class="row"><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing XEBEC ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
+    <div class="row"><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing XEBEC ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
   </div>
   ${R.warnings.map(w => `<div class="callout warn">${I.warn}<div><b>${esc(w.t)}</b>${esc(w.d)}</div></div>`).join('')}
   <div class="grid2" style="margin-top:14px">
