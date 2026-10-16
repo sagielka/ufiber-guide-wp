@@ -224,7 +224,11 @@ function recommend(st) {
 
   /* ---- hard blockers / out-of-scope signals ---- */
   if (machine === 'lathe0') R.warnings.push({ t: 'This needs a rotating tool', d: 'UFIBER brushes cut only while they spin. On a lathe without live tooling, use a driven tool station, a dedicated spindle, or deburr off-line with the E-Pack.' });
-  if (burr === 'heavy') R.warnings.push({ t: 'Large burr — check first', d: 'Ceramic fiber is built for small burrs (roughly ≤0.2 mm root, the kind you can bend with a fingernail). If yours is thicker, remove most of it with a chamfer cutter or NOGA UBURR first, then brush.' });
+  if (burr === 'heavy' && st.burrMm) {
+    const x = st.burrMm / 0.2;
+    R.warnings.push({ t: `A ${fmtMm(st.burrMm)} mm burr is too large for brushing alone`, d: `Ceramic fiber is built for small burrs, roughly ≤0.2 mm at the root${x >= 1.5 ? ` — this one is about ${Math.round(x)}× that` : ''}. Brushing it as it is will wear the brush fast and leave the burr folded over instead of removed. Remove most of it first (pre-machining, a back-chamfer or a deburring cutter such as NOGA UBURR), then use the brush for the final edge. If nothing else fits, test on one part and check the edge and brush wear before running a batch.` });
+    lower('low', `Burr height ${fmtMm(st.burrMm)} mm is above the ~0.2 mm brushes are built for.`);
+  } else if (burr === 'heavy') R.warnings.push({ t: 'Large burr — check first', d: 'Ceramic fiber is built for small burrs (roughly ≤0.2 mm root, the kind you can bend with a fingernail). If yours is thicker, remove most of it with a chamfer cutter or NOGA UBURR first, then brush.' });
 
   /* ---- family selection ---- */
   let fam;
@@ -724,6 +728,16 @@ function scrubToolWords(s) {
     .replace(/\b(ceramic|diamond|carbide|abrasive|nylon|aluminium oxide|aluminum oxide|silicon carbide|cbn)[\w\s-]{0,24}?(fib(?:er|re)s?|brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|tool|bristle)/gi, ' ')
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
 }
+const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
+function burrSize(t) {
+  const m = t.match(/burrs?\s*(?:height|thickness|size|root|thick|high)?\s*[:=]?\s*(?:approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*(\d+(?:\.\d+)?)\s*(mm|µm|um|")/i)
+    || t.match(/(\d+(?:\.\d+)?)\s*(mm|µm|um)\s*(?:high|thick|tall|large)?\s*burr/i);
+  if (!m) return null;
+  let v = parseFloat(m[1]); if (/µm|um/i.test(m[2])) v /= 1000; else if (m[2] === '"') v *= 25.4;
+  return isFinite(v) && v > 0 && v < 20 ? Math.round(v * 1000) / 1000 : null;
+}
+const fmtMm = v => String(+Number(v).toFixed(3));
+const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
   const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
@@ -764,6 +778,8 @@ function parseText(text) {
     if (/\b(304|316|6061|7075|2024|4140|1045|718|625|420|410|440|390|12)\b/.test(String(v)) && !/[øØ⌀]|mm|dia/.test(raw + after.slice(0, 4))) { if (!/mm/.test(after.slice(0, 4))) continue; }
     const hasMark = /[øØ⌀]|dia|mm|"/.test(raw) || /^\s*mm/.test(after);
     if (!hasMark) continue;
+    // "burr height: approx. 1 mm" / "a 0.3 mm burr" is the burr, not a size of the part
+    if (!/[øØ⌀]|dia/i.test(raw) && (BURR_BEFORE.test(before) || /^\s*(mm)?\s*(high|thick|tall|large)?\s*burr/i.test(after))) continue;
     let mm = m[2] === '"' ? v * 25.4 : v;
     nums.push({ v: mm, before, after });
   }
@@ -789,6 +805,9 @@ function parseText(text) {
   if (/(heavy|large|big|thick|rolled|significant) burr/i.test(t)) out.burr = 'heavy';
   else if (/(medium|moderate) burr/i.test(t)) out.burr = 'medium';
   else if (/(small|light|fine|tiny|micro|feather|thin) burr|fuzz/i.test(t)) out.burr = 'light';
+  // a measured burr beats the adjectives: >0.2 mm at the root is more than fiber should take on
+  const bmm = burrSize(t);
+  if (bmm != null) { out.burrMm = bmm; out.burr = burrLevel(bmm); }
   // machine
   const mc = {};
   // explicit machines first; "today we deburr by hand" describes the current process, not the target machine

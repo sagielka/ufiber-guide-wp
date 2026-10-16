@@ -107,6 +107,10 @@ async def main():
                 "() => { doAsk('Light burrs on cross hole Ø10 into Ø16.5 bore, 4140 steel', {ai:false});"
                 " return JSON.stringify(APP.ws.dims); }")
             ok('cross hole Ø10 into a Ø16.5 bore keeps the bore', '"main":16.5' in dims and '"cross":10' in dims, dims)
+            st = await page.evaluate(
+                "() => { doAsk('Main hole diameter: Ø16.5 mm\\nCross hole diameter: Ø10 mm\\nBurr height: Approx. 1 mm\\nWorkpiece material: S45C', {ai:false});"
+                " return JSON.stringify({d: APP.ws.dims, b: APP.ws.burr, h: APP.ws.burrMm}); }")
+            ok('a stated burr height is the burr, not a width (1.6.2)', '"width"' not in st and '"h":1' in st and '"b":"heavy"' in st, st)
 
             # --- Clear (1.4.0) ---
             await page.evaluate("() => go('')")
