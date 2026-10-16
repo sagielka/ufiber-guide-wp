@@ -9,7 +9,7 @@ const SHARE = (() => {
   const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64d = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
   // short keys keep the link readable
-  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x' };
+  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x', through: 'w' };
 
   function encode(st) {
     if (!st || !st.task) return '';
@@ -47,6 +47,7 @@ const SHARE = (() => {
     st.override = (st.override && typeof st.override === 'object') ? st.override : {};
     if (st.override.grit && !GRITS.some(g => g.grit === st.override.grit) && !STONE_GRITS.some(g => g.grit === st.override.grit)) delete st.override.grit;
     if (st.fromX && typeof st.fromX !== 'string') delete st.fromX;
+    if (st.through !== undefined) st.through = st.through === true;
     return st;
   }
   /** The address someone can paste to a colleague. */

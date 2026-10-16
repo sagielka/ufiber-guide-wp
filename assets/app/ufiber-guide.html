@@ -744,7 +744,13 @@ function recommend(st) {
     if (!main) { R.warnings.push({ t: 'Bore diameter needed', d: 'Brush size is chosen from the bore you insert into. Showing a mid-size Ø5 brush until you enter it.' }); lower('medium', 'Bore diameter not given.'); }
     if (feature === 'cross' && main && cross) {
       if (cross >= main) R.warnings.push({ t: 'Insert from the larger bore', d: `The brush must enter the main (larger) bore. Your cross hole (Ø${cross}) is not smaller than the bore (Ø${main}) — swap them, or if they are equal, a cross-hole brush is not the right tool; ask NOGA about UBURR.` });
-      else if (cross > 0.7 * main) R.notes.push(`Cross hole is ${Math.round(cross / main * 100)}% of the main bore. That's fine for a T-junction (cross < main); for a through cross-shape keep it ≤70%.`);
+      else if (cross > 0.7 * main) {
+        const pct = Math.round(cross / main * 100);
+        if (st.through) {
+          R.warnings.push({ t: `Through cross hole is ${pct}% of the bore`, d: `When the cross hole goes through both walls, NOGA keeps it at or below 70% of the main bore. Above that the expanded fibers flare out into both openings and can catch the far edge, which breaks fibers. Start at the low end of the RPM window, keep the feed steady through the intersection, and check the brush after the first part.` });
+          lower('medium', 'Through cross hole above NOGA\'s 70% limit.');
+        } else R.notes.push(`Cross hole is ${pct}% of the main bore. That's fine for a T-junction (one side only). If it goes through both walls, NOGA's limit is 70%.`);
+      }
     }
     // choose size
     let size = null, shank = false;
@@ -764,7 +770,7 @@ function recommend(st) {
       }
     }
     if (main && main >= 2.5 && main < 3.5 && size === 1.5) {
-      R.warnings.push({ t: 'Bore below the standard Ø3.5 mm range', d: 'The catalogue range for the Ø1.5 cross-hole brush starts at Ø3.5 mm. NOGA\'s own 17-4 PH case study ran this brush in a Ø2.6 mm hole (7,000 RPM, 100 mm/min, dry), so it is used here with that case as the reference. Run a test part and ask NOGA to confirm.' });
+      R.warnings.push({ t: 'Bore below the standard Ø3.5 mm range', d: 'The catalogue range for the Ø1.5 cross-hole brush starts at Ø3.5 mm. NOGA\'s own 17-4 PH case study ran this brush in a Ø2.6 mm hole (7,000 RPM, 100 mm/min, dry), so it is used here with that case as the reference. Run a test part and ask NOGA to confirm. A field trial in a Ø3.1 mm bore in L605 cobalt alloy on a sliding-head lathe did not clear the burr with a Ø1.5 #600 brush at 6,000 RPM and about 120 mm/min, and a Ø3 brush broke on entry: reach the full RPM, use #400 or coarser in hard alloys, and never put a Ø3 brush into a bore of about Ø3.' });
       lower('medium', 'Bore is below the catalogue range; based on one NOGA case study.');
     }
     if (main && main < 2.5 && !ov.dia) {
@@ -960,41 +966,79 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   return finalize(R, st);
 }
 
+/* Live tools on lathes are slower than machining-centre spindles. The figures are
+   makers' published maxima for the end-working / driven-tool stations. */
+const LIVE_TOOL = { typical: [6000, 8000], examples: '7,500 RPM max on a Citizen L20 front tool, 8,000 on a Star SR-20R IV, 6,000 on a Tornos Swiss GT 13' };
+const isLathe = machine => machine === 'swiss' || machine === 'lathe';
+/* Checks the live-tool speed against what the brush needs and returns the RPM to run. */
+function liveToolSpeed(R, machine, maxRpm, need, what) {
+  if (!isLathe(machine)) {
+    if (maxRpm && need > maxRpm) { R.warnings.push({ t: 'Spindle below recommended speed', d: `The brush expands less at ${maxRpm.toLocaleString()} RPM. Use the larger brush size that fits the bore, add passes, or step one grit coarser.` }); return maxRpm; }
+    return need;
+  }
+  const min = r100(need * 0.85);
+  if (!maxRpm) {
+    if (need > LIVE_TOOL.typical[0]) {
+      R.warnings.push({ t: 'Check the live-tool speed', d: `${what} needs ${need.toLocaleString()} RPM. Live tools on sliding-head and turn-mill lathes are often limited to ${LIVE_TOOL.typical[0].toLocaleString()}–${LIVE_TOOL.typical[1].toLocaleString()} RPM (${LIVE_TOOL.examples}). Enter the station's maximum RPM under Machine. Below about ${min.toLocaleString()} RPM, fit a speed increaser on that station.` });
+      R.lower('medium', 'Live-tool maximum RPM not given.');
+    }
+    return need;
+  }
+  if (maxRpm >= need) return need;
+  if (maxRpm >= min) R.warnings.push({ t: 'Live tool slightly below the target speed', d: `Your live tool gives ${maxRpm.toLocaleString()} RPM, a little under the ${need.toLocaleString()} RPM ${what.toLowerCase()} needs. Run at ${maxRpm.toLocaleString()}, add a pass, and step one grit coarser if burrs remain.` });
+  else { R.warnings.push({ t: 'Live tool too slow for this brush', d: `Your live tool gives ${maxRpm.toLocaleString()} RPM, more than 15% under the ${need.toLocaleString()} RPM ${what.toLowerCase()} needs. The fibers will not expand fully to the bore wall. Fit a speed increaser on the live-tool station (a 1:3 or 1:4 ratio covers it), or run the brush in a machine that reaches the speed.` }); R.lower('low', `Live tool ${maxRpm.toLocaleString()} RPM is well below the ${need.toLocaleString()} RPM the brush needs.`); }
+  return maxRpm;
+}
+
 function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross, feature) {
   const C = CROSS[size]; const q = G(grit); const k = skuCross(size, grit);
+  const lathe = isLathe(machine);
   R.family = 'crosshole'; R.familyName = 'Cross-Hole Brush'; R.dia = size; R.grit = q; R.sku = k.sku; R.desc = k.desc;
-  R.holders.push({ role: 'Holding', sku: '—', desc: `Ø${C.ds} mm shank in a collet or shrink chuck. Grip at least 30 mm of shank.` });
+  R.holders.push({ role: 'Holding', sku: '—', desc: lathe ? `Ø${C.ds} mm shank in the collet of an axial (end-working) live tool, on the bore axis. Grip at least 30 mm of shank and keep runout under 0.02 mm.` : `Ø${C.ds} mm shank in a collet or shrink chuck. Grip at least 30 mm of shank.` });
   const row = sfRowOf(st); R.sfRow = row.id;
   const SFc = sfCross({ row, bore: main || (r0 => (r0[0] + r0[1]) / 2)((grit >= 1200 && C.pilotFine) ? C.pilotFine : C.pilot), grit, mode, size });
   R.dataChecks = SFc.checks || [];
   const r = (grit >= 1200 && C.pilotFine) ? C.pilotFine : C.pilot;
-  let rpm = SFc.rpm || C.base;
-  if (maxRpm && rpm > maxRpm) { R.warnings.push({ t: 'Spindle below recommended speed', d: `The brush expands less at ${maxRpm.toLocaleString()} RPM. Use the larger brush size that fits the bore, add passes, or step one grit coarser.` }); rpm = maxRpm; }
+  const below = SFc.method === 'small';
+  const need = SFc.rpm || C.base;
+  const rpm = liveToolSpeed(R, machine, maxRpm, need, `The Ø${size} cross-hole brush`);
   const feed = SFc.feedRange ? SFc.feedRange[0] : 300;
   const passes = String(SFc.passes || '2–3').replace('-', '–');
-  const stroke = cross ? cross + 10 : null;
+  const slotW = Number(st.dims?.slotW) || null, slotL = Number(st.dims?.slotL) || null;
+  const span = Math.max(cross || 0, slotL || 0) || null;
+  const stroke = span ? +(span + 10).toFixed(2) : null;
+  const both = cross && slotL;
   R.params = {
     rpm, rpmLo: SFc.newRpm || rpm, rpmHi: Math.min(round((SFc.newRpm || rpm) * 1.25, 100), C.max), rpmMax: C.max, feed, feedRange: SFc.feedRange,
-    engage: { label: 'Stroke', value: stroke ? stroke : 'Ø + 10', unit: 'mm', note: stroke ? `Axial travel through the intersection: the ${cross} mm cross hole plus 5 mm clear on each side. There is no depth of cut — the fibers expand outward by centrifugal force.` : 'Axial travel: the cross hole plus 5 mm clear on each side. No depth of cut — the fibers expand outward by centrifugal force.' },
+    engage: { label: 'Stroke', value: stroke ? stroke : 'Ø + 10', unit: 'mm', note: both ? `Axial travel past every opening: 5 mm before the first (cross hole or slot) to 5 mm past the last. ${stroke} mm covers them only if they sit at the same position along the bore; if not, add the distance between them. There is no depth of cut — the fibers expand outward by centrifugal force.` : stroke ? `Axial travel through the intersection: the ${span} mm ${cross ? 'cross hole' : 'slot'} plus 5 mm clear on each side. There is no depth of cut — the fibers expand outward by centrifugal force.` : 'Axial travel: the cross hole plus 5 mm clear on each side. No depth of cut — the fibers expand outward by centrifugal force.' },
     passes, direction: 'CW, then CCW (stop between)', projection: null, coolant: SFc.cool || mat.coolant,
   };
   const depth = Number(st.dims?.depth) || null;
   if (depth && depth > C.reach - 30 - (cross || 0) / 2) R.warnings.push({ t: 'Check reach', d: `The intersection is ${depth} mm deep. This brush is about ${C.reach} mm long overall and needs 30 mm of shank in the holder. Confirm reach in CAM, or ask NOGA about extended lengths.` });
+  if (lathe) R.notes.push(`NOGA's machine list names machining centres, dedicated machines and robots for cross-hole brushes, not lathes. NOGA's own 17-4 PH case ran a Ø1.5 cross-hole brush on a Star SR-20 sliding-head lathe, so it works with the main spindle stopped and the brush in an axial live tool on the bore axis.`);
+  if (slotW) R.notes.push(`The ${slotW}${slotL ? ` × ${slotL}` : ''} mm slot${st.through ? 's open' : ' opens'} into the bore as well. The same strokes deburr ${st.through ? 'them' : 'it'}, as long as each stroke runs 5 mm past every opening.`);
+  const where = both ? 'the cross hole and slot' : slotW && !cross ? 'the slot' : 'the intersection';
   R.steps = [
-    `Position above the ${main ? 'Ø' + main + ' ' : ''}main bore with the spindle stopped.`,
-    'Insert the brush without rotation until its tip is 5 mm past the far side of the intersection.',
-    `Start rotation (${rpm.toLocaleString()} RPM, clockwise) inside the bore.`,
-    `Pull back through the intersection to 5 mm before it${cross ? ` (stroke ${stroke} mm)` : ''} — pulling back keeps burrs from being laid flat against the bore wall.`,
-    'Push forward through the intersection to 5 mm past the far side — this pass takes the burrs pointing the other way.',
-    'Stop the spindle completely.',
+    lathe ? `Stop the main spindle and lock it (C-axis clamp). Bring the axial live tool onto the ${main ? 'Ø' + main + ' ' : ''}bore axis.` : `Position above the ${main ? 'Ø' + main + ' ' : ''}main bore with the spindle stopped.`,
+    `Insert the brush without rotation until its tip is 5 mm past the far side of ${both ? 'the last opening' : where}.`,
+    `Start rotation (${rpm.toLocaleString()} RPM, clockwise) inside the bore.${lathe ? ` Program the feed in mm/min (G98), not mm/rev: ${feed} mm/min.` : ''}`,
+    `Pull back through ${where} to 5 mm before ${both ? 'the first opening' : 'it'}${stroke ? ` (stroke ${stroke} mm${both ? ' or more' : ''})` : ''} — pulling back keeps burrs from being laid flat against the bore wall.`,
+    `Push forward through ${where} to 5 mm past the ${both ? 'last opening' : 'far side'} — this pass takes the burrs pointing the other way.`,
+    lathe ? 'Stop the live tool completely.' : 'Stop the spindle completely.',
     'Switch to counter-clockwise and repeat the pull-back and push-forward strokes.',
     'Stop rotation and withdraw the brush while stationary.',
   ];
+  const sizeWhy = !main ? 'Mid-size default until the bore diameter is known.'
+    : below ? `Ø${size} is the smallest cross-hole brush. Your Ø${main} bore is below its Ø${r[0]}–${r[1]} catalogue range, so this choice rests on NOGA's 17-4 PH case in a Ø2.6 mm hole rather than on the catalogue range.`
+    : `Your Ø${main} bore is inside this brush's working range (Ø${r[0]}–${r[1]} for #${grit}). Larger bores need a larger brush to expand far enough.`;
+  const speedWhy = below
+    ? `RPM is scaled from NOGA's 17-4 PH case (7,000 RPM with #1000) by grit (#${grit} ×${SF_GRITX[grit] || 1}). The 100 mm/min feed also comes from that case, below the table's ${(mode === 'polish' ? row.C.feedP : row.C.feedD).join('–')} mm/min for bores in the catalogue range. Run both rotation directions so burrs are removed instead of bent over.`
+    : `RPM follows NOGA's RPM Advisor formula: it rises with bore size inside the brush's range and with coarser grit (#${grit} ×${SF_GRITX[grit] || 1}). Feed is the low end of NOGA's cross-hole table for ${sfLabel(row).toLowerCase()}. Run both rotation directions so burrs are removed instead of bent over.`;
   R.why = [
     { t: 'Why a Cross-Hole brush', d: 'Spinning makes the fibers fan out and press into the bore wall, so they reach the burr at the intersection without a complex 3D toolpath.' },
-    { t: `Why Ø${size}`, d: main ? `Your Ø${main} bore is inside this brush's working range (Ø${r[0]}–${r[1]} for #${grit}). Larger bores need a larger brush to expand far enough.` : 'Mid-size default until the bore diameter is known.' },
+    { t: `Why Ø${size}`, d: sizeWhy },
     { t: `Why #${grit} (${q.color.toLowerCase()})`, d: gritWhy(st, grit, mode) + (grit >= 1200 ? ' Fine grits are more flexible and expand more.' : '') },
-    { t: 'Why this speed and feed', d: `RPM follows NOGA's RPM Advisor formula: it rises with bore size inside the brush's range and with coarser grit (#${grit} ×${SF_GRITX[grit] || 1}). Feed is the low end of NOGA's cross-hole table for ${sfLabel(row).toLowerCase()}. Run both rotation directions so burrs are removed instead of bent over.` },
+    { t: 'Why this speed and feed', d: speedWhy },
   ];
   R.watch = [
     'Never start rotation outside the bore — fibers fly out and break.',
@@ -1027,7 +1071,8 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   if (SFs && SFs.clearance >= 1) R.notes.push(`The Ø${size} brush leaves about ${SFs.clearance} mm radial clearance in the Ø${main} bore. Use a circular-interpolated or offset toolpath so the fiber tips reach the cross-hole edge.`);
   const row = sfRowOf(st); R.sfRow = row.id;
   let rpm = sfSurface({ row, dia: size, grit, mode }).rpm;
-  if (maxRpm && rpm > maxRpm) { rpm = maxRpm; R.warnings.push({ t: 'Lower spindle speed', d: 'The brush will expand less. Add passes or try #1000 for more bite.' }); }
+  if (isLathe(machine)) rpm = liveToolSpeed(R, machine, maxRpm, rpm, `The Ø${size} surface brush on a shank`);
+  else if (maxRpm && rpm > maxRpm) { rpm = maxRpm; R.warnings.push({ t: 'Lower spindle speed', d: 'The brush will expand less. Add passes or try #1000 for more bite.' }); }
   const stroke = cross ? cross + 10 : null;
   R.params = { rpm, rpmLo: S.rpm[0], rpmHi: S.rpm[1], rpmMax: S.rpm[1], feed: (mode === 'polish' ? row.C.feedP : row.C.feedD)[0], engage: { label: 'Stroke', value: stroke || 'Ø + 10', unit: 'mm', note: stroke ? `Axial travel through the intersection: the ${cross} mm cross hole plus 5 mm clear on each side. The fibers expand outward by centrifugal force, so there is no depth of cut.` : 'Axial travel: the cross hole plus 5 mm clear on each side. The fibers expand outward by centrifugal force, so there is no depth of cut.' }, passes: mode === 'polish' ? row.C.passP.replace('-', '–') : row.C.passD.replace('-', '–'), direction: 'CW, then CCW (stop between)', coolant: SF_COOL[row.C.cool] };
   R.steps = [
@@ -1165,6 +1210,10 @@ function matchCases(R, st, cases) {
 }
 
 function finalize(R, st) {
+  // live tools on lathes rarely reach machining-centre speeds; cross-hole and shank set-ups check this themselves
+  const mt = st.machine?.type;
+  if (isLathe(mt) && !st.machine?.maxRpm && !['crosshole', 'shank', 'diamond'].includes(R.family) && R.params?.rpm > LIVE_TOOL.typical[0])
+    R.notes.push(`This runs at ${R.params.rpm.toLocaleString()} RPM. Live tools on lathes are often limited to ${LIVE_TOOL.typical[0].toLocaleString()}–${LIVE_TOOL.typical[1].toLocaleString()} RPM; enter the station's maximum under Machine to check.`);
   delete R.lower;
   if (R.conf.level === 'high' && !R.conf.reasons.length) R.conf.reasons.push('Selection follows the catalogue rules directly.');
   return R;
@@ -1173,7 +1222,7 @@ function finalize(R, st) {
 /* ---------- natural-language parsing ---------- */
 const MAT_WORDS = [
   [/\b(inconel|hastelloy|waspaloy|nimonic|rene|718|625|superalloy|heat[- ]resistant|hrsa)\b/i, 'hrsa', 'ni'],
-  [/\b(cobalt|co-?cr|cocr|stellite)\b/i, 'hrsa', 'co'],
+  [/\b(cobalt|co-?cr|cocr|stellite|l-?605|haynes ?25|mp35n)\b/i, 'hrsa', 'co'],
   [/\b(titanium|ti-?6al|ti6al4v|grade ?5|ti\b)/i, 'titanium'],
   [/\b(carbide|tungsten|ceramic|glass|sapphire)\b/i, 'carbide'],
   [/\b(17-?4(ph)?|15-?5(ph)?|420|410|416|440c?|martensitic|ferritic)\b/i, 'stainless', 'mart'],
@@ -1235,7 +1284,7 @@ function parseText(text) {
   const hrc = t.match(/(\d{2})\s*hrc/i); if (hrc) { if (!out.material || out.material === 'carbon') out.material = 'hardened'; out.sub = Number(hrc[1]) > 55 ? 'gt55' : 'le55'; }
   if (out.material === 'carbon' && /(quench|tempered|heat[- ]treat|through[- ]hard)/i.test(t)) out.sub = 'treated';
   // task / feature
-  const isCross = /(cross|intersect|crossing|t-?junction|side hole|meets? (a|the) bore)/i.test(t);
+  const isCross = /(cross|intersect|crossing|t-?junction|side hole|radial hole|meets? (a|the) bore|opens? (in|into) the (?:[^.\n]|\.\d){0,30}(hole|bore)|(hole|drill\w*)(?:[^.\n]|\.\d){0,25}\bon the (od|o\.d\.|outer diameter|diameter))/i.test(t);
   if (isCross) { out.task = 'crosshole'; out.feature = 'cross'; }
   else if (/\b(edm|wire[- ]?cut|recast)\b/i.test(t) || out.material === 'carbide') out.task = 'hard';
   else if (/(tool ?marks?|cutter ?marks?|mill(ing)? marks|\bra\b|roughness|scallop)/i.test(t)) out.task = 'marks';
@@ -1252,6 +1301,21 @@ function parseText(text) {
     else if (/(edge|contour|profile|outline|perimeter)/i.test(t)) out.feature = 'edge';
     else if (/(small|tiny|micro|precision|narrow)/i.test(t)) out.feature = 'small';
   }
+  // a slot that opens into the bore: "1.016 slot with length of 1.5 mm", "slot 1 x 1.5"
+  const NUM = '(\\d+(?:\\.\\d+)?)';
+  let slotW = null, slotL = null;
+  if (isCross && /\bslot/i.test(t)) {
+    const sx = t.match(new RegExp('slot[^.\\n]{0,20}?' + NUM + '\\s*(?:mm)?\\s*[x×]\\s*' + NUM, 'i'));
+    if (sx) { slotW = +sx[1]; slotL = +sx[2]; }
+    else {
+      const w = t.match(new RegExp(NUM + '\\s*(?:mm)?\\s*(?:wide\\s+)?(?:milled\\s+)?slot', 'i')) || t.match(new RegExp('slot\\s*(?:width|wide|w)\\s*(?:of|[:=])?\\s*' + NUM, 'i'));
+      const l = t.match(new RegExp('slot[^\\n]{0,40}?(?:length|long)\\s*(?:of|[:=])?\\s*' + NUM, 'i')) || t.match(new RegExp('slot[^\\n]{0,30}?' + NUM + '\\s*(?:mm)?\\s*long', 'i'));
+      if (w) slotW = +w[1]; if (l) slotL = +l[1];
+    }
+    if (slotW && slotL && slotW > slotL) [slotW, slotL] = [slotL, slotW];
+  }
+  // a cross hole drilled across the part goes through both walls of the bore
+  if (isCross && /(both (sides|walls)|on the (od|o\.d\.|outer diameter|diameter)|through both|thru both|drilled (right |all the way )?through|goes (right )?through|across the (part|diameter))/i.test(t)) out.through = true;
   // dimensions
   const nums = [];
   const re = /(?:[øØ⌀]|dia(?:meter)?\.?\s*|d\s*=\s*)?\s*(\d+(?:\.\d+)?)\s*(mm|")?/g;
@@ -1270,15 +1334,17 @@ function parseText(text) {
     // "burr height: approx. 1 mm" / "a 0.3 mm burr" is the burr, not a size of the part
     if (!/[øØ⌀]|dia/i.test(raw) && (BURR_BEFORE.test(before) || /^\s*(mm)?\s*(high|thick|tall|large)?\s*burr/i.test(after))) continue;
     let mm = m[2] === '"' ? v * 25.4 : v;
+    if ((slotW && mm === slotW) || (slotL && mm === slotL)) { if (/slot|length|long|wide|width/i.test(before.slice(-25) + after.slice(0, 25))) continue; }
     nums.push({ v: mm, before, after });
   }
   const tag = (n, words) => words.test(n.after.slice(0, 30)) || words.test(n.before.slice(-25));
   if (isCross && nums.length >= 2) {
-    const mainN = nums.find(n => tag(n, /main|bore|primary|large/)); const crossN = nums.find(n => n !== mainN && tag(n, /cross|drill|side|small|intersect/));
+    const mainN = nums.find(n => tag(n, /main|bore|primary|large|entry|reamed/)); const crossN = nums.find(n => n !== mainN && n.v !== mainN?.v && tag(n, /cross|drill|side|small|intersect|radial/));
     let a = mainN?.v, b = crossN?.v;
-    if (!a || !b) { const s = nums.map(n => n.v).sort((x, y) => y - x); a = s[0]; b = s[1]; }
-    if (b > a) [a, b] = [b, a];
-    out.dims = { main: a, cross: b };
+    // the same diameter is often repeated ("entry dia 3.1 … the dia 3.1 mm reamed hole"): pick two different sizes
+    if (!a || !b) { const s = [...new Set(nums.map(n => n.v))].sort((x, y) => y - x); if (!a) a = s[0]; if (!b) b = s.find(x => x !== a); }
+    if (b != null && b > a) [a, b] = [b, a];
+    out.dims = b != null ? { main: a, cross: b } : { main: a };
   } else if (nums.length) {
     out.dims = {};
     for (const n of nums) {
@@ -1311,6 +1377,7 @@ function parseText(text) {
   const rpm = t.match(/(\d[\d.]*)\s*(k)?\s*rpm/i); if (rpm) { let v = parseFloat(rpm[1].replace(/\.(?=\d{3})/g, '')); if (rpm[2]) v *= 1000; mc.maxRpm = Math.round(v); }
   if (/(uneven|cast surface|as[- ]cast|warp|runout)/i.test(t)) mc.uneven = true;
   if (Object.keys(mc).length) out.machine = mc;
+  if (slotW || slotL) { out.dims = out.dims || {}; if (slotW) out.dims.slotW = slotW; if (slotL) out.dims.slotL = slotL; }
   // a cross-hole job states two diameters; a third chip repeating one of them is noise
   if (out.dims && out.task === 'crosshole' && out.dims.hole != null &&
       (out.dims.hole === out.dims.cross || out.dims.hole === out.dims.main)) delete out.dims.hole;
@@ -1557,7 +1624,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.2';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.3';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -1568,6 +1635,7 @@ const lenOut = (mm, dpmm = 2) => isIn() ? fmtN(mm / 25.4, mm < 2 ? 4 : 3) : fmtN
 const lenU = () => isIn() ? 'in' : 'mm';
 const feedOut = v => v == null ? '—' : (isIn() ? fmtN(v / 25.4, 1) : fmtN(v));
 const feedU = () => isIn() ? 'in/min' : 'mm/min';
+const lenOutT = mm => isIn() ? lenOut(mm) : String(+Number(mm).toFixed(3));   /* no padding zeros: 1.016 and 1.5, not 1.500 */
 const diaOut = mm => isIn() ? `Ø${fmtN(mm / 25.4, 3)}″` : `Ø${mm}`;
 const lenIn = v => v === '' || v == null || isNaN(parseFloat(v)) ? null : (isIn() ? parseFloat(v) * 25.4 : parseFloat(v));
 const lenVal = mm => mm == null ? '' : (isIn() ? +(mm / 25.4).toFixed(3) : mm);
@@ -1704,31 +1772,79 @@ function dgSurface(R) {
   </g></svg>`;
 }
 
+/* Cross-hole drawing. The scene is built in one frame — x' across the bore,
+   y' along it from the entry face — and turned to match the machine: a bore
+   entered from above on a machining centre, a bar lying on its side with the
+   brush coming in from the end on a lathe or Swiss-type machine. The cross hole
+   and any slot open on one side (T) or on both (through). */
+function crossLayout() {
+  const ws = APP.ws || {}, d = ws.dims || {}, mt = ws.machine?.type;
+  const lathe = mt === 'swiss' || mt === 'lathe' || mt === 'lathe0';
+  const main = Number(d.main) || 10;
+  const cross = Number(d.cross) || (d.slotW || d.slotL ? null : main * 0.5);
+  const slotLen = Number(d.slotL) || Number(d.slotW) || null;
+  const bw = 84, PW = 132, Lp = lathe ? 300 : 270, C0 = 135;
+  const ops = [];
+  if (cross) ops.push({ kind: 'cross', h: Math.max(22, Math.min(72, bw * cross / main)) });
+  if (slotLen) ops.push({ kind: 'slot', h: Math.max(14, Math.min(72, bw * slotLen / main)) });
+  const gap = 34, total = ops.reduce((t, o) => t + o.h, 0) + gap * (ops.length - 1);
+  let y = C0 - total / 2; ops.forEach(o => { o.c = y + o.h / 2; y += o.h + gap; });
+  const ft = ops[0].c - ops[0].h / 2, fb = ops[ops.length - 1].c + ops[ops.length - 1].h / 2;
+  // canonical → page
+  const M = lathe ? (x, yy) => [330 - yy, 165 + x] : (x, yy) => [192 + x, 40 + yy];
+  const frame = lathe ? 'matrix(0 1 -1 0 330 165)' : 'translate(192 40)';
+  const icon = lathe ? [385, 300] : [370, 26];
+  return { lathe, main, cross, slotW: Number(d.slotW) || null, slotL: Number(d.slotL) || null, through: !!ws.through, bw, PW, Lp, ops, ft, fb, M, frame, icon, vb: lathe ? '0 0 420 340' : '0 0 420 330', len: 72 };
+}
 function dgCross(R) {
-  const main = Number(APP.ws?.dims?.main) || 10, cross = Number(APP.ws?.dims?.cross) || main * 0.5;
-  const bw = 84, h = Math.max(22, Math.min(72, bw * cross / main));
-  const cy = 170, ct = cy - h / 2, cb = cy + h / 2, bx = 150, hex = R.grit.hex;
+  const L = crossLayout(), { bw, PW, Lp, ops, ft, fb, M, icon } = L, hb = bw / 2, hex = R.grit.hex;
   const wide = R.family === 'shank' ? bw - 6 : bw - 8;
   const bundle = (w) => { let s = ''; const n = 22; for (let i = 0; i < n; i++) { const y = i * 3; s += `<path d="M0 ${y} L${-w / 2} ${y + 3} M0 ${y} L${w / 2} ${y + 3}" stroke="${hex}" stroke-width="1.8"/>`; } return s + `<path d="M${-w / 2} 0v66M${w / 2} 0v66" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>`; };
-  return `<svg viewBox="0 0 420 330" role="img" aria-label="Cross-hole brushing sequence">
-  <rect x="60" y="40" width="330" height="270" fill="var(--line)"/>
-  <rect x="${bx}" y="40" width="${bw}" height="270" fill="var(--surface)"/>
-  <rect x="${bx + bw}" y="${ct}" width="${390 - bx - bw}" height="${h}" fill="var(--surface)"/>
-  <g id="cbBurr" style="transition:opacity .6s"><path d="M${bx + bw} ${ct} l-9 4 9 3z M${bx + bw} ${cb} l-9 -4 9 -3z" fill="var(--bad)"/></g>
-  <line x1="${bx - 30}" x2="${bx + bw + 30}" y1="${ct - 14}" y2="${ct - 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
-  <line x1="${bx - 30}" x2="${bx + bw + 30}" y1="${cb + 14}" y2="${cb + 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
-  <text x="${bx - 34}" y="${ct - 18}" font-size="13" text-anchor="end" fill="var(--accent)" font-family="Barlow,sans-serif" font-weight="600">5 mm before</text>
-  <text x="${bx - 34}" y="${cb + 26}" font-size="13" text-anchor="end" fill="var(--accent)" font-family="Barlow,sans-serif" font-weight="600">5 mm past</text>
-  <text x="${bx - 8}" y="20" text-anchor="end" font-size="13" fill="var(--ink-2)" font-family="Barlow,sans-serif" font-weight="600">Main bore ${diaOut(main)}</text>
-  <text x="${bx - 8}" y="35" text-anchor="end" font-size="13" fill="var(--accent)" font-family="Barlow,sans-serif" font-weight="600">enter here ↓</text>
-  <text x="${bx + bw + 10}" y="${cy + 5}" font-size="13" fill="var(--ink-2)" font-family="Barlow,sans-serif">Cross hole ${diaOut(cross)}</text>
-  <g id="cbBrush" style="transition:transform .8s ease">
-    <rect x="${bx + bw / 2 - 5}" y="-240" width="10" height="250" fill="#9aa2a9"/>
-    <g id="cbN" style="transition:opacity .5s" transform="translate(${bx + bw / 2} 6)">${bundle(16)}</g>
-    <g id="cbW" style="transition:opacity .5s;opacity:0" transform="translate(${bx + bw / 2} 6)">${bundle(wide)}</g>
+  const sides = L.through ? [1, -1] : [1];
+  let open = '', burrs = '';
+  for (const o of ops) for (const sd of sides) {
+    const t = o.c - o.h / 2, b = o.c + o.h / 2, x0 = sd > 0 ? hb : -PW;
+    open += `<rect x="${x0}" y="${t}" width="${PW - hb}" height="${o.h}" fill="var(--surface)"${o.kind === 'slot' ? ' stroke="var(--ink-3)" stroke-width=".6" stroke-dasharray="3 3"' : ''}/>`;
+    const w = sd * hb, k = -sd * 9;
+    burrs += `<path d="M${w} ${t} l${k} 4 ${-k} 3z M${w} ${b} l${k} -4 ${-k} -3z" fill="var(--bad)"/>`;
+  }
+  const txt = (x, y, s, o = {}) => `<text x="${x}" y="${y}" font-size="${o.size || 13}" text-anchor="${o.a || 'start'}" fill="var(${o.c || '--ink-2'})" font-family="Barlow,sans-serif"${o.w ? ` font-weight="${o.w}"` : ''}>${s}</text>`;
+  const both = L.through ? ' · both sides' : '';
+  const opName = o => o.kind === 'cross' ? `Cross hole ${diaOut(L.cross)}${both}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}${both}`;
+  let labels = '';
+  if (L.lathe) {
+    labels += txt(34, 22, 'Bar in the main spindle: stopped, C-axis locked', { size: 12 });
+    labels += txt(414, 112, `Main bore ${diaOut(L.main)}`, { a: 'end', w: 600 }) + txt(414, 128, 'enter here ←', { a: 'end', w: 600, c: '--accent' });
+    labels += txt(414, 222, 'axial live tool', { a: 'end', size: 12 });
+    ops.forEach((o, i) => { const [x] = M(0, o.c); labels += txt(Math.max(110, Math.min(320, x)), 315 + i * 16, opName(o), { a: 'middle', size: 12.5 }); });
+    const [xb] = M(0, ft - 14), [xp] = M(0, fb + 14);
+    labels += txt(xb + 4, 86, '5 mm before', { w: 600, c: '--accent' }) + txt(xp - 4, 86, '5 mm past', { a: 'end', w: 600, c: '--accent' });
+  } else {
+    labels += txt(142, 20, `Main bore ${diaOut(L.main)}`, { a: 'end', w: 600 }) + txt(142, 35, 'enter here ↓', { a: 'end', w: 600, c: '--accent' });
+    const vName = o => o.kind === 'cross' ? `Cross hole ${diaOut(L.cross)}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}`;
+    ops.forEach(o => { const [x, y] = M(hb + 10, o.c + (L.through ? -2 : 5)); labels += txt(x, y, vName(o), { size: 12.5 }) + (L.through ? txt(x, y + 15, 'both sides', { size: 12 }) : ''); });
+    const [xl, yb] = M(-hb - 34, ft - 18), [, yp] = M(0, fb + 26);
+    labels += txt(xl, yb, '5 mm before', { a: 'end', w: 600, c: '--accent' }) + txt(xl, yp, '5 mm past', { a: 'end', w: 600, c: '--accent' });
+  }
+  const [ix, iy] = icon;
+  return `<svg viewBox="${L.vb}" role="img" aria-label="Cross-hole brushing sequence${L.lathe ? ' on a lathe' : ''}">
+  <g transform="${L.frame}">
+    <rect x="${-PW}" y="0" width="${PW * 2}" height="${Lp}" fill="var(--line)"/>
+    ${L.lathe ? `<path d="M${-PW} ${Lp} l22 -8 22 8 22 -8 22 8 22 -8 22 8 22 -8 22 8 22 -8 22 8 22 -8 22 8" fill="none" stroke="var(--ink-3)" stroke-width="1"/>` : ''}
+    <rect x="${-hb}" y="0" width="${bw}" height="${Lp}" fill="var(--surface)"/>
+    ${open}
+    <g id="cbBurr" style="transition:opacity .6s">${burrs}</g>
+    <line x1="${-hb - 30}" x2="${hb + 30}" y1="${ft - 14}" y2="${ft - 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
+    <line x1="${-hb - 30}" x2="${hb + 30}" y1="${fb + 14}" y2="${fb + 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
+    <g id="cbBrush" style="transition:transform .8s ease">
+      <rect x="-5" y="-250" width="10" height="256" fill="#9aa2a9"/>
+      <g id="cbN" style="transition:opacity .5s" transform="translate(0 6)">${bundle(16)}</g>
+      <g id="cbW" style="transition:opacity .5s;opacity:0" transform="translate(0 6)">${bundle(wide)}</g>
+    </g>
   </g>
-  <g id="cbRot" style="transition:opacity .4s;opacity:0"><circle cx="370" cy="26" r="15" fill="var(--accent-soft)"/><path id="cbArc" d="M361 26 a9 9 0 1 1 9 9" fill="none" stroke="var(--accent)" stroke-width="2.4"/><text id="cbDir" x="370" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)" font-family="Barlow Condensed,sans-serif">CW</text></g>
-  <g id="cbStop"><rect x="352" y="12" width="30" height="30" rx="6" fill="var(--surface)" stroke="var(--ink-3)"/><rect x="361" y="21" width="12" height="12" fill="var(--ink-3)"/></g>
+  ${labels}
+  <g id="cbRot" style="transition:opacity .4s;opacity:0"><circle cx="${ix}" cy="${iy}" r="15" fill="var(--accent-soft)"/><path id="cbArc" d="M${ix - 9} ${iy} a9 9 0 1 1 9 9" fill="none" stroke="var(--accent)" stroke-width="2.4"/><text id="cbDir" x="${ix}" y="${iy + 32}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)" font-family="Barlow Condensed,sans-serif">CW</text></g>
+  <g id="cbStop"><rect x="${ix - 15}" y="${iy - 15}" width="30" height="30" rx="6" fill="var(--surface)" stroke="var(--ink-3)"/><rect x="${ix - 6}" y="${iy - 6}" width="12" height="12" fill="var(--ink-3)"/></g>
   </svg>`;
 }
 const CB_FRAMES = [
@@ -1745,15 +1861,14 @@ const CB_PLAY = [
 ];
 function cbApply(k) {
   const svg = $('#dgWrap svg'); if (!svg) return;
-  const main = Number(APP.ws?.dims?.main) || 10, cross = Number(APP.ws?.dims?.cross) || main * .5;
-  const h = Math.max(22, Math.min(72, 84 * cross / main)), ct = 170 - h / 2, cb = 170 + h / 2;
+  const L = crossLayout(), [ix, iy] = L.icon;
   const e = CB_PLAY[k] || CB_PLAY[0], f = CB_FRAMES[e.f], pos = e.pos || f.pos;
-  const yBottomBelow = cb + 14, yBottomAbove = ct - 14, len = 72;
-  const y = pos === 'out' ? -30 : pos === 'below' ? yBottomBelow - len : yBottomAbove - len;
+  // positions along the bore, in the drawing's own frame: the tip at the entry face, 5 mm past the last opening, 5 mm before the first
+  const y = pos === 'out' ? -L.len : pos === 'below' ? L.fb + 14 - L.len : L.ft - 14 - L.len;
   $('#cbBrush', svg).style.transform = `translateY(${y}px)`;
   $('#cbN', svg).style.opacity = f.wide ? 0 : 1; $('#cbW', svg).style.opacity = f.wide ? 1 : 0;
   $('#cbRot', svg).style.opacity = f.rot ? 1 : 0; $('#cbStop', svg).style.opacity = f.rot ? 0 : 1;
-  if (f.rot) { $('#cbDir', svg).textContent = f.rot; $('#cbArc', svg).setAttribute('d', f.rot === 'CW' ? 'M361 26 a9 9 0 1 1 9 9' : 'M379 26 a9 9 0 1 0 -9 9'); }
+  if (f.rot) { $('#cbDir', svg).textContent = f.rot; $('#cbArc', svg).setAttribute('d', f.rot === 'CW' ? `M${ix - 9} ${iy} a9 9 0 1 1 9 9` : `M${ix + 9} ${iy} a9 9 0 1 0 -9 9`); }
   $('#cbBurr', svg).style.opacity = f.burr;
   document.querySelectorAll('#stepList li').forEach((li, j) => li.classList.toggle('on', j === e.f));
   const cap = $('#dgCap'); if (cap) cap.textContent = `Step ${e.f + 1} of ${CB_FRAMES.length} — ${APP.rec.steps[e.f]}`;
@@ -1871,7 +1986,8 @@ function renderUnderstood() {
   add('material', 'Material', labelOf('material', st), !st.material);
   const d = st.dims || {};
   if (d.main) chips.push(`<span class="u-chip">Bore <b>${diaOut(d.main)}</b></span>`);
-  if (d.cross) chips.push(`<span class="u-chip">Cross hole <b>${diaOut(d.cross)}</b></span>`);
+  if (d.cross) chips.push(`<span class="u-chip">Cross hole <b>${diaOut(d.cross)}${st.through ? ', through both walls' : ''}</b></span>`);
+  if (d.slotW || d.slotL) chips.push(`<span class="u-chip">Slot <b>${[d.slotW, d.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}</b></span>`);
   if (d.width) chips.push(`<span class="u-chip">Width <b>${lenOut(d.width)} ${lenU()}</b></span>`);
   if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
@@ -1921,6 +2037,7 @@ function doAsk(text, opt = {}) {
   Object.assign(st, { task: p.task || null, feature: p.feature || (p.task && SUGGEST_FEATURE[p.task]) || null, material: p.material || null, sub: p.sub || null, burr: p.burr || 'light' });
   st.dims = { ...(p.dims || {}) };          // a copy: the offline model must not write into the keyword reading
   if (p.machine) Object.assign(st.machine, p.machine);
+  if (p.through) st.through = true;
   if (p.ra) st.dims.ra = p.ra;
   // Offline domain model fills whatever the keyword rules did not catch.
   if (NLU.ready) {
@@ -1976,7 +2093,7 @@ function numField(id, label, val, hint, unit = lenU()) { return `<div class="fie
 function dimsStep(st) {
   const f = TASKS[st.task]?.feature || st.feature; const d = st.dims || {}; const mode = TASKS[st.task]?.mode;
   let h = `<h1 class="wiz-q">Feature size</h1><p class="muted">Rough numbers are fine. Leave blank if you don't know — the guide will assume a typical size and tell you.</p>`;
-  if (f === 'cross') h += numField('dMain', 'Main bore diameter (the hole the brush enters)', lenVal(d.main), 'Sets the brush size. Cross-hole brushes cover Ø3.5–20 mm bores.') + numField('dCross', 'Cross-hole diameter', lenVal(d.cross), 'Should be smaller than the main bore.') + numField('dDepth', 'Depth from entry to the intersection (optional)', lenVal(d.depth), 'Checks that the brush can reach.');
+  if (f === 'cross') h += numField('dMain', 'Main bore diameter (the hole the brush enters)', lenVal(d.main), 'Sets the brush size. Cross-hole brushes cover Ø3.5–20 mm bores.') + numField('dCross', 'Cross-hole diameter', lenVal(d.cross), 'Should be smaller than the main bore.') + `<div class="field"><label>Does it go through both walls of the bore?</label><div class="seg"><button data-through="1" aria-pressed="${!!st.through}">Yes — opens on both sides</button><button data-through="0" aria-pressed="${!st.through}">No — one side (T)</button></div><span class="hint">A hole drilled across the part, or a slot milled on both sides, opens on both sides.</span></div>` + numField('dSlotW', 'Slot width, if a slot also opens into the bore (optional)', lenVal(d.slotW), 'The brush strokes past the slot as well.') + numField('dSlotL', 'Slot length along the bore (optional)', lenVal(d.slotL), '') + numField('dDepth', 'Depth from entry to the intersection (optional)', lenVal(d.depth), 'Checks that the brush can reach.');
   else if (f === 'bore') h += numField('dMain', 'Bore diameter', lenVal(d.main), '') + numField('dDepth', 'Bore depth (optional)', lenVal(d.depth), '');
   else if (f === 'hole') h += numField('dHole', 'Hole diameter', lenVal(d.hole), '') + numField('dW', 'Width of the area with holes (optional)', lenVal(d.width), 'For a field of holes, the brush covers them in passes.');
   else if (f === 'groove') h += numField('dG', 'Groove or slot width', lenVal(d.groove), 'The tool must be narrower than this.') + numField('dDepth', 'Groove depth (optional)', lenVal(d.depth), '');
@@ -1998,7 +2115,7 @@ function machineStep(st) {
 function saveDims() {
   const st = APP.ws; const d = st.dims = st.dims || {};
   const g = id => $('#' + id) ? lenIn($('#' + id).value) : undefined;
-  [['dMain', 'main'], ['dCross', 'cross'], ['dDepth', 'depth'], ['dHole', 'hole'], ['dW', 'width'], ['dG', 'groove']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) d[k] = v; });
+  [['dMain', 'main'], ['dCross', 'cross'], ['dSlotW', 'slotW'], ['dSlotL', 'slotL'], ['dDepth', 'depth'], ['dHole', 'hole'], ['dW', 'width'], ['dG', 'groove']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) d[k] = v; });
   if ($('#dRa')) d.ra = parseFloat($('#dRa').value) || null;
 }
 function saveMachine() { if ($('#mRpm')) APP.ws.machine.maxRpm = parseFloat($('#mRpm').value) || null; }
@@ -2577,6 +2694,7 @@ document.addEventListener('click', e => {
   if (d.burr) { APP.ws.burr = d.burr; delete APP.ws.burrMm; /* a picked size replaces a measured one */ document.querySelectorAll('[data-burr]').forEach(b => b.setAttribute('aria-pressed', b.dataset.burr === d.burr)); return; }
   if (d.mach) { saveMachine(); APP.ws.machine.type = d.mach; route(); return; }
   if (d.iface) { APP.ws.machine.iface = d.iface; document.querySelectorAll('[data-iface]').forEach(b => b.setAttribute('aria-pressed', b.dataset.iface === d.iface)); return; }
+  if (d.through) { APP.ws.through = d.through === '1'; document.querySelectorAll('[data-through]').forEach(b => b.setAttribute('aria-pressed', b.dataset.through === d.through)); return; }
   if (d.uneven) { APP.ws.machine.uneven = d.uneven === '1'; document.querySelectorAll('[data-uneven]').forEach(b => b.setAttribute('aria-pressed', b.dataset.uneven === d.uneven)); return; }
   if (d.goto) { APP.wizI = wizSteps(APP.ws).indexOf(d.goto); route(); return; }
   if (d.nav) {
@@ -3584,14 +3702,15 @@ function extractionSpec() {
  "sub": material sub-type key if clear (carbon: annealed|treated; stainless: aust|mart; hardened: le55|gt55; castiron: grey|pearl; aluminum: wrought|cast|hisi; hrsa: ni|co|fe) or null,
  "burr": "light" | "medium" | "heavy" | null,
  "burrMm": burr height or thickness in mm if a number is stated, else null,
- "dims": {"main": mm|null, "cross": mm|null, "depth": mm|null, "width": mm|null, "groove": mm|null, "hole": mm|null, "ra": µm|null},
+ "dims": {"main": mm|null, "cross": mm|null, "slotW": mm|null, "slotL": mm|null, "depth": mm|null, "width": mm|null, "groove": mm|null, "hole": mm|null, "ra": µm|null},
+ "through": true if the cross hole or slot opens on BOTH sides of the main bore (drilled across the part, "on the diameter", "both sides"), false if one side only, null if not stated,
  "machine": {"type": ${enumKeys(MACHINES)} | null, "maxRpm": number|null, "iface": "BT30"|"BT40"|null},
  "summary": "one short sentence restating the job, in the language of the job description itself",
  "questions": [up to 2 questions, ONLY for missing facts that would change the tool or its parameters, most important first:
    {"ask": "short question, in the SAME language as your summary above", "field": "task"|"feature"|"material"|"sub"|"burr"|"machine"|"main"|"cross"|"depth"|"width"|"groove"|"hole",
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
-Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole. Use null when not stated — never invent numbers.
+Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole; "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
 Materials: 304/316/A2/A4 → stainless aust; 17-4/420/410 → stainless mart; 6061/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
 Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root. A stated burr height or thickness goes in "burrMm" and sets "burr" (over 0.2 mm = heavy) — it is never a width, depth or hole size.
 Phrases about the CURRENT process ("today we deburr by hand") are not the target machine.
@@ -3648,7 +3767,8 @@ function applyExtraction(r, snapJson) {
   if (r.burrMm != null && isFinite(bm) && bm > 0 && bm < 20 && free('burr')) { st.burrMm = bm; st.burr = burrLevel(bm); APP.parsed = { ...(APP.parsed || {}), burr: st.burr }; }
   const d = r.dims || {}; st.dims = st.dims || {};
   if (st.burrMm != null && Number(d.width) === st.burrMm) d.width = null;
-  ['main', 'cross', 'depth', 'width', 'groove', 'hole', 'ra'].forEach(k => { const v = Number(d[k]); if (d[k] != null && isFinite(v) && v > 0 && v < 5000 && free(k)) st.dims[k] = v; });
+  ['main', 'cross', 'slotW', 'slotL', 'depth', 'width', 'groove', 'hole', 'ra'].forEach(k => { const v = Number(d[k]); if (d[k] != null && isFinite(v) && v > 0 && v < 5000 && free(k)) st.dims[k] = v; });
+  if (typeof r.through === 'boolean' && st.task === 'crosshole') st.through = r.through;
   if (st.dims.main && st.dims.cross && st.dims.cross > st.dims.main) [st.dims.main, st.dims.cross] = [st.dims.cross, st.dims.main];
   const m = r.machine || {};
   if (ok(m.type, MACHINES) && free('mtype')) st.machine.type = m.type;
@@ -3784,7 +3904,7 @@ const AI_RULES = `UFIBER rules you can rely on:
 - Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush.
 - Point (Ø1–3) and End (Ø5) brushes: max 12,000 RPM on CNC; hand-held 1,000–3,000 RPM; electric drives only, no air tools.
 - Ceramic fiber suits small burrs (≤~0.2 mm root, bendable with a fingernail); thicker burrs need a cutter first (e.g. NOGA UBURR for hole edges). Brushing always leaves a small edge radius; no mirror finish. Carbide/ceramic/glass/EDM need Ceramic Diamond Stones.
-- Ceramic Diamond Stones Ø1–3 (#200 black, #400 silver, #600 forest green, #800 green): 60,000 RPM max, ≤30,000 RPM typical, contact force about 1 N and always below 5 N, no fixed feed or depth, test-run for runout first, epoxy-resin bond, pneumatic tools allowed at controlled speed.\n- Floating dampers: BT30/BT40 max 6,000 RPM, 5 mm float, about 50 N, ER25UM (BT30) or ER32UM (BT40) collet; End-type max 12,000 RPM, 4 mm float, about 20 N. Approach vertically or with arc entry/exit, preload before feed, no through-spindle coolant, don't drop into pockets.\n- Portable E-Pack UF9999: 30,000 RPM, 3.0 Ncm torque; only for End/Point brushes, discs and diamond stones; follow each tool's own max RPM.\n- NOGA case: Ø1.5 cross-hole brush #1000 in a Ø2.6 mm hole (17-4 PH) at 7,000 RPM, 100 mm/min, dry.\n- More cutting: raise RPM toward the top of the window, lower feed 10%, add a pass, coarser grit. Less aggressive / longer life: lower RPM 10%, raise feed 10%, fewer passes, finer grit, lighter engagement. Wet machining improves finish and life.
+- Ceramic Diamond Stones Ø1–3 (#200 black, #400 silver, #600 forest green, #800 green): 60,000 RPM max, ≤30,000 RPM typical, contact force about 1 N and always below 5 N, no fixed feed or depth, test-run for runout first, epoxy-resin bond, pneumatic tools allowed at controlled speed.\n- Floating dampers: BT30/BT40 max 6,000 RPM, 5 mm float, about 50 N, ER25UM (BT30) or ER32UM (BT40) collet; End-type max 12,000 RPM, 4 mm float, about 20 N. Approach vertically or with arc entry/exit, preload before feed, no through-spindle coolant, don't drop into pockets.\n- Portable E-Pack UF9999: 30,000 RPM, 3.0 Ncm torque; only for End/Point brushes, discs and diamond stones; follow each tool's own max RPM.\n- NOGA case: Ø1.5 cross-hole brush #1000 in a Ø2.6 mm hole (17-4 PH) at 7,000 RPM, 100 mm/min, dry, on a Star SR-20 sliding-head lathe.\n- Lathes and Swiss-type machines: cross-hole brushes run in an axial (end-working) live tool on the bore axis with the main spindle stopped; feed in mm/min (G98). Live tools are often limited to 6,000–8,000 RPM (Citizen L20 front tool 7,500 max, Star SR-20R IV 8,000, Tornos Swiss GT 13 6,000), so check the station's max RPM against the brush's RPM; well short of it, a speed increaser is needed.\n- Field trial that failed: Ø3.1 bore in L605 cobalt alloy on a sliding-head lathe, Ø1.5 cross-hole #600 at 6,000 RPM and about 120 mm/min left the burr; a Ø3 cross-hole brush broke on entry.\n- More cutting: raise RPM toward the top of the window, lower feed 10%, add a pass, coarser grit. Less aggressive / longer life: lower RPM 10%, raise feed 10%, fewer passes, finer grit, lighter engagement. Wet machining improves finish and life.
 - Known NOGA data conflicts: End-brush feed/engagement appear copied from the Surface table; surface-brush material cutting speeds give lower RPM than the catalogue window (the app follows the window, as NOGA's RPM Advisor does); RPM Advisor bore ranges differ from the catalogue (the app follows the catalogue).`;
 function aiTools(props) {
   const changeProps = {
@@ -3903,7 +4023,7 @@ const SHARE = (() => {
   const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64d = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
   // short keys keep the link readable
-  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x' };
+  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x', through: 'w' };
 
   function encode(st) {
     if (!st || !st.task) return '';
@@ -3941,6 +4061,7 @@ const SHARE = (() => {
     st.override = (st.override && typeof st.override === 'object') ? st.override : {};
     if (st.override.grit && !GRITS.some(g => g.grit === st.override.grit) && !STONE_GRITS.some(g => g.grit === st.override.grit)) delete st.override.grit;
     if (st.fromX && typeof st.fromX !== 'string') delete st.fromX;
+    if (st.through !== undefined) st.through = st.through === true;
     return st;
   }
   /** The address someone can paste to a colleague. */

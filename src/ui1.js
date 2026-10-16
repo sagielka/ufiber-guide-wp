@@ -14,7 +14,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.2';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.3';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -25,6 +25,7 @@ const lenOut = (mm, dpmm = 2) => isIn() ? fmtN(mm / 25.4, mm < 2 ? 4 : 3) : fmtN
 const lenU = () => isIn() ? 'in' : 'mm';
 const feedOut = v => v == null ? '—' : (isIn() ? fmtN(v / 25.4, 1) : fmtN(v));
 const feedU = () => isIn() ? 'in/min' : 'mm/min';
+const lenOutT = mm => isIn() ? lenOut(mm) : String(+Number(mm).toFixed(3));   /* no padding zeros: 1.016 and 1.5, not 1.500 */
 const diaOut = mm => isIn() ? `Ø${fmtN(mm / 25.4, 3)}″` : `Ø${mm}`;
 const lenIn = v => v === '' || v == null || isNaN(parseFloat(v)) ? null : (isIn() ? parseFloat(v) * 25.4 : parseFloat(v));
 const lenVal = mm => mm == null ? '' : (isIn() ? +(mm / 25.4).toFixed(3) : mm);
@@ -161,31 +162,79 @@ function dgSurface(R) {
   </g></svg>`;
 }
 
+/* Cross-hole drawing. The scene is built in one frame — x' across the bore,
+   y' along it from the entry face — and turned to match the machine: a bore
+   entered from above on a machining centre, a bar lying on its side with the
+   brush coming in from the end on a lathe or Swiss-type machine. The cross hole
+   and any slot open on one side (T) or on both (through). */
+function crossLayout() {
+  const ws = APP.ws || {}, d = ws.dims || {}, mt = ws.machine?.type;
+  const lathe = mt === 'swiss' || mt === 'lathe' || mt === 'lathe0';
+  const main = Number(d.main) || 10;
+  const cross = Number(d.cross) || (d.slotW || d.slotL ? null : main * 0.5);
+  const slotLen = Number(d.slotL) || Number(d.slotW) || null;
+  const bw = 84, PW = 132, Lp = lathe ? 300 : 270, C0 = 135;
+  const ops = [];
+  if (cross) ops.push({ kind: 'cross', h: Math.max(22, Math.min(72, bw * cross / main)) });
+  if (slotLen) ops.push({ kind: 'slot', h: Math.max(14, Math.min(72, bw * slotLen / main)) });
+  const gap = 34, total = ops.reduce((t, o) => t + o.h, 0) + gap * (ops.length - 1);
+  let y = C0 - total / 2; ops.forEach(o => { o.c = y + o.h / 2; y += o.h + gap; });
+  const ft = ops[0].c - ops[0].h / 2, fb = ops[ops.length - 1].c + ops[ops.length - 1].h / 2;
+  // canonical → page
+  const M = lathe ? (x, yy) => [330 - yy, 165 + x] : (x, yy) => [192 + x, 40 + yy];
+  const frame = lathe ? 'matrix(0 1 -1 0 330 165)' : 'translate(192 40)';
+  const icon = lathe ? [385, 300] : [370, 26];
+  return { lathe, main, cross, slotW: Number(d.slotW) || null, slotL: Number(d.slotL) || null, through: !!ws.through, bw, PW, Lp, ops, ft, fb, M, frame, icon, vb: lathe ? '0 0 420 340' : '0 0 420 330', len: 72 };
+}
 function dgCross(R) {
-  const main = Number(APP.ws?.dims?.main) || 10, cross = Number(APP.ws?.dims?.cross) || main * 0.5;
-  const bw = 84, h = Math.max(22, Math.min(72, bw * cross / main));
-  const cy = 170, ct = cy - h / 2, cb = cy + h / 2, bx = 150, hex = R.grit.hex;
+  const L = crossLayout(), { bw, PW, Lp, ops, ft, fb, M, icon } = L, hb = bw / 2, hex = R.grit.hex;
   const wide = R.family === 'shank' ? bw - 6 : bw - 8;
   const bundle = (w) => { let s = ''; const n = 22; for (let i = 0; i < n; i++) { const y = i * 3; s += `<path d="M0 ${y} L${-w / 2} ${y + 3} M0 ${y} L${w / 2} ${y + 3}" stroke="${hex}" stroke-width="1.8"/>`; } return s + `<path d="M${-w / 2} 0v66M${w / 2} 0v66" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>`; };
-  return `<svg viewBox="0 0 420 330" role="img" aria-label="Cross-hole brushing sequence">
-  <rect x="60" y="40" width="330" height="270" fill="var(--line)"/>
-  <rect x="${bx}" y="40" width="${bw}" height="270" fill="var(--surface)"/>
-  <rect x="${bx + bw}" y="${ct}" width="${390 - bx - bw}" height="${h}" fill="var(--surface)"/>
-  <g id="cbBurr" style="transition:opacity .6s"><path d="M${bx + bw} ${ct} l-9 4 9 3z M${bx + bw} ${cb} l-9 -4 9 -3z" fill="var(--bad)"/></g>
-  <line x1="${bx - 30}" x2="${bx + bw + 30}" y1="${ct - 14}" y2="${ct - 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
-  <line x1="${bx - 30}" x2="${bx + bw + 30}" y1="${cb + 14}" y2="${cb + 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
-  <text x="${bx - 34}" y="${ct - 18}" font-size="13" text-anchor="end" fill="var(--accent)" font-family="Barlow,sans-serif" font-weight="600">5 mm before</text>
-  <text x="${bx - 34}" y="${cb + 26}" font-size="13" text-anchor="end" fill="var(--accent)" font-family="Barlow,sans-serif" font-weight="600">5 mm past</text>
-  <text x="${bx - 8}" y="20" text-anchor="end" font-size="13" fill="var(--ink-2)" font-family="Barlow,sans-serif" font-weight="600">Main bore ${diaOut(main)}</text>
-  <text x="${bx - 8}" y="35" text-anchor="end" font-size="13" fill="var(--accent)" font-family="Barlow,sans-serif" font-weight="600">enter here ↓</text>
-  <text x="${bx + bw + 10}" y="${cy + 5}" font-size="13" fill="var(--ink-2)" font-family="Barlow,sans-serif">Cross hole ${diaOut(cross)}</text>
-  <g id="cbBrush" style="transition:transform .8s ease">
-    <rect x="${bx + bw / 2 - 5}" y="-240" width="10" height="250" fill="#9aa2a9"/>
-    <g id="cbN" style="transition:opacity .5s" transform="translate(${bx + bw / 2} 6)">${bundle(16)}</g>
-    <g id="cbW" style="transition:opacity .5s;opacity:0" transform="translate(${bx + bw / 2} 6)">${bundle(wide)}</g>
+  const sides = L.through ? [1, -1] : [1];
+  let open = '', burrs = '';
+  for (const o of ops) for (const sd of sides) {
+    const t = o.c - o.h / 2, b = o.c + o.h / 2, x0 = sd > 0 ? hb : -PW;
+    open += `<rect x="${x0}" y="${t}" width="${PW - hb}" height="${o.h}" fill="var(--surface)"${o.kind === 'slot' ? ' stroke="var(--ink-3)" stroke-width=".6" stroke-dasharray="3 3"' : ''}/>`;
+    const w = sd * hb, k = -sd * 9;
+    burrs += `<path d="M${w} ${t} l${k} 4 ${-k} 3z M${w} ${b} l${k} -4 ${-k} -3z" fill="var(--bad)"/>`;
+  }
+  const txt = (x, y, s, o = {}) => `<text x="${x}" y="${y}" font-size="${o.size || 13}" text-anchor="${o.a || 'start'}" fill="var(${o.c || '--ink-2'})" font-family="Barlow,sans-serif"${o.w ? ` font-weight="${o.w}"` : ''}>${s}</text>`;
+  const both = L.through ? ' · both sides' : '';
+  const opName = o => o.kind === 'cross' ? `Cross hole ${diaOut(L.cross)}${both}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}${both}`;
+  let labels = '';
+  if (L.lathe) {
+    labels += txt(34, 22, 'Bar in the main spindle: stopped, C-axis locked', { size: 12 });
+    labels += txt(414, 112, `Main bore ${diaOut(L.main)}`, { a: 'end', w: 600 }) + txt(414, 128, 'enter here ←', { a: 'end', w: 600, c: '--accent' });
+    labels += txt(414, 222, 'axial live tool', { a: 'end', size: 12 });
+    ops.forEach((o, i) => { const [x] = M(0, o.c); labels += txt(Math.max(110, Math.min(320, x)), 315 + i * 16, opName(o), { a: 'middle', size: 12.5 }); });
+    const [xb] = M(0, ft - 14), [xp] = M(0, fb + 14);
+    labels += txt(xb + 4, 86, '5 mm before', { w: 600, c: '--accent' }) + txt(xp - 4, 86, '5 mm past', { a: 'end', w: 600, c: '--accent' });
+  } else {
+    labels += txt(142, 20, `Main bore ${diaOut(L.main)}`, { a: 'end', w: 600 }) + txt(142, 35, 'enter here ↓', { a: 'end', w: 600, c: '--accent' });
+    const vName = o => o.kind === 'cross' ? `Cross hole ${diaOut(L.cross)}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}`;
+    ops.forEach(o => { const [x, y] = M(hb + 10, o.c + (L.through ? -2 : 5)); labels += txt(x, y, vName(o), { size: 12.5 }) + (L.through ? txt(x, y + 15, 'both sides', { size: 12 }) : ''); });
+    const [xl, yb] = M(-hb - 34, ft - 18), [, yp] = M(0, fb + 26);
+    labels += txt(xl, yb, '5 mm before', { a: 'end', w: 600, c: '--accent' }) + txt(xl, yp, '5 mm past', { a: 'end', w: 600, c: '--accent' });
+  }
+  const [ix, iy] = icon;
+  return `<svg viewBox="${L.vb}" role="img" aria-label="Cross-hole brushing sequence${L.lathe ? ' on a lathe' : ''}">
+  <g transform="${L.frame}">
+    <rect x="${-PW}" y="0" width="${PW * 2}" height="${Lp}" fill="var(--line)"/>
+    ${L.lathe ? `<path d="M${-PW} ${Lp} l22 -8 22 8 22 -8 22 8 22 -8 22 8 22 -8 22 8 22 -8 22 8 22 -8 22 8" fill="none" stroke="var(--ink-3)" stroke-width="1"/>` : ''}
+    <rect x="${-hb}" y="0" width="${bw}" height="${Lp}" fill="var(--surface)"/>
+    ${open}
+    <g id="cbBurr" style="transition:opacity .6s">${burrs}</g>
+    <line x1="${-hb - 30}" x2="${hb + 30}" y1="${ft - 14}" y2="${ft - 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
+    <line x1="${-hb - 30}" x2="${hb + 30}" y1="${fb + 14}" y2="${fb + 14}" stroke="var(--accent)" stroke-dasharray="4 4"/>
+    <g id="cbBrush" style="transition:transform .8s ease">
+      <rect x="-5" y="-250" width="10" height="256" fill="#9aa2a9"/>
+      <g id="cbN" style="transition:opacity .5s" transform="translate(0 6)">${bundle(16)}</g>
+      <g id="cbW" style="transition:opacity .5s;opacity:0" transform="translate(0 6)">${bundle(wide)}</g>
+    </g>
   </g>
-  <g id="cbRot" style="transition:opacity .4s;opacity:0"><circle cx="370" cy="26" r="15" fill="var(--accent-soft)"/><path id="cbArc" d="M361 26 a9 9 0 1 1 9 9" fill="none" stroke="var(--accent)" stroke-width="2.4"/><text id="cbDir" x="370" y="58" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)" font-family="Barlow Condensed,sans-serif">CW</text></g>
-  <g id="cbStop"><rect x="352" y="12" width="30" height="30" rx="6" fill="var(--surface)" stroke="var(--ink-3)"/><rect x="361" y="21" width="12" height="12" fill="var(--ink-3)"/></g>
+  ${labels}
+  <g id="cbRot" style="transition:opacity .4s;opacity:0"><circle cx="${ix}" cy="${iy}" r="15" fill="var(--accent-soft)"/><path id="cbArc" d="M${ix - 9} ${iy} a9 9 0 1 1 9 9" fill="none" stroke="var(--accent)" stroke-width="2.4"/><text id="cbDir" x="${ix}" y="${iy + 32}" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)" font-family="Barlow Condensed,sans-serif">CW</text></g>
+  <g id="cbStop"><rect x="${ix - 15}" y="${iy - 15}" width="30" height="30" rx="6" fill="var(--surface)" stroke="var(--ink-3)"/><rect x="${ix - 6}" y="${iy - 6}" width="12" height="12" fill="var(--ink-3)"/></g>
   </svg>`;
 }
 const CB_FRAMES = [
@@ -202,15 +251,14 @@ const CB_PLAY = [
 ];
 function cbApply(k) {
   const svg = $('#dgWrap svg'); if (!svg) return;
-  const main = Number(APP.ws?.dims?.main) || 10, cross = Number(APP.ws?.dims?.cross) || main * .5;
-  const h = Math.max(22, Math.min(72, 84 * cross / main)), ct = 170 - h / 2, cb = 170 + h / 2;
+  const L = crossLayout(), [ix, iy] = L.icon;
   const e = CB_PLAY[k] || CB_PLAY[0], f = CB_FRAMES[e.f], pos = e.pos || f.pos;
-  const yBottomBelow = cb + 14, yBottomAbove = ct - 14, len = 72;
-  const y = pos === 'out' ? -30 : pos === 'below' ? yBottomBelow - len : yBottomAbove - len;
+  // positions along the bore, in the drawing's own frame: the tip at the entry face, 5 mm past the last opening, 5 mm before the first
+  const y = pos === 'out' ? -L.len : pos === 'below' ? L.fb + 14 - L.len : L.ft - 14 - L.len;
   $('#cbBrush', svg).style.transform = `translateY(${y}px)`;
   $('#cbN', svg).style.opacity = f.wide ? 0 : 1; $('#cbW', svg).style.opacity = f.wide ? 1 : 0;
   $('#cbRot', svg).style.opacity = f.rot ? 1 : 0; $('#cbStop', svg).style.opacity = f.rot ? 0 : 1;
-  if (f.rot) { $('#cbDir', svg).textContent = f.rot; $('#cbArc', svg).setAttribute('d', f.rot === 'CW' ? 'M361 26 a9 9 0 1 1 9 9' : 'M379 26 a9 9 0 1 0 -9 9'); }
+  if (f.rot) { $('#cbDir', svg).textContent = f.rot; $('#cbArc', svg).setAttribute('d', f.rot === 'CW' ? `M${ix - 9} ${iy} a9 9 0 1 1 9 9` : `M${ix + 9} ${iy} a9 9 0 1 0 -9 9`); }
   $('#cbBurr', svg).style.opacity = f.burr;
   document.querySelectorAll('#stepList li').forEach((li, j) => li.classList.toggle('on', j === e.f));
   const cap = $('#dgCap'); if (cap) cap.textContent = `Step ${e.f + 1} of ${CB_FRAMES.length} — ${APP.rec.steps[e.f]}`;
