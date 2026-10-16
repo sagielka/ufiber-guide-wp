@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.2 – 2026-10-16
+- A stated burr height is now read as the burr. "Burr height: approx. 1 mm" in
+  a customer email used to become "Width 1 mm" with the burr left as light, so
+  a burr five times what fiber is built for got no warning at all.
+- The measured height sets the burr size (over 0.2 mm is heavy), shows on the
+  Burr chip ("heavy · 1 mm"), travels in a shared link, and on the setup gives
+  a named warning with how far over it is, and Low confidence.
+- The offline model could write into the sizes the keyword reading had found;
+  it now works on a copy, so a burr height it mistakes for a width is removed.
+- Picking a burr size by hand replaces a measured one.
+
 ## 1.6.1 – 2026-10-16
 - One main button on Find a tool. It reads the description or the attached
   email, then turns into "Show my setup" once nothing is missing. The separate

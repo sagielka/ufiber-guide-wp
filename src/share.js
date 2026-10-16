@@ -9,7 +9,7 @@ const SHARE = (() => {
   const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64d = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
   // short keys keep the link readable
-  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x' };
+  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x' };
 
   function encode(st) {
     if (!st || !st.task) return '';
@@ -35,6 +35,7 @@ const SHARE = (() => {
     if (st.material && !MATERIALS[st.material]) st.material = null;
     if (st.material && st.sub && !(MATERIALS[st.material].subs || {})[st.sub]) st.sub = null;
     if (!['light', 'medium', 'heavy'].includes(st.burr)) st.burr = 'light';
+    if (st.burrMm != null) { const b = Number(st.burrMm); st.burrMm = isFinite(b) && b > 0 && b < 20 ? b : null; }
     st.dims = (st.dims && typeof st.dims === 'object') ? st.dims : {};
     for (const k of Object.keys(st.dims)) {
       const v = Number(st.dims[k]);

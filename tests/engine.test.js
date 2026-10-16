@@ -30,6 +30,27 @@ const ok = (name, cond, detail) => {
 };
 const eq = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(want), { got, want });
 
+/* ---- a stated burr height is the burr, not a width, and a big one is flagged (1.6.2) ---- */
+{
+  const mail = `Machining conditions:
+* Main hole diameter: Ø16.5 mm
+* Cross hole diameter: Ø10 mm
+* Burr height: Approx. 1 mm
+* Workpiece material: S45C
+Proposed tooling: Brush: UF1315 (Ø15 #400), Shank: UF5001`;
+  const p = E.parseText(mail);
+  eq('the burr height is read', p.burrMm, 1);
+  eq('a 1 mm burr is heavy', p.burr, 'heavy');
+  ok('the burr height is not a width', !(p.dims && p.dims.width), p.dims);
+  ok('the bore and cross hole are kept', p.dims && p.dims.main === 16.5 && p.dims.cross === 10, p.dims);
+  const st = Object.assign(E.newState(), { task: p.task, feature: p.feature, material: p.material, burr: p.burr, burrMm: p.burrMm, dims: p.dims });
+  const R = E.recommend(st);
+  ok('a 1 mm burr gets a warning', R.warnings.some(w => /1 mm burr is too large/.test(w.t)), R.warnings.map(w => w.t));
+  eq('and lowers the confidence', R.conf.level, 'low');
+  eq('0.05 mm is a light burr', E.parseText('burr height 0.05 mm on a 6 mm hole edge').burr, 'light');
+  eq('a "0.3 mm burr" is heavy', E.parseText('there is a 0.3 mm burr on the Ø8 hole').burr, 'heavy');
+}
+
 /* ---- the tool a customer names is not their part (1.3.7) ---- */
 {
   const p = E.parseText('Deburr the inside diameter of a part along a slot using a 3/8" hone/brush with ceramic abrasive fiber.');

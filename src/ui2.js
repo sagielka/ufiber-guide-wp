@@ -77,7 +77,7 @@ function renderUnderstood() {
   if (d.width) chips.push(`<span class="u-chip">Width <b>${lenOut(d.width)} ${lenU()}</b></span>`);
   if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
-  if (APP.parsed.burr) chips.push(`<span class="u-chip">Burr <b>${st.burr}</b></span>`);
+  if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
   if (APP.parsed.machine) chips.push(`<span class="u-chip">Machine <b>${esc(MACHINES[st.machine.type] || '')}${st.machine.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}</b></span>`);
   if (APP.parsed.ra) chips.push(`<span class="u-chip">Ra <b>${APP.parsed.ra} µm</b></span>`);
   const missing = !st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null));
@@ -121,7 +121,7 @@ function doAsk(text, opt = {}) {
   const p = parseText(text); APP.parsed = p; APP.editKey = null;
   const st = newState();
   Object.assign(st, { task: p.task || null, feature: p.feature || (p.task && SUGGEST_FEATURE[p.task]) || null, material: p.material || null, sub: p.sub || null, burr: p.burr || 'light' });
-  st.dims = p.dims || {};
+  st.dims = { ...(p.dims || {}) };          // a copy: the offline model must not write into the keyword reading
   if (p.machine) Object.assign(st.machine, p.machine);
   if (p.ra) st.dims.ra = p.ra;
   // Offline domain model fills whatever the keyword rules did not catch.
@@ -135,6 +135,10 @@ function doAsk(text, opt = {}) {
         if (JSON.stringify(smartFields(st)) !== before) APP.parsed = { ...(APP.parsed || {}), nlu: true };
       }
     } catch (e) { }
+  }
+  if (p.burrMm != null) {
+    st.burrMm = p.burrMm;
+    for (const k of ['width', 'depth', 'hole', 'groove']) if (st.dims[k] === p.burrMm && !(p.dims && p.dims[k] != null)) delete st.dims[k];   // the model took the burr height for a size
   }
   APP.ws = st; renderUnderstood();
   if (opt.ai !== false) smartRead(text);

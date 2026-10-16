@@ -17,6 +17,7 @@ function extractionSpec() {
  "material": ${enumKeys(MATERIALS)} | null,
  "sub": material sub-type key if clear (carbon: annealed|treated; stainless: aust|mart; hardened: le55|gt55; castiron: grey|pearl; aluminum: wrought|cast|hisi; hrsa: ni|co|fe) or null,
  "burr": "light" | "medium" | "heavy" | null,
+ "burrMm": burr height or thickness in mm if a number is stated, else null,
  "dims": {"main": mm|null, "cross": mm|null, "depth": mm|null, "width": mm|null, "groove": mm|null, "hole": mm|null, "ra": µm|null},
  "machine": {"type": ${enumKeys(MACHINES)} | null, "maxRpm": number|null, "iface": "BT30"|"BT40"|null},
  "summary": "one short sentence restating the job, in the language of the job description itself",
@@ -26,7 +27,7 @@ function extractionSpec() {
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole. Use null when not stated — never invent numbers.
 Materials: 304/316/A2/A4 → stainless aust; 17-4/420/410 → stainless mart; 6061/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
-Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root.
+Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root. A stated burr height or thickness goes in "burrMm" and sets "burr" (over 0.2 mm = heavy) — it is never a width, depth or hole size.
 Phrases about the CURRENT process ("today we deburr by hand") are not the target machine.
 THE TOOL IS NOT THE PART. A customer often names a tool they already have or want: a brush, hone, stone, 3/8" hone, "ceramic abrasive fiber", a grit number, an item code.
   - Its SIZE is never a part dimension. "a 3/8 inch hone" says nothing about the bore; leave "main" null and ask.
@@ -77,7 +78,10 @@ function applyExtraction(r, snapJson) {
   if (material && free('material')) { st.material = material; st.sub = MATERIALS[material].subs && MATERIALS[material].subs[r.sub] ? r.sub : null; }
   else if (st.material && r.sub && free('sub') && MATERIALS[st.material].subs?.[r.sub]) st.sub = r.sub;
   if (['light', 'medium', 'heavy'].includes(r.burr) && free('burr')) { st.burr = r.burr; APP.parsed = { ...(APP.parsed || {}), burr: r.burr }; }
+  const bm = Number(r.burrMm);
+  if (r.burrMm != null && isFinite(bm) && bm > 0 && bm < 20 && free('burr')) { st.burrMm = bm; st.burr = burrLevel(bm); APP.parsed = { ...(APP.parsed || {}), burr: st.burr }; }
   const d = r.dims || {}; st.dims = st.dims || {};
+  if (st.burrMm != null && Number(d.width) === st.burrMm) d.width = null;
   ['main', 'cross', 'depth', 'width', 'groove', 'hole', 'ra'].forEach(k => { const v = Number(d[k]); if (d[k] != null && isFinite(v) && v > 0 && v < 5000 && free(k)) st.dims[k] = v; });
   if (st.dims.main && st.dims.cross && st.dims.cross > st.dims.main) [st.dims.main, st.dims.cross] = [st.dims.cross, st.dims.main];
   const m = r.machine || {};

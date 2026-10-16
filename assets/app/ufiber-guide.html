@@ -713,7 +713,11 @@ function recommend(st) {
 
   /* ---- hard blockers / out-of-scope signals ---- */
   if (machine === 'lathe0') R.warnings.push({ t: 'This needs a rotating tool', d: 'UFIBER brushes cut only while they spin. On a lathe without live tooling, use a driven tool station, a dedicated spindle, or deburr off-line with the E-Pack.' });
-  if (burr === 'heavy') R.warnings.push({ t: 'Large burr — check first', d: 'Ceramic fiber is built for small burrs (roughly ≤0.2 mm root, the kind you can bend with a fingernail). If yours is thicker, remove most of it with a chamfer cutter or NOGA UBURR first, then brush.' });
+  if (burr === 'heavy' && st.burrMm) {
+    const x = st.burrMm / 0.2;
+    R.warnings.push({ t: `A ${fmtMm(st.burrMm)} mm burr is too large for brushing alone`, d: `Ceramic fiber is built for small burrs, roughly ≤0.2 mm at the root${x >= 1.5 ? ` — this one is about ${Math.round(x)}× that` : ''}. Brushing it as it is will wear the brush fast and leave the burr folded over instead of removed. Remove most of it first (pre-machining, a back-chamfer or a deburring cutter such as NOGA UBURR), then use the brush for the final edge. If nothing else fits, test on one part and check the edge and brush wear before running a batch.` });
+    lower('low', `Burr height ${fmtMm(st.burrMm)} mm is above the ~0.2 mm brushes are built for.`);
+  } else if (burr === 'heavy') R.warnings.push({ t: 'Large burr — check first', d: 'Ceramic fiber is built for small burrs (roughly ≤0.2 mm root, the kind you can bend with a fingernail). If yours is thicker, remove most of it with a chamfer cutter or NOGA UBURR first, then brush.' });
 
   /* ---- family selection ---- */
   let fam;
@@ -1213,6 +1217,16 @@ function scrubToolWords(s) {
     .replace(/\b(ceramic|diamond|carbide|abrasive|nylon|aluminium oxide|aluminum oxide|silicon carbide|cbn)[\w\s-]{0,24}?(fib(?:er|re)s?|brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|tool|bristle)/gi, ' ')
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
 }
+const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
+function burrSize(t) {
+  const m = t.match(/burrs?\s*(?:height|thickness|size|root|thick|high)?\s*[:=]?\s*(?:approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*(\d+(?:\.\d+)?)\s*(mm|µm|um|")/i)
+    || t.match(/(\d+(?:\.\d+)?)\s*(mm|µm|um)\s*(?:high|thick|tall|large)?\s*burr/i);
+  if (!m) return null;
+  let v = parseFloat(m[1]); if (/µm|um/i.test(m[2])) v /= 1000; else if (m[2] === '"') v *= 25.4;
+  return isFinite(v) && v > 0 && v < 20 ? Math.round(v * 1000) / 1000 : null;
+}
+const fmtMm = v => String(+Number(v).toFixed(3));
+const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
   const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
@@ -1253,6 +1267,8 @@ function parseText(text) {
     if (/\b(304|316|6061|7075|2024|4140|1045|718|625|420|410|440|390|12)\b/.test(String(v)) && !/[øØ⌀]|mm|dia/.test(raw + after.slice(0, 4))) { if (!/mm/.test(after.slice(0, 4))) continue; }
     const hasMark = /[øØ⌀]|dia|mm|"/.test(raw) || /^\s*mm/.test(after);
     if (!hasMark) continue;
+    // "burr height: approx. 1 mm" / "a 0.3 mm burr" is the burr, not a size of the part
+    if (!/[øØ⌀]|dia/i.test(raw) && (BURR_BEFORE.test(before) || /^\s*(mm)?\s*(high|thick|tall|large)?\s*burr/i.test(after))) continue;
     let mm = m[2] === '"' ? v * 25.4 : v;
     nums.push({ v: mm, before, after });
   }
@@ -1278,6 +1294,9 @@ function parseText(text) {
   if (/(heavy|large|big|thick|rolled|significant) burr/i.test(t)) out.burr = 'heavy';
   else if (/(medium|moderate) burr/i.test(t)) out.burr = 'medium';
   else if (/(small|light|fine|tiny|micro|feather|thin) burr|fuzz/i.test(t)) out.burr = 'light';
+  // a measured burr beats the adjectives: >0.2 mm at the root is more than fiber should take on
+  const bmm = burrSize(t);
+  if (bmm != null) { out.burrMm = bmm; out.burr = burrLevel(bmm); }
   // machine
   const mc = {};
   // explicit machines first; "today we deburr by hand" describes the current process, not the target machine
@@ -1538,7 +1557,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.1';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.2';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -1856,7 +1875,7 @@ function renderUnderstood() {
   if (d.width) chips.push(`<span class="u-chip">Width <b>${lenOut(d.width)} ${lenU()}</b></span>`);
   if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
-  if (APP.parsed.burr) chips.push(`<span class="u-chip">Burr <b>${st.burr}</b></span>`);
+  if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
   if (APP.parsed.machine) chips.push(`<span class="u-chip">Machine <b>${esc(MACHINES[st.machine.type] || '')}${st.machine.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}</b></span>`);
   if (APP.parsed.ra) chips.push(`<span class="u-chip">Ra <b>${APP.parsed.ra} µm</b></span>`);
   const missing = !st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null));
@@ -1900,7 +1919,7 @@ function doAsk(text, opt = {}) {
   const p = parseText(text); APP.parsed = p; APP.editKey = null;
   const st = newState();
   Object.assign(st, { task: p.task || null, feature: p.feature || (p.task && SUGGEST_FEATURE[p.task]) || null, material: p.material || null, sub: p.sub || null, burr: p.burr || 'light' });
-  st.dims = p.dims || {};
+  st.dims = { ...(p.dims || {}) };          // a copy: the offline model must not write into the keyword reading
   if (p.machine) Object.assign(st.machine, p.machine);
   if (p.ra) st.dims.ra = p.ra;
   // Offline domain model fills whatever the keyword rules did not catch.
@@ -1914,6 +1933,10 @@ function doAsk(text, opt = {}) {
         if (JSON.stringify(smartFields(st)) !== before) APP.parsed = { ...(APP.parsed || {}), nlu: true };
       }
     } catch (e) { }
+  }
+  if (p.burrMm != null) {
+    st.burrMm = p.burrMm;
+    for (const k of ['width', 'depth', 'hole', 'groove']) if (st.dims[k] === p.burrMm && !(p.dims && p.dims[k] != null)) delete st.dims[k];   // the model took the burr height for a size
   }
   APP.ws = st; renderUnderstood();
   if (opt.ai !== false) smartRead(text);
@@ -2551,7 +2574,7 @@ document.addEventListener('click', e => {
     APP.wizI = Math.min((APP.wizI || 0) + 1, wizSteps(st).length - 1); route(); return;
   }
   if (d.sub) { APP.ws.sub = APP.ws.sub === d.sub ? null : d.sub; document.querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === APP.ws.sub)); return; }
-  if (d.burr) { APP.ws.burr = d.burr; document.querySelectorAll('[data-burr]').forEach(b => b.setAttribute('aria-pressed', b.dataset.burr === d.burr)); return; }
+  if (d.burr) { APP.ws.burr = d.burr; delete APP.ws.burrMm; /* a picked size replaces a measured one */ document.querySelectorAll('[data-burr]').forEach(b => b.setAttribute('aria-pressed', b.dataset.burr === d.burr)); return; }
   if (d.mach) { saveMachine(); APP.ws.machine.type = d.mach; route(); return; }
   if (d.iface) { APP.ws.machine.iface = d.iface; document.querySelectorAll('[data-iface]').forEach(b => b.setAttribute('aria-pressed', b.dataset.iface === d.iface)); return; }
   if (d.uneven) { APP.ws.machine.uneven = d.uneven === '1'; document.querySelectorAll('[data-uneven]').forEach(b => b.setAttribute('aria-pressed', b.dataset.uneven === d.uneven)); return; }
@@ -3560,6 +3583,7 @@ function extractionSpec() {
  "material": ${enumKeys(MATERIALS)} | null,
  "sub": material sub-type key if clear (carbon: annealed|treated; stainless: aust|mart; hardened: le55|gt55; castiron: grey|pearl; aluminum: wrought|cast|hisi; hrsa: ni|co|fe) or null,
  "burr": "light" | "medium" | "heavy" | null,
+ "burrMm": burr height or thickness in mm if a number is stated, else null,
  "dims": {"main": mm|null, "cross": mm|null, "depth": mm|null, "width": mm|null, "groove": mm|null, "hole": mm|null, "ra": µm|null},
  "machine": {"type": ${enumKeys(MACHINES)} | null, "maxRpm": number|null, "iface": "BT30"|"BT40"|null},
  "summary": "one short sentence restating the job, in the language of the job description itself",
@@ -3569,7 +3593,7 @@ function extractionSpec() {
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole. Use null when not stated — never invent numbers.
 Materials: 304/316/A2/A4 → stainless aust; 17-4/420/410 → stainless mart; 6061/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
-Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root.
+Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root. A stated burr height or thickness goes in "burrMm" and sets "burr" (over 0.2 mm = heavy) — it is never a width, depth or hole size.
 Phrases about the CURRENT process ("today we deburr by hand") are not the target machine.
 THE TOOL IS NOT THE PART. A customer often names a tool they already have or want: a brush, hone, stone, 3/8" hone, "ceramic abrasive fiber", a grit number, an item code.
   - Its SIZE is never a part dimension. "a 3/8 inch hone" says nothing about the bore; leave "main" null and ask.
@@ -3620,7 +3644,10 @@ function applyExtraction(r, snapJson) {
   if (material && free('material')) { st.material = material; st.sub = MATERIALS[material].subs && MATERIALS[material].subs[r.sub] ? r.sub : null; }
   else if (st.material && r.sub && free('sub') && MATERIALS[st.material].subs?.[r.sub]) st.sub = r.sub;
   if (['light', 'medium', 'heavy'].includes(r.burr) && free('burr')) { st.burr = r.burr; APP.parsed = { ...(APP.parsed || {}), burr: r.burr }; }
+  const bm = Number(r.burrMm);
+  if (r.burrMm != null && isFinite(bm) && bm > 0 && bm < 20 && free('burr')) { st.burrMm = bm; st.burr = burrLevel(bm); APP.parsed = { ...(APP.parsed || {}), burr: st.burr }; }
   const d = r.dims || {}; st.dims = st.dims || {};
+  if (st.burrMm != null && Number(d.width) === st.burrMm) d.width = null;
   ['main', 'cross', 'depth', 'width', 'groove', 'hole', 'ra'].forEach(k => { const v = Number(d[k]); if (d[k] != null && isFinite(v) && v > 0 && v < 5000 && free(k)) st.dims[k] = v; });
   if (st.dims.main && st.dims.cross && st.dims.cross > st.dims.main) [st.dims.main, st.dims.cross] = [st.dims.cross, st.dims.main];
   const m = r.machine || {};
@@ -3876,7 +3903,7 @@ const SHARE = (() => {
   const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64d = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
   // short keys keep the link readable
-  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x' };
+  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x' };
 
   function encode(st) {
     if (!st || !st.task) return '';
@@ -3902,6 +3929,7 @@ const SHARE = (() => {
     if (st.material && !MATERIALS[st.material]) st.material = null;
     if (st.material && st.sub && !(MATERIALS[st.material].subs || {})[st.sub]) st.sub = null;
     if (!['light', 'medium', 'heavy'].includes(st.burr)) st.burr = 'light';
+    if (st.burrMm != null) { const b = Number(st.burrMm); st.burrMm = isFinite(b) && b > 0 && b < 20 ? b : null; }
     st.dims = (st.dims && typeof st.dims === 'object') ? st.dims : {};
     for (const k of Object.keys(st.dims)) {
       const v = Number(st.dims[k]);
