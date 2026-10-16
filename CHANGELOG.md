@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.6.3 – 2026-10-16
+- Cross-hole jobs on a lathe or Swiss-type machine get their own setup. The
+  steps stop and lock the main spindle, put the brush in an axial live tool on
+  the bore axis and program the feed in mm/min (G98), instead of "position
+  above the bore".
+- The live-tool speed is checked. With no maximum entered, a brush that needs
+  more than 6,000 RPM is flagged, with makers' figures (Citizen L20 front tool
+  7,500, Star SR-20R IV 8,000, Tornos Swiss GT 13 6,000). Within 15% of the
+  target it can be trialled; further below, the guide asks for a speed
+  increaser and drops confidence to Low. Shank set-ups get the same check;
+  other brushes get a note.
+- The cross-hole drawing follows the part: a bar lying on its side with the
+  brush coming in from the end on a lathe, openings on both walls for a hole
+  drilled through, and the slot drawn and labelled next to the cross hole.
+- New inputs: "goes through both walls" and a slot that opens into the bore
+  (width and length). They are read from an email ("on the diameter", "both
+  sides", "1.016 slot with length of 1.5 mm"), shown as chips, kept in shared
+  links and used for the stroke.
+- A through cross hole over 70% of the bore is now a warning, not a note.
+- Below the Ø3.5 range the Ø1.5 brush no longer says the bore is "inside this
+  brush's working range"; it says the choice rests on NOGA's Ø2.6 mm case. The
+  failed field trial in a Ø3.1 L605 bore is passed on in the warning.
+- Reading: "a hole … opens in the reamed hole" is a cross-hole job, a repeated
+  bore size no longer becomes the cross hole as well, and L605, Haynes 25 and
+  MP35N read as cobalt alloys.
+
 ## 1.6.2 – 2026-10-16
 - A stated burr height is now read as the burr. "Burr height: approx. 1 mm" in
   a customer email used to become "Width 1 mm" with the burr left as light, so

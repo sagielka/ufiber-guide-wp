@@ -30,6 +30,45 @@ const ok = (name, cond, detail) => {
 };
 const eq = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(want), { got, want });
 
+/* ---- a Swiss-type cross-hole job: lathe steps, live-tool speed, through hole and slot (1.6.3) ---- */
+{
+  const mail = `Machine : Swiss type lathe
+Holding : Live tool
+Entry dia : 3.1
+Material : L-605 Cobalt alloy.
+There is a hole of dia 2.3 on the diameter and a milled slot ( both sides ) as per below details which opens in the dia 3.1mm reamed hole.
+he also has a 1.016 slot with length of 1.5mm.`;
+  const p = E.parseText(mail);
+  eq('a hole "on the diameter" that "opens in the reamed hole" is a cross-hole job', p.task, 'crosshole');
+  ok('the bore and cross hole are two different sizes', p.dims && p.dims.main === 3.1 && p.dims.cross === 2.3, p.dims);
+  ok('the slot is read as a slot', p.dims && p.dims.slotW === 1.016 && p.dims.slotL === 1.5, p.dims);
+  eq('"on the diameter" / "both sides" means through both walls', p.through, true);
+  eq('L-605 is a cobalt alloy', [p.material, p.sub], ['hrsa', 'co']);
+  eq('the machine is a Swiss type', p.machine && p.machine.type, 'swiss');
+  const st = Object.assign(E.newState(), { task: p.task, feature: p.feature, material: p.material, sub: p.sub, dims: p.dims, through: p.through });
+  st.machine.type = 'swiss';
+  const R = E.recommend(st);
+  ok('lathe steps: spindle stopped, axial live tool', /C-axis/.test(R.steps[0]) && /axial live tool/.test(R.steps[0]), R.steps[0]);
+  ok('lathe feed is programmed in mm/min', /G98/.test(R.steps[2]), R.steps[2]);
+  ok('an unknown live-tool speed is flagged', R.warnings.some(w => /Check the live-tool speed/.test(w.t)), R.warnings.map(w => w.t));
+  ok('a through cross hole over 70% is a warning, not a note', R.warnings.some(w => /Through cross hole is 74%/.test(w.t)), R.warnings.map(w => w.t));
+  ok('the below-range bore is not called "inside the range"', !R.why.some(w => /inside this brush's working range/.test(w.d)), R.why.map(w => w.d));
+  ok('the failed L605 field trial is passed on', R.warnings.some(w => /L605/.test(w.d)));
+  ok('the slot is mentioned', R.notes.some(n => /slot/.test(n)), R.notes);
+  st.machine.maxRpm = 6000;
+  const R6 = E.recommend(st);
+  ok('a 6,000 RPM live tool is too slow for 7,700', R6.warnings.some(w => /too slow/.test(w.t)) && R6.params.rpm === 6000, R6.warnings.map(w => w.t));
+  eq('and drops the confidence to low', R6.conf.level, 'low');
+  st.machine.maxRpm = 7000;
+  ok('7,000 RPM is close enough to trial', E.recommend(st).warnings.some(w => /slightly below/.test(w.t)));
+  st.machine.maxRpm = 10000;
+  ok('a fast live tool raises no speed warning', !E.recommend(st).warnings.some(w => /live.tool/i.test(w.t)));
+  const mc = Object.assign(E.newState(), { task: 'crosshole', feature: 'cross', material: 'carbon', dims: { main: 16.5, cross: 10 } });
+  const Rm = E.recommend(mc);
+  ok('a machining centre keeps the "position above" step', /Position above/.test(Rm.steps[0]), Rm.steps[0]);
+  ok('and gets no live-tool warning', !Rm.warnings.some(w => /live.tool/i.test(w.t)));
+}
+
 /* ---- a stated burr height is the burr, not a width, and a big one is flagged (1.6.2) ---- */
 {
   const mail = `Machining conditions:

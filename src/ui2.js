@@ -73,7 +73,8 @@ function renderUnderstood() {
   add('material', 'Material', labelOf('material', st), !st.material);
   const d = st.dims || {};
   if (d.main) chips.push(`<span class="u-chip">Bore <b>${diaOut(d.main)}</b></span>`);
-  if (d.cross) chips.push(`<span class="u-chip">Cross hole <b>${diaOut(d.cross)}</b></span>`);
+  if (d.cross) chips.push(`<span class="u-chip">Cross hole <b>${diaOut(d.cross)}${st.through ? ', through both walls' : ''}</b></span>`);
+  if (d.slotW || d.slotL) chips.push(`<span class="u-chip">Slot <b>${[d.slotW, d.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}</b></span>`);
   if (d.width) chips.push(`<span class="u-chip">Width <b>${lenOut(d.width)} ${lenU()}</b></span>`);
   if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
@@ -123,6 +124,7 @@ function doAsk(text, opt = {}) {
   Object.assign(st, { task: p.task || null, feature: p.feature || (p.task && SUGGEST_FEATURE[p.task]) || null, material: p.material || null, sub: p.sub || null, burr: p.burr || 'light' });
   st.dims = { ...(p.dims || {}) };          // a copy: the offline model must not write into the keyword reading
   if (p.machine) Object.assign(st.machine, p.machine);
+  if (p.through) st.through = true;
   if (p.ra) st.dims.ra = p.ra;
   // Offline domain model fills whatever the keyword rules did not catch.
   if (NLU.ready) {
@@ -178,7 +180,7 @@ function numField(id, label, val, hint, unit = lenU()) { return `<div class="fie
 function dimsStep(st) {
   const f = TASKS[st.task]?.feature || st.feature; const d = st.dims || {}; const mode = TASKS[st.task]?.mode;
   let h = `<h1 class="wiz-q">Feature size</h1><p class="muted">Rough numbers are fine. Leave blank if you don't know — the guide will assume a typical size and tell you.</p>`;
-  if (f === 'cross') h += numField('dMain', 'Main bore diameter (the hole the brush enters)', lenVal(d.main), 'Sets the brush size. Cross-hole brushes cover Ø3.5–20 mm bores.') + numField('dCross', 'Cross-hole diameter', lenVal(d.cross), 'Should be smaller than the main bore.') + numField('dDepth', 'Depth from entry to the intersection (optional)', lenVal(d.depth), 'Checks that the brush can reach.');
+  if (f === 'cross') h += numField('dMain', 'Main bore diameter (the hole the brush enters)', lenVal(d.main), 'Sets the brush size. Cross-hole brushes cover Ø3.5–20 mm bores.') + numField('dCross', 'Cross-hole diameter', lenVal(d.cross), 'Should be smaller than the main bore.') + `<div class="field"><label>Does it go through both walls of the bore?</label><div class="seg"><button data-through="1" aria-pressed="${!!st.through}">Yes — opens on both sides</button><button data-through="0" aria-pressed="${!st.through}">No — one side (T)</button></div><span class="hint">A hole drilled across the part, or a slot milled on both sides, opens on both sides.</span></div>` + numField('dSlotW', 'Slot width, if a slot also opens into the bore (optional)', lenVal(d.slotW), 'The brush strokes past the slot as well.') + numField('dSlotL', 'Slot length along the bore (optional)', lenVal(d.slotL), '') + numField('dDepth', 'Depth from entry to the intersection (optional)', lenVal(d.depth), 'Checks that the brush can reach.');
   else if (f === 'bore') h += numField('dMain', 'Bore diameter', lenVal(d.main), '') + numField('dDepth', 'Bore depth (optional)', lenVal(d.depth), '');
   else if (f === 'hole') h += numField('dHole', 'Hole diameter', lenVal(d.hole), '') + numField('dW', 'Width of the area with holes (optional)', lenVal(d.width), 'For a field of holes, the brush covers them in passes.');
   else if (f === 'groove') h += numField('dG', 'Groove or slot width', lenVal(d.groove), 'The tool must be narrower than this.') + numField('dDepth', 'Groove depth (optional)', lenVal(d.depth), '');
@@ -200,7 +202,7 @@ function machineStep(st) {
 function saveDims() {
   const st = APP.ws; const d = st.dims = st.dims || {};
   const g = id => $('#' + id) ? lenIn($('#' + id).value) : undefined;
-  [['dMain', 'main'], ['dCross', 'cross'], ['dDepth', 'depth'], ['dHole', 'hole'], ['dW', 'width'], ['dG', 'groove']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) d[k] = v; });
+  [['dMain', 'main'], ['dCross', 'cross'], ['dSlotW', 'slotW'], ['dSlotL', 'slotL'], ['dDepth', 'depth'], ['dHole', 'hole'], ['dW', 'width'], ['dG', 'groove']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) d[k] = v; });
   if ($('#dRa')) d.ra = parseFloat($('#dRa').value) || null;
 }
 function saveMachine() { if ($('#mRpm')) APP.ws.machine.maxRpm = parseFloat($('#mRpm').value) || null; }

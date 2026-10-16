@@ -384,6 +384,7 @@ document.addEventListener('click', e => {
   if (d.burr) { APP.ws.burr = d.burr; delete APP.ws.burrMm; /* a picked size replaces a measured one */ document.querySelectorAll('[data-burr]').forEach(b => b.setAttribute('aria-pressed', b.dataset.burr === d.burr)); return; }
   if (d.mach) { saveMachine(); APP.ws.machine.type = d.mach; route(); return; }
   if (d.iface) { APP.ws.machine.iface = d.iface; document.querySelectorAll('[data-iface]').forEach(b => b.setAttribute('aria-pressed', b.dataset.iface === d.iface)); return; }
+  if (d.through) { APP.ws.through = d.through === '1'; document.querySelectorAll('[data-through]').forEach(b => b.setAttribute('aria-pressed', b.dataset.through === d.through)); return; }
   if (d.uneven) { APP.ws.machine.uneven = d.uneven === '1'; document.querySelectorAll('[data-uneven]').forEach(b => b.setAttribute('aria-pressed', b.dataset.uneven === d.uneven)); return; }
   if (d.goto) { APP.wizI = wizSteps(APP.ws).indexOf(d.goto); route(); return; }
   if (d.nav) {
