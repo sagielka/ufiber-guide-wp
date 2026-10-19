@@ -367,8 +367,9 @@ document.addEventListener('click', e => {
   if (d.task && t.classList.contains('tile') && !d.pick) { APP.ws = newState(); APP.ws.task = d.task; if (TASKS[d.task].feature) APP.ws.feature = TASKS[d.task].feature; APP.wizI = 1; go('find'); return; }
   if (d.recent) { const r = store.get('ufg_recent', [])[+d.recent]; if (r) { APP.ws = r.st; go('result'); } return; }
   if (t.id === 'clrRecent') { store.set('ufg_recent', []); rerender(); return; }
+  if (d.later !== undefined) { switchLater(+d.later); return; }
   if (d.edit) { APP.editKey = APP.editKey === d.edit ? null : d.edit; renderUnderstood(); return; }
-  if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') APP.ws.sub = null; if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
+  if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }
   if (t.id === 'goWiz') { APP.wizI = 0; go('find'); return; }
   // wizard
@@ -377,7 +378,7 @@ document.addEventListener('click', e => {
     if (d.pick === 'task') { st.feature = TASKS[d.v].feature || (['cross', 'bore'].includes(st.feature) ? null : st.feature); st.override = {}; }
     if (d.pick === 'feature' && d.v === 'cross') { st.task = 'crosshole'; }
     if (d.pick === 'feature' && d.v === 'bore') { st.task = 'id_finish'; }
-    if (d.pick === 'material') { st.sub = null; if (MATERIALS[d.v].subs) { route(); return; } }
+    if (d.pick === 'material') { st.sub = null; st.grades = null; if (MATERIALS[d.v].subs) { route(); return; } }
     APP.wizI = Math.min((APP.wizI || 0) + 1, wizSteps(st).length - 1); route(); return;
   }
   if (d.sub) { APP.ws.sub = APP.ws.sub === d.sub ? null : d.sub; document.querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === APP.ws.sub)); return; }

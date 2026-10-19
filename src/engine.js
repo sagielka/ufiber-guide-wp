@@ -725,6 +725,16 @@ function finalize(R, st) {
   const mt = st.machine?.type;
   if (isLathe(mt) && !st.machine?.maxRpm && !['crosshole', 'shank', 'diamond'].includes(R.family) && R.params?.rpm > LIVE_TOOL.typical[0])
     R.notes.push(`This runs at ${R.params.rpm.toLocaleString()} RPM. Live tools on lathes are often limited to ${LIVE_TOOL.typical[0].toLocaleString()}–${LIVE_TOOL.typical[1].toLocaleString()} RPM; enter the station's maximum under Machine to check.`);
+  // grades of one material that sit in different NOGA rows (5083 not hardenable, 7075 hardenable)
+  const gRows = st.sfRow ? [] : gradeRows(st.material, st.sub, st.grades);
+  if (gRows.length > 1) {
+    const used = sfRow(R.sfRow || sfRowOf(st).id), pol = TASKS[st.task]?.mode === 'polish';
+    const byRow = gRows.map(id => ({ row: sfRow(id), gs: st.grades.filter(g => gradeInfo(g)?.row === id) }));
+    const vc = byRow.map(x => pol ? x.row.S.vcP : x.row.S.vcD), lo = Math.max(...vc.map(v => v[0])), hi = Math.min(...vc.map(v => v[1]));
+    R.notes.push(byRow.map(x => `${x.gs.join(', ')} is ${(x.row.details || '').toLowerCase()}`).join('; ') + ` — two rows in NOGA's table. ` +
+      (R.family === 'surface' || R.family === 'shank' ? (hi > lo ? `Their ${pol ? 'polishing' : 'deburring'} speeds overlap at Vc ${lo}–${hi} m/min, so one setup covers both. ` : '') : '') +
+      `This setup follows the ${(used.details || '').toLowerCase()} row (${used.grade}), the slower of the two.`);
+  }
   delete R.lower;
   if (R.conf.level === 'high' && !R.conf.reasons.length) R.conf.reasons.push('Selection follows the catalogue rules directly.');
   return R;
@@ -794,10 +804,21 @@ function parseText(text) {
   for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
   const hrc = t.match(/(\d{2})\s*hrc/i); if (hrc) { if (!out.material || out.material === 'carbon') out.material = 'hardened'; out.sub = Number(hrc[1]) > 55 ? 'gt55' : 'le55'; }
   if (out.material === 'carbon' && /(quench|tempered|heat[- ]treat|through[- ]hard)/i.test(t)) out.sub = 'treated';
+  // named grades pick the NOGA row; a second material named by grade is a second setup.
+  // A bare "2024" is only an alloy when the text is already about aluminium.
+  const hits = gradesIn(t).filter((g, _, all) => !g.bare || out.material === 'aluminum' || all.some(x => x.mat === 'aluminum' && !x.bare));
+  if (hits.length) {
+    const groups = []; hits.forEach(g => { if (!groups.some(x => x.mat === g.mat && x.sub === g.sub)) groups.push(g); });
+    // the first material the customer lists is set up first, unless every grade is the material already read
+    if (!(out.material && groups.every(g => g.mat === out.material))) { out.material = groups[0].mat; out.sub = groups[0].sub; }
+    out.grades = hits.filter(g => g.mat === out.material).map(g => g.g);
+    out.also = groups.filter(g => g.mat !== out.material).map(g => ({ material: g.mat, sub: g.sub, grades: hits.filter(h => h.mat === g.mat && h.sub === g.sub).map(h => h.g) }));
+    if (!out.also.length) delete out.also;
+  }
   // task / feature
   const isCross = /(cross|intersect|crossing|t-?junction|side hole|radial hole|meets? (a|the) bore|opens? (in|into) the (?:[^.\n]|\.\d){0,30}(hole|bore)|(hole|drill\w*)(?:[^.\n]|\.\d){0,25}\bon the (od|o\.d\.|outer diameter|diameter))/i.test(t);
   if (isCross) { out.task = 'crosshole'; out.feature = 'cross'; }
-  else if (/\b(edm|wire[- ]?cut|recast)\b/i.test(t) || out.material === 'carbide') out.task = 'hard';
+  else if (/(?<!\p{L})(edm|wire[- ]?cut|recast)(?!\p{L})/iu.test(t) || out.material === 'carbide') out.task = 'hard';   // \b is ASCII-only: Czech "Předmět" (Subject:) read as EDM
   else if (/(tool ?marks?|cutter ?marks?|mill(ing)? marks|\bra\b|roughness|scallop)/i.test(t)) out.task = 'marks';
   else if (/(polish|mirror|shine|lustre|luster|finish(ing)? the surface)/i.test(t)) out.task = 'polish';
   else if (/(edge break|break the edge|round(ing)? (the )?edge|radius the edge|blend)/i.test(t)) out.task = 'edge';
@@ -879,7 +900,7 @@ function parseText(text) {
   // explicit machines first; "today we deburr by hand" describes the current process, not the target machine
   if (/swiss|citizen|tsugami|star sr|star sb/i.test(t)) mc.type = 'swiss';
   else if (/robot|fanuc m-|kuka|abb irb|ur\d+e?\b|cobot/i.test(t)) mc.type = 'robot';
-  else if (/(machining cent|vmc|hmc|\bmill(ing machine)?\b|5-?axis|bt ?40|bt ?30|cat ?40|hsk|haas|mazak|dmg|okuma|doosan|hermle|robodrill|speedio|makino|vf-?\d)/i.test(t) && !/(lathe|turning cent)/i.test(t)) mc.type = 'mc';
+  else if (/(machining cent|vmc|hmc|\bmill\b|\bmill(?:ing)? (?:machine|cent(?:er|re))|cnc mill|5-?axis|bt ?40|bt ?30|cat ?40|hsk|haas|mazak|dmg|okuma|doosan|hermle|robodrill|speedio|makino|vf-?\d)/i.test(t) && !/(lathe|turning cent)/i.test(t)) mc.type = 'mc';
   else if (/(lathe|turning)/i.test(t)) mc.type = /(no live|without live|no driven)/i.test(t) ? 'lathe0' : 'lathe';
   else if (/(pneumatic|air[- ]?(powered|tool|grinder|die grinder|driven))/i.test(t)) mc.type = 'air';
   else if (/(dedicated machine|special[- ]purpose machine|transfer machine)/i.test(t)) mc.type = 'dedicated';

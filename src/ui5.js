@@ -177,7 +177,9 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
 function applyAi(r) {
   const D = APP.doc; if (!r || typeof r !== 'object') { D.aiErr = 'No usable answer. Try again.'; return; }
   applyExtraction(r, null);
-  D.ai = { summary: String(r.summary || '').slice(0, 300), callouts: (Array.isArray(r.callouts) ? r.callouts : []).map(String).slice(0, 6), questions: (Array.isArray(r.questions) ? r.questions : []).map(q => typeof q === 'string' ? q : q && q.ask).filter(Boolean).slice(0, 3) };
+  const later = (APP.ws?.later || []).flatMap(x => x.grades || []).map(g => g.toLowerCase());
+  const aboutLater = q => later.some(g => q.toLowerCase().includes(g) || q.toLowerCase().replace(/[\s-]/g, '').includes(g.replace(/[\s-]/g, '')));
+  D.ai = { summary: String(r.summary || '').slice(0, 300), callouts: (Array.isArray(r.callouts) ? r.callouts : []).map(String).slice(0, 6), questions: (Array.isArray(r.questions) ? r.questions : []).map(q => typeof q === 'string' ? q : q && q.ask).filter(Boolean).filter(q => !aboutLater(q)).slice(0, 3) };
   APP.parsed = { ...(APP.parsed || {}), fromDoc: true };
   renderUnderstood();
 }

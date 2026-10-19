@@ -126,6 +126,35 @@ async def main():
             ok('Clear empties the box', '"box":""' in after, after)
             ok('Clear keeps the machine', '"mach":"lathe"' in after and '"rpm":8000' in after, after)
 
+            # --- two aluminium grades and a stainless in one email (1.6.4) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(400)
+            await page.evaluate("() => doAsk('Our customer needs to polish the surface of plates\\nAW5083\\nAW7075\\nStainless steel 1.4301', {ai:false})")
+            chip = await page.locator('#understood [data-edit=material]').inner_text()
+            ok('the material chip names both grades', 'AW-5083 + AW-7075' in chip, chip)
+            also = await page.locator('#understood').inner_text()
+            ok('the stainless is shown as its own setup, not dropped', 'Also in this job' in also and '1.4301' in also, also[:200])
+            # the AI reading of the same email: grades kept, and no question about the stainless
+            q = await page.evaluate("""() => {
+                APP.doc = { files: [{ name: 'Re_ Offer.msg', kind: 'msg', status: '' }], images: [], text: 'x' };
+                applyAi({ task: 'polish', feature: 'face', material: 'aluminum', sub: 'wrought', grades: ['AW5083', 'AW7075'],
+                  later: [{ material: 'stainless', sub: 'aust', grades: ['1.4301'] }], summary: 'Polish plates.',
+                  callouts: [], questions: ['Will the stainless 1.4301 plates also be polished with this setup?'] });
+                return JSON.stringify({ q: APP.doc.ai.questions, g: APP.ws.grades, l: APP.ws.later }); }""")
+            ok('the AI grades are written one way', '"g":["AW-5083","AW-7075"]' in q, q)
+            ok('no question about a material that already has its own setup', '"q":[]' in q, q)
+            await page.evaluate("() => { APP.doc = null; renderAttach(); go('result'); }")
+            await page.wait_for_timeout(700)
+            res = await page.locator('#view').inner_text()
+            ok('the setup says which plates it is for', 'aluminum AW-5083 + AW-7075' in res, res[:160])
+            ok('the setup notes the two NOGA rows', "two rows in NOGA's table" in res)
+            await page.click('[data-later="0"]')
+            await page.wait_for_timeout(700)
+            sw = await page.evaluate("() => JSON.stringify({ m: APP.ws.material, s: APP.ws.sub, g: APP.ws.grades, l: APP.ws.later.map(x => x.material) })")
+            ok('one tap sets up the stainless, and the aluminium waits its turn',
+               '"m":"stainless"' in sw and '"g":["1.4301"]' in sw and '"l":["aluminum"]' in sw, sw)
+            ok('the stainless setup is on screen', 'stainless steel 1.4301' in (await page.locator('#view').inner_text()).lower())
+
             # --- every tab renders ---
             for tab in ['sf', 'fix', 'xebec', 'learn', 'products']:
                 await page.evaluate(f"() => go('{tab}')")

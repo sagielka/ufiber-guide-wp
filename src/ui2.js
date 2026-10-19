@@ -60,7 +60,7 @@ function heroArt() {
 function labelOf(k, st) {
   if (k === 'task') return TASKS[st.task]?.short;
   if (k === 'feature') return FEATURES[st.feature];
-  if (k === 'material') { const m = MATERIALS[st.material]; return m ? m.name + (st.sub && m.subs && m.subs[st.sub] ? ` (${m.subs[st.sub].split(' (')[0]})` : '') : null; }
+  if (k === 'material') { const m = MATERIALS[st.material]; return m ? m.name + (st.sub && m.subs && m.subs[st.sub] ? ` (${m.subs[st.sub].split(' (')[0]})` : '') + (st.grades?.length ? ' · ' + st.grades.join(' + ') : '') : null; }
   return null;
 }
 function renderUnderstood() {
@@ -89,12 +89,32 @@ function renderUnderstood() {
   if (picker === 'material') pick = `<p class="small" style="margin:12px 0 0"><b>Which material?</b></p><div class="mini-tiles">${Object.entries(MATERIALS).map(([k, m]) => `<button class="chip${st.material === k ? ' on' : ''}" data-set="material" data-v="${k}">${m.name}</button>`).join('')}</div>`;
   if (picker === 'feature') pick = `<p class="small" style="margin:12px 0 0"><b>Where is the feature?</b></p><div class="mini-tiles">${Object.entries(FEATURES).filter(([k]) => k !== 'cross' && k !== 'bore').map(([k, f]) => `<button class="chip${st.feature === k ? ' on' : ''}" data-set="feature" data-v="${k}">${f}</button>`).join('')}</div>`;
   el.innerHTML = `<div class="understood fade-in"><b>Here's what I understood</b> <span class="tiny">— tap anything to change it</span>
-    <div class="u-list">${chips.join('')}</div>${smartBlock()}${pick}
+    <div class="u-list">${chips.join('')}</div>${laterBlock(st)}${smartBlock()}${pick}
     <div class="row" style="margin-top:12px">${missing ? `<span class="small muted">${APP.smart.busy ? 'Filling in the gaps…' : 'One more answer and you\'re set.'}</span>` : ''}
     <button class="btn ghost small" id="goWiz">Refine step by step</button>
     <span id="goSlot" style="margin-left:auto"></span></div></div>`;
   const g = $('#goGroup'), slot = $('#goSlot'); if (g && slot) slot.appendChild(g);
   updateGo();
+}
+/* A job that names a second material ("AW5083, AW7075 and 1.4301") is two setups.
+   The other one is kept here, one tap away, instead of being dropped or asked about. */
+function laterLabel(x) { const m = MATERIALS[x.material]; return m ? m.name + (x.sub && m.subs?.[x.sub] ? ` (${m.subs[x.sub].split(' (')[0]})` : '') + (x.grades?.length ? ' · ' + x.grades.join(' + ') : '') : ''; }
+function laterBlock(st, big) {
+  const L = (st && Array.isArray(st.later) ? st.later : []).filter(x => MATERIALS[x.material]);
+  if (!L.length) return '';
+  const cur = laterLabel({ material: st.material, sub: st.sub, grades: st.grades });
+  return L.map((x, i) => big
+    ? `<div class="callout note">${I.info}<div><b>This setup is for ${esc(cur)}.</b>The job also names ${esc(laterLabel(x))}, which needs its own setup. <button class="btn small" data-later="${i}" style="margin-top:8px">Set up ${esc(MATERIALS[x.material].name.toLowerCase())} next ${I.arrow}</button></div></div>`
+    : `<div class="small" style="margin-top:10px">${I.info.replace('<svg', '<svg style="color:var(--warn);vertical-align:-3px" width="16" height="16"')} Also in this job: <b>${esc(laterLabel(x))}</b> — its own setup, after this one. <button class="btn ghost small" data-later="${i}">Set it up</button></div>`).join('');
+}
+function switchLater(i) {
+  const st = APP.ws, L = st?.later, x = L?.[i]; if (!x || !MATERIALS[x.material]) return;
+  const cur = st.material ? { material: st.material, sub: st.sub, grades: st.grades || null } : null;
+  st.material = x.material; st.sub = x.sub && MATERIALS[x.material].subs?.[x.sub] ? x.sub : null; st.grades = x.grades?.length ? x.grades : null;
+  delete st.sfRow; st.override = {};
+  L.splice(i, 1); if (cur) L.unshift(cur);
+  APP.editKey = null;
+  if (APP.view === 'result') route(); else renderUnderstood();
 }
 // One main button: "Read my application" until the reading is complete, then "Show my setup".
 function missingField(st) { return !st ? 'task' : (!st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null))); }
@@ -126,6 +146,8 @@ function doAsk(text, opt = {}) {
   if (p.machine) Object.assign(st.machine, p.machine);
   if (p.through) st.through = true;
   if (p.ra) st.dims.ra = p.ra;
+  if (p.grades?.length) st.grades = p.grades;
+  if (p.also?.length) st.later = p.also;
   // Offline domain model fills whatever the keyword rules did not catch.
   if (NLU.ready) {
     try {
@@ -276,7 +298,7 @@ function result() {
   const engageV = typeof p.engage.value === 'number' ? (p.engage.unit === 'mm' ? lenOut(p.engage.value) : p.engage.value) : esc(p.engage.value);
   const engageU = typeof p.engage.value === 'number' && p.engage.unit === 'mm' ? lenU() : esc(p.engage.unit || '');
   const est = p.est ? '<span class="est" title="Starting estimate — NOGA has not published this value">EST</span>' : '';
-  const summary = `${R.familyName}, ${diaOut(R.dia)}, #${R.grit.grit} for ${(MATERIALS[st.material]?.name || 'your material').toLowerCase()}.`;
+  const summary = `${R.familyName}, ${diaOut(R.dia)}, #${R.grit.grit} for ${(MATERIALS[st.material]?.name || 'your material').toLowerCase()}${st.grades?.length ? ' ' + st.grades.join(' + ') : ''}.`;
   const gritsAvail = R.family === 'diamond' ? STONE_GRITS : (R.family === 'disc' ? GRITS.filter(g => g.grit <= 1000) : (R.family === 'crosshole' && R.dia === 11 ? GRITS.filter(g => [600, 800, 1000].includes(g.grit)) : GRITS));
   const diasAvail = R.family === 'surface' || R.family === 'shank' ? [6, 15, 25, 40, 60, 100] : R.family === 'crosshole' ? [1.5, 3, 5, 7, 11] : R.family === 'point' ? [1, 1.5, 2, 2.5, 3] : R.family === 'disc' ? [13, 19, 22, 25, 30] : [];
   return `<div class="res-top">
@@ -284,6 +306,7 @@ function result() {
     <div class="row"><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing XEBEC ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
   </div>
   ${R.warnings.map(w => `<div class="callout warn">${I.warn}<div><b>${esc(w.t)}</b>${esc(w.d)}</div></div>`).join('')}
+  ${laterBlock(st, true)}
   <div class="grid2" style="margin-top:14px">
     <div>
       <section class="panel" aria-labelledby="tTool">
@@ -356,7 +379,8 @@ function setupText(R, extra = '') {
   const L = [];
   L.push('UFIBER SETUP SHEET'); L.push('');
   L.push(`Task: ${TASKS[st.task]?.name || ''}`); L.push(`Feature: ${FEATURES[R.inputs.feature] || ''}`);
-  L.push(`Material: ${MATERIALS[st.material]?.name || ''}${st.sub && MATERIALS[st.material]?.subs ? ' — ' + MATERIALS[st.material].subs[st.sub] : ''}`);
+  L.push(`Material: ${MATERIALS[st.material]?.name || ''}${st.sub && MATERIALS[st.material]?.subs ? ' — ' + MATERIALS[st.material].subs[st.sub] : ''}${st.grades?.length ? ' — ' + st.grades.join(', ') : ''}`);
+  if (st.later?.length) L.push(`Also in this job (separate setup): ${st.later.map(laterLabel).join('; ')}`);
   const dims = Object.entries(d).filter(([, v]) => v).map(([k, v]) => `${k} ${v}${k === 'ra' ? ' µm' : ' mm'}`).join(', '); if (dims) L.push(`Dimensions: ${dims}`);
   if (TASKS[st.task]?.mode === 'deburr') L.push(`Burr: ${st.burr}`);
   L.push(`Machine: ${MACHINES[st.machine.type]}${st.machine.maxRpm ? ', max ' + st.machine.maxRpm + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}`);

@@ -9,13 +9,13 @@ const path = require('path');
 const SRC = path.join(__dirname, '..', 'src');
 const load = (f) => fs.readFileSync(path.join(SRC, f), 'utf8').replace(/if \(typeof module[^\n]+/g, '');
 
-const ctx = { console, module: { exports: {} }, navigator: { language: 'en' }, location: { search: '' } };
+const ctx = { console, module: { exports: {} }, navigator: { language: 'en' }, location: { search: '' }, btoa, atob, escape, unescape };
 vm.createContext(ctx);
 vm.runInContext(
   [fs.readFileSync(path.join(SRC, 'cases_block.txt'), 'utf8'),
-   load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js')].join('\n') +
+   load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js'), load('share.js')].join('\n') +
   '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;\n;globalThis.__C = typeof AI_CASES === "function" ? AI_CASES : null;\n;globalThis.__CASES = typeof CASES !== "undefined" ? CASES : [];' +
-  '\n;globalThis.__E = { parseText, recommend, scrubContact, scrubToolWords, dedupeDims, msgRead, NLU,' +
+  '\n;globalThis.__E = { parseText, recommend, gradesIn, gradeInfo, cleanGrades, SHARE, scrubContact, scrubToolWords, dedupeDims, msgRead, NLU,' +
   ' skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
   ' newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {},' +
   ' machine: { type: "mc", maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} }) };',
@@ -169,6 +169,57 @@ ok('a .msg that is not an OLE file is refused rather than guessed at',
   E.NLU.load && ok('the model is optional, and absent here', true);
   const p = E.parseText('something about a part with no material named at all');
   ok('no material is guessed from a sentence that names none', !p.material, p.material);
+}
+
+/* ---- three plate materials in one email: two aluminium grades and a stainless (1.6.4) ---- */
+{
+  // AFI / Dominika, Oct 2026: answered "aluminium, please"; the app showed one
+  // "Aluminum (Wrought)" chip, used the 7075 row for 5083, dropped the 1.4301,
+  // and asked whether the stainless shared the setup. The Czech "Předmět:"
+  // header also read as EDM, so offline the job became "Hard / EDM".
+  const mail = `Hello,
+Which plate material should we start with: aluminium or stainless? -> aluminium, please
+What machine will do the polishing? -> CNC milling center
+Dominika Antlová
+mobil: +420 722 924 747
+Od: Sagi Elkayam <sagi@noga.com>
+Předmět: RE: Offer
+Our customer needs to polish the surface of plates
+AW5083
+AW7075
+Stainless steel 1.4301
+Can you suggest any tools and conditions for this?`;
+  const p = E.parseText(mail);
+  eq('a Czech "Předmět:" header is not EDM', p.task, 'polish');
+  eq('a "CNC milling center" is a machining centre', p.machine && p.machine.type, 'mc');
+  eq('the plates listed first are set up first', [p.material, p.sub], ['aluminum', 'wrought']);
+  eq('both aluminium grades are kept', p.grades, ['AW-5083', 'AW-7075']);
+  eq('the stainless is kept for its own setup', p.also, [{ material: 'stainless', sub: 'aust', grades: ['1.4301'] }]);
+  const st = Object.assign(E.newState(), { task: 'polish', feature: 'face', material: p.material, sub: p.sub, grades: p.grades });
+  const R = E.recommend(st);
+  ok('a 5083 + 7075 mix says one setup covers both, with the overlap from the table',
+    R.notes.some(n => /two rows in NOGA's table/.test(n) && /Vc 165–320 m\/min/.test(n)), R.notes);
+  eq('the mix runs on the hardenable (slower) row', R.sfRow, 22);
+  eq('5083 alone runs on the not-hardenable row', E.recommend(Object.assign({}, st, { grades: ['AW-5083'] })).sfRow, 21);
+  eq('7075 alone runs on the hardenable row', E.recommend(Object.assign({}, st, { grades: ['EN AW-7075'] })).sfRow, 22);
+  ok('one grade gives no two-row note', !E.recommend(Object.assign({}, st, { grades: ['AW-5083'] })).notes.some(n => /two rows/.test(n)));
+}
+
+/* ---- grades are read carefully ---- */
+{
+  eq('EN AW-6082-T6 is wrought aluminium', E.gradesIn('EN AW-6082-T6 bracket').map(g => g.g), ['AW-6082']);
+  eq('a year is not a 2024 alloy', E.parseText('drawing rev October 2024, AW-6082 part').grades, ['AW-6082']);
+  eq('1,4404 with a comma is a stainless grade', E.parseText('housing in 1,4404, deburr the ports').grades, ['1.4404']);
+  eq('a +420 phone number is still not a grade', E.parseText('aluminium plate\nmobil: +420 722 924 747').grades, undefined);
+  eq('grades the AI writes are cleaned and written one way', E.cleanGrades(['AW7075', 'EN AW-7075', '<b>', '1.4301']), ['AW-7075', '1.4301']);
+}
+
+/* ---- a shared link keeps the grades and leaves out what does not apply ---- */
+{
+  const st = Object.assign(E.newState(), { task: 'polish', feature: 'face', material: 'aluminum', sub: 'wrought', grades: ['AW-5083', 'AW-7075'], burr: 'light' });
+  const back = E.SHARE.decode(E.SHARE.encode(st));
+  eq('grades travel in a shared link', back.grades, ['AW-5083', 'AW-7075']);
+  ok('a polishing link carries no burr level', !JSON.parse(Buffer.from(E.SHARE.encode(st).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()).b);
 }
 
 /* ---- the facts handed to the AI are read from the tables, not written out ---- */

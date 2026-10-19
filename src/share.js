@@ -9,7 +9,7 @@ const SHARE = (() => {
   const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64d = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
   // short keys keep the link readable
-  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x', through: 'w' };
+  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x', through: 'w', grades: 'g' };
 
   function encode(st) {
     if (!st || !st.task) return '';
@@ -18,6 +18,7 @@ const SHARE = (() => {
       const v = st[long];
       if (v === null || v === undefined || v === '') continue;
       if (typeof v === 'object' && !Object.keys(v).length) continue;
+      if ((long === 'burr' || long === 'burrMm') && TASKS[st.task]?.mode !== 'deburr') continue;
       out[short] = v;
     }
     try { return b64e(JSON.stringify(out)); } catch (e) { return ''; }
@@ -48,6 +49,7 @@ const SHARE = (() => {
     if (st.override.grit && !GRITS.some(g => g.grit === st.override.grit) && !STONE_GRITS.some(g => g.grit === st.override.grit)) delete st.override.grit;
     if (st.fromX && typeof st.fromX !== 'string') delete st.fromX;
     if (st.through !== undefined) st.through = st.through === true;
+    st.grades = cleanGrades(st.grades);
     return st;
   }
   /** The address someone can paste to a colleague. */
