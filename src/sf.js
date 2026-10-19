@@ -78,8 +78,54 @@ const sfLabel = r => [r.group, r.details !== '—' ? r.details : '', r.cond !== 
 
 // app material → representative official row
 const SF_MATROW = { carbon: { annealed: 2, treated: 7, _: 2 }, stainless: { aust: 14, mart: 12, _: 14 }, hardened: { le55: 38, gt55: 39, _: 38 }, castiron: { grey: 15, pearl: 16, _: 15 }, aluminum: { wrought: 22, cast: 23, hisi: 25, _: 22 }, brass: { _: 27 }, copper: { _: 28 }, titanium: { _: 37 }, hrsa: { ni: 34, co: 35, fe: 31, _: 34 }, plastic: { _: 29 }, other: { _: 2 }, carbide: { _: 39 } };
-const sfRowOf = st => st.sfRow ? sfRow(st.sfRow) : sfRowFor(st.material, st.sub);
-const sfRowFor = (mat, sub) => { const m = SF_MATROW[mat] || SF_MATROW.other; return sfRow(m[sub] || m._); };
+const sfRowOf = st => st.sfRow ? sfRow(st.sfRow) : sfRowFor(st.material, st.sub, st.grades);
+const sfRowFor = (mat, sub, grades) => {
+  const m = SF_MATROW[mat] || SF_MATROW.other; const def = sfRow(m[sub] || m._);
+  const rows = gradeRows(mat, sub, grades);
+  // every grade the customer named sits in one row → that row; a mix stays on the default,
+  // which for wrought aluminium is the hardenable (slower) row
+  return rows.length === 1 ? sfRow(rows[0]) : def;
+};
+
+/* ---------- Workpiece grades ----------
+   Customers name the alloy, and NOGA's table splits on it: wrought aluminium is
+   two rows, not hardenable (1xxx/3xxx/5xxx, e.g. 5083) and hardenable
+   (2xxx/6xxx/7xxx, e.g. 7075). "AW5083, AW7075 and 1.4301" once became one
+   "Aluminum (Wrought)" chip with the stainless dropped. */
+const AL_KNOWN = '1050|1100|1200|2011|2014|2017|2024|3003|3103|5005|5052|5083|5086|5182|5754|6005|6060|6061|6063|6082|7020|7050|7075';
+const SS_AUST = '4301|4303|4305|4306|4307|4401|4404|4435|4436|4438|4462|4539|4541|4571|4362';
+const SS_MART = '4005|4006|4021|4028|4034|4057|4104|4112|4122|4125|4542|4545';
+function gradeInfo(raw) {
+  const s = String(raw || '').trim(); let m;
+  if ((m = s.match(/^(?:EN\s*)?(?:A[\s-]?W|AA)?[\s-]?([1-8]\d{3})(?:[\s-]?[TH]\d{1,4})?$/i)) && (/A[\s-]?W|AA/i.test(s) || new RegExp('^(' + AL_KNOWN + ')$').test(m[1])))
+    return { g: 'AW-' + m[1], mat: 'aluminum', sub: 'wrought', row: /^[135]/.test(m[1]) ? 21 : 22 };
+  if ((m = s.match(/^1[.,]4(\d{3})$/))) {
+    if (new RegExp('^(' + SS_AUST + ')$').test('4' + m[1])) return { g: '1.4' + m[1], mat: 'stainless', sub: 'aust', row: 14 };
+    if (new RegExp('^(' + SS_MART + ')$').test('4' + m[1])) return { g: '1.4' + m[1], mat: 'stainless', sub: 'mart', row: 12 };
+  }
+  if ((m = s.match(/^(?:AISI|SUS|SS)?\s*(30[1-4]L?|31[06]L?|321)$/i)) && /AISI|SUS|SS|L$/i.test(s)) return { g: m[1].toUpperCase(), mat: 'stainless', sub: 'aust', row: 14 };
+  return null;
+}
+// every grade in a text, in reading order, each once
+function gradesIn(text) {
+  const re = new RegExp('\\b(?:EN\\s*)?A[\\s-]?W[\\s-]?[1-8]\\d{3}\\b|\\b(?:' + AL_KNOWN + ')(?:[\\s-]?T\\d{1,4})?\\b|\\b1[.,]4\\d{3}\\b|\\b(?:AISI|SUS|SS)\\s*(?:30[1-4]|31[06]|321)L?\\b', 'gi');
+  const out = [], seen = new Set();
+  for (const m of String(text || '').matchAll(re)) { if (/^20\d\d$/.test(m[0])) continue;   // a bare 2011/2014/2017/2024 is a year until it carries a temper (2024-T3) or an AW
+    const gi = gradeInfo(m[0].replace(/[\s-]?T\d{1,4}$/i, '')); if (gi && !seen.has(gi.g)) { seen.add(gi.g); out.push(Object.assign(gi, { bare: gi.mat === 'aluminum' && /^\d/.test(m[0]) })); } }
+  return out;
+}
+// the NOGA rows the named grades of this material fall in
+function gradeRows(mat, sub, grades) {
+  if (!Array.isArray(grades)) return [];
+  return [...new Set(grades.map(gradeInfo).filter(g => g && g.mat === mat && (!sub || g.sub === sub)).map(g => g.row))];
+}
+// keep only clean grade labels; known grades are written one way
+function cleanGrades(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  for (const x of list.slice(0, 8)) { const s = String(x || '').replace(/[^\w.,\s/-]/g, '').trim().slice(0, 20); if (!/\d/.test(s)) continue; const g = gradeInfo(s)?.g || s; if (!out.includes(g)) out.push(g); }
+  return out.length ? out.slice(0, 6) : null;
+}
 
 // NOGA Cross-Hole RPM Advisor constants
 const SF_GRITX = { 150: 1.15, 200: 1.12, 400: 1.08, 600: 1.04, 800: 1, 1000: .98, 1200: .96, 2000: .92, 3000: .88, 6000: .84 };
@@ -218,5 +264,5 @@ function sfDisc({ row, dia = 22, mode = 'deburr', maxRpm = null }) {
   return out;
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { sfShank, sfShankFits, SF_SHANKS, SF_ROWS, sfRow, sfRowFor, sfSurface, sfCross, sfPoint, sfEnd, sfDisc, sfLabel, SF_COOL, SF_GRITX, SF_SURF_WIN, SF_DISC, SF_DISC_OF, sfAdvisorSize, sfCrossFits };
+if (typeof module !== 'undefined' && module.exports) module.exports = { gradeInfo, gradesIn, gradeRows, cleanGrades, sfShank, sfShankFits, SF_SHANKS, SF_ROWS, sfRow, sfRowFor, sfSurface, sfCross, sfPoint, sfEnd, sfDisc, sfLabel, SF_COOL, SF_GRITX, SF_SURF_WIN, SF_DISC, SF_DISC_OF, sfAdvisorSize, sfCrossFits };
 

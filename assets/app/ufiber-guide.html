@@ -1214,6 +1214,16 @@ function finalize(R, st) {
   const mt = st.machine?.type;
   if (isLathe(mt) && !st.machine?.maxRpm && !['crosshole', 'shank', 'diamond'].includes(R.family) && R.params?.rpm > LIVE_TOOL.typical[0])
     R.notes.push(`This runs at ${R.params.rpm.toLocaleString()} RPM. Live tools on lathes are often limited to ${LIVE_TOOL.typical[0].toLocaleString()}–${LIVE_TOOL.typical[1].toLocaleString()} RPM; enter the station's maximum under Machine to check.`);
+  // grades of one material that sit in different NOGA rows (5083 not hardenable, 7075 hardenable)
+  const gRows = st.sfRow ? [] : gradeRows(st.material, st.sub, st.grades);
+  if (gRows.length > 1) {
+    const used = sfRow(R.sfRow || sfRowOf(st).id), pol = TASKS[st.task]?.mode === 'polish';
+    const byRow = gRows.map(id => ({ row: sfRow(id), gs: st.grades.filter(g => gradeInfo(g)?.row === id) }));
+    const vc = byRow.map(x => pol ? x.row.S.vcP : x.row.S.vcD), lo = Math.max(...vc.map(v => v[0])), hi = Math.min(...vc.map(v => v[1]));
+    R.notes.push(byRow.map(x => `${x.gs.join(', ')} is ${(x.row.details || '').toLowerCase()}`).join('; ') + ` — two rows in NOGA's table. ` +
+      (R.family === 'surface' || R.family === 'shank' ? (hi > lo ? `Their ${pol ? 'polishing' : 'deburring'} speeds overlap at Vc ${lo}–${hi} m/min, so one setup covers both. ` : '') : '') +
+      `This setup follows the ${(used.details || '').toLowerCase()} row (${used.grade}), the slower of the two.`);
+  }
   delete R.lower;
   if (R.conf.level === 'high' && !R.conf.reasons.length) R.conf.reasons.push('Selection follows the catalogue rules directly.');
   return R;
@@ -1283,10 +1293,21 @@ function parseText(text) {
   for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
   const hrc = t.match(/(\d{2})\s*hrc/i); if (hrc) { if (!out.material || out.material === 'carbon') out.material = 'hardened'; out.sub = Number(hrc[1]) > 55 ? 'gt55' : 'le55'; }
   if (out.material === 'carbon' && /(quench|tempered|heat[- ]treat|through[- ]hard)/i.test(t)) out.sub = 'treated';
+  // named grades pick the NOGA row; a second material named by grade is a second setup.
+  // A bare "2024" is only an alloy when the text is already about aluminium.
+  const hits = gradesIn(t).filter((g, _, all) => !g.bare || out.material === 'aluminum' || all.some(x => x.mat === 'aluminum' && !x.bare));
+  if (hits.length) {
+    const groups = []; hits.forEach(g => { if (!groups.some(x => x.mat === g.mat && x.sub === g.sub)) groups.push(g); });
+    // the first material the customer lists is set up first, unless every grade is the material already read
+    if (!(out.material && groups.every(g => g.mat === out.material))) { out.material = groups[0].mat; out.sub = groups[0].sub; }
+    out.grades = hits.filter(g => g.mat === out.material).map(g => g.g);
+    out.also = groups.filter(g => g.mat !== out.material).map(g => ({ material: g.mat, sub: g.sub, grades: hits.filter(h => h.mat === g.mat && h.sub === g.sub).map(h => h.g) }));
+    if (!out.also.length) delete out.also;
+  }
   // task / feature
   const isCross = /(cross|intersect|crossing|t-?junction|side hole|radial hole|meets? (a|the) bore|opens? (in|into) the (?:[^.\n]|\.\d){0,30}(hole|bore)|(hole|drill\w*)(?:[^.\n]|\.\d){0,25}\bon the (od|o\.d\.|outer diameter|diameter))/i.test(t);
   if (isCross) { out.task = 'crosshole'; out.feature = 'cross'; }
-  else if (/\b(edm|wire[- ]?cut|recast)\b/i.test(t) || out.material === 'carbide') out.task = 'hard';
+  else if (/(?<!\p{L})(edm|wire[- ]?cut|recast)(?!\p{L})/iu.test(t) || out.material === 'carbide') out.task = 'hard';   // \b is ASCII-only: Czech "Předmět" (Subject:) read as EDM
   else if (/(tool ?marks?|cutter ?marks?|mill(ing)? marks|\bra\b|roughness|scallop)/i.test(t)) out.task = 'marks';
   else if (/(polish|mirror|shine|lustre|luster|finish(ing)? the surface)/i.test(t)) out.task = 'polish';
   else if (/(edge break|break the edge|round(ing)? (the )?edge|radius the edge|blend)/i.test(t)) out.task = 'edge';
@@ -1368,7 +1389,7 @@ function parseText(text) {
   // explicit machines first; "today we deburr by hand" describes the current process, not the target machine
   if (/swiss|citizen|tsugami|star sr|star sb/i.test(t)) mc.type = 'swiss';
   else if (/robot|fanuc m-|kuka|abb irb|ur\d+e?\b|cobot/i.test(t)) mc.type = 'robot';
-  else if (/(machining cent|vmc|hmc|\bmill(ing machine)?\b|5-?axis|bt ?40|bt ?30|cat ?40|hsk|haas|mazak|dmg|okuma|doosan|hermle|robodrill|speedio|makino|vf-?\d)/i.test(t) && !/(lathe|turning cent)/i.test(t)) mc.type = 'mc';
+  else if (/(machining cent|vmc|hmc|\bmill\b|\bmill(?:ing)? (?:machine|cent(?:er|re))|cnc mill|5-?axis|bt ?40|bt ?30|cat ?40|hsk|haas|mazak|dmg|okuma|doosan|hermle|robodrill|speedio|makino|vf-?\d)/i.test(t) && !/(lathe|turning cent)/i.test(t)) mc.type = 'mc';
   else if (/(lathe|turning)/i.test(t)) mc.type = /(no live|without live|no driven)/i.test(t) ? 'lathe0' : 'lathe';
   else if (/(pneumatic|air[- ]?(powered|tool|grinder|die grinder|driven))/i.test(t)) mc.type = 'air';
   else if (/(dedicated machine|special[- ]purpose machine|transfer machine)/i.test(t)) mc.type = 'dedicated';
@@ -1466,8 +1487,54 @@ const sfLabel = r => [r.group, r.details !== '—' ? r.details : '', r.cond !== 
 
 // app material → representative official row
 const SF_MATROW = { carbon: { annealed: 2, treated: 7, _: 2 }, stainless: { aust: 14, mart: 12, _: 14 }, hardened: { le55: 38, gt55: 39, _: 38 }, castiron: { grey: 15, pearl: 16, _: 15 }, aluminum: { wrought: 22, cast: 23, hisi: 25, _: 22 }, brass: { _: 27 }, copper: { _: 28 }, titanium: { _: 37 }, hrsa: { ni: 34, co: 35, fe: 31, _: 34 }, plastic: { _: 29 }, other: { _: 2 }, carbide: { _: 39 } };
-const sfRowOf = st => st.sfRow ? sfRow(st.sfRow) : sfRowFor(st.material, st.sub);
-const sfRowFor = (mat, sub) => { const m = SF_MATROW[mat] || SF_MATROW.other; return sfRow(m[sub] || m._); };
+const sfRowOf = st => st.sfRow ? sfRow(st.sfRow) : sfRowFor(st.material, st.sub, st.grades);
+const sfRowFor = (mat, sub, grades) => {
+  const m = SF_MATROW[mat] || SF_MATROW.other; const def = sfRow(m[sub] || m._);
+  const rows = gradeRows(mat, sub, grades);
+  // every grade the customer named sits in one row → that row; a mix stays on the default,
+  // which for wrought aluminium is the hardenable (slower) row
+  return rows.length === 1 ? sfRow(rows[0]) : def;
+};
+
+/* ---------- Workpiece grades ----------
+   Customers name the alloy, and NOGA's table splits on it: wrought aluminium is
+   two rows, not hardenable (1xxx/3xxx/5xxx, e.g. 5083) and hardenable
+   (2xxx/6xxx/7xxx, e.g. 7075). "AW5083, AW7075 and 1.4301" once became one
+   "Aluminum (Wrought)" chip with the stainless dropped. */
+const AL_KNOWN = '1050|1100|1200|2011|2014|2017|2024|3003|3103|5005|5052|5083|5086|5182|5754|6005|6060|6061|6063|6082|7020|7050|7075';
+const SS_AUST = '4301|4303|4305|4306|4307|4401|4404|4435|4436|4438|4462|4539|4541|4571|4362';
+const SS_MART = '4005|4006|4021|4028|4034|4057|4104|4112|4122|4125|4542|4545';
+function gradeInfo(raw) {
+  const s = String(raw || '').trim(); let m;
+  if ((m = s.match(/^(?:EN\s*)?(?:A[\s-]?W|AA)?[\s-]?([1-8]\d{3})(?:[\s-]?[TH]\d{1,4})?$/i)) && (/A[\s-]?W|AA/i.test(s) || new RegExp('^(' + AL_KNOWN + ')$').test(m[1])))
+    return { g: 'AW-' + m[1], mat: 'aluminum', sub: 'wrought', row: /^[135]/.test(m[1]) ? 21 : 22 };
+  if ((m = s.match(/^1[.,]4(\d{3})$/))) {
+    if (new RegExp('^(' + SS_AUST + ')$').test('4' + m[1])) return { g: '1.4' + m[1], mat: 'stainless', sub: 'aust', row: 14 };
+    if (new RegExp('^(' + SS_MART + ')$').test('4' + m[1])) return { g: '1.4' + m[1], mat: 'stainless', sub: 'mart', row: 12 };
+  }
+  if ((m = s.match(/^(?:AISI|SUS|SS)?\s*(30[1-4]L?|31[06]L?|321)$/i)) && /AISI|SUS|SS|L$/i.test(s)) return { g: m[1].toUpperCase(), mat: 'stainless', sub: 'aust', row: 14 };
+  return null;
+}
+// every grade in a text, in reading order, each once
+function gradesIn(text) {
+  const re = new RegExp('\\b(?:EN\\s*)?A[\\s-]?W[\\s-]?[1-8]\\d{3}\\b|\\b(?:' + AL_KNOWN + ')(?:[\\s-]?T\\d{1,4})?\\b|\\b1[.,]4\\d{3}\\b|\\b(?:AISI|SUS|SS)\\s*(?:30[1-4]|31[06]|321)L?\\b', 'gi');
+  const out = [], seen = new Set();
+  for (const m of String(text || '').matchAll(re)) { if (/^20\d\d$/.test(m[0])) continue;   // a bare 2011/2014/2017/2024 is a year until it carries a temper (2024-T3) or an AW
+    const gi = gradeInfo(m[0].replace(/[\s-]?T\d{1,4}$/i, '')); if (gi && !seen.has(gi.g)) { seen.add(gi.g); out.push(Object.assign(gi, { bare: gi.mat === 'aluminum' && /^\d/.test(m[0]) })); } }
+  return out;
+}
+// the NOGA rows the named grades of this material fall in
+function gradeRows(mat, sub, grades) {
+  if (!Array.isArray(grades)) return [];
+  return [...new Set(grades.map(gradeInfo).filter(g => g && g.mat === mat && (!sub || g.sub === sub)).map(g => g.row))];
+}
+// keep only clean grade labels; known grades are written one way
+function cleanGrades(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  for (const x of list.slice(0, 8)) { const s = String(x || '').replace(/[^\w.,\s/-]/g, '').trim().slice(0, 20); if (!/\d/.test(s)) continue; const g = gradeInfo(s)?.g || s; if (!out.includes(g)) out.push(g); }
+  return out.length ? out.slice(0, 6) : null;
+}
 
 // NOGA Cross-Hole RPM Advisor constants
 const SF_GRITX = { 150: 1.15, 200: 1.12, 400: 1.08, 600: 1.04, 800: 1, 1000: .98, 1200: .96, 2000: .92, 3000: .88, 6000: .84 };
@@ -1606,7 +1673,7 @@ function sfDisc({ row, dia = 22, mode = 'deburr', maxRpm = null }) {
   return out;
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { sfShank, sfShankFits, SF_SHANKS, SF_ROWS, sfRow, sfRowFor, sfSurface, sfCross, sfPoint, sfEnd, sfDisc, sfLabel, SF_COOL, SF_GRITX, SF_SURF_WIN, SF_DISC, SF_DISC_OF, sfAdvisorSize, sfCrossFits };
+if (typeof module !== 'undefined' && module.exports) module.exports = { gradeInfo, gradesIn, gradeRows, cleanGrades, sfShank, sfShankFits, SF_SHANKS, SF_ROWS, sfRow, sfRowFor, sfSurface, sfCross, sfPoint, sfEnd, sfDisc, sfLabel, SF_COOL, SF_GRITX, SF_SURF_WIN, SF_DISC, SF_DISC_OF, sfAdvisorSize, sfCrossFits };
 
 /* ============================================================
    UFIBER Guide — UI part 1: helpers, icons, art and diagrams
@@ -1624,7 +1691,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.3';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.4';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -1973,7 +2040,7 @@ function heroArt() {
 function labelOf(k, st) {
   if (k === 'task') return TASKS[st.task]?.short;
   if (k === 'feature') return FEATURES[st.feature];
-  if (k === 'material') { const m = MATERIALS[st.material]; return m ? m.name + (st.sub && m.subs && m.subs[st.sub] ? ` (${m.subs[st.sub].split(' (')[0]})` : '') : null; }
+  if (k === 'material') { const m = MATERIALS[st.material]; return m ? m.name + (st.sub && m.subs && m.subs[st.sub] ? ` (${m.subs[st.sub].split(' (')[0]})` : '') + (st.grades?.length ? ' · ' + st.grades.join(' + ') : '') : null; }
   return null;
 }
 function renderUnderstood() {
@@ -2002,12 +2069,32 @@ function renderUnderstood() {
   if (picker === 'material') pick = `<p class="small" style="margin:12px 0 0"><b>Which material?</b></p><div class="mini-tiles">${Object.entries(MATERIALS).map(([k, m]) => `<button class="chip${st.material === k ? ' on' : ''}" data-set="material" data-v="${k}">${m.name}</button>`).join('')}</div>`;
   if (picker === 'feature') pick = `<p class="small" style="margin:12px 0 0"><b>Where is the feature?</b></p><div class="mini-tiles">${Object.entries(FEATURES).filter(([k]) => k !== 'cross' && k !== 'bore').map(([k, f]) => `<button class="chip${st.feature === k ? ' on' : ''}" data-set="feature" data-v="${k}">${f}</button>`).join('')}</div>`;
   el.innerHTML = `<div class="understood fade-in"><b>Here's what I understood</b> <span class="tiny">— tap anything to change it</span>
-    <div class="u-list">${chips.join('')}</div>${smartBlock()}${pick}
+    <div class="u-list">${chips.join('')}</div>${laterBlock(st)}${smartBlock()}${pick}
     <div class="row" style="margin-top:12px">${missing ? `<span class="small muted">${APP.smart.busy ? 'Filling in the gaps…' : 'One more answer and you\'re set.'}</span>` : ''}
     <button class="btn ghost small" id="goWiz">Refine step by step</button>
     <span id="goSlot" style="margin-left:auto"></span></div></div>`;
   const g = $('#goGroup'), slot = $('#goSlot'); if (g && slot) slot.appendChild(g);
   updateGo();
+}
+/* A job that names a second material ("AW5083, AW7075 and 1.4301") is two setups.
+   The other one is kept here, one tap away, instead of being dropped or asked about. */
+function laterLabel(x) { const m = MATERIALS[x.material]; return m ? m.name + (x.sub && m.subs?.[x.sub] ? ` (${m.subs[x.sub].split(' (')[0]})` : '') + (x.grades?.length ? ' · ' + x.grades.join(' + ') : '') : ''; }
+function laterBlock(st, big) {
+  const L = (st && Array.isArray(st.later) ? st.later : []).filter(x => MATERIALS[x.material]);
+  if (!L.length) return '';
+  const cur = laterLabel({ material: st.material, sub: st.sub, grades: st.grades });
+  return L.map((x, i) => big
+    ? `<div class="callout note">${I.info}<div><b>This setup is for ${esc(cur)}.</b>The job also names ${esc(laterLabel(x))}, which needs its own setup. <button class="btn small" data-later="${i}" style="margin-top:8px">Set up ${esc(MATERIALS[x.material].name.toLowerCase())} next ${I.arrow}</button></div></div>`
+    : `<div class="small" style="margin-top:10px">${I.info.replace('<svg', '<svg style="color:var(--warn);vertical-align:-3px" width="16" height="16"')} Also in this job: <b>${esc(laterLabel(x))}</b> — its own setup, after this one. <button class="btn ghost small" data-later="${i}">Set it up</button></div>`).join('');
+}
+function switchLater(i) {
+  const st = APP.ws, L = st?.later, x = L?.[i]; if (!x || !MATERIALS[x.material]) return;
+  const cur = st.material ? { material: st.material, sub: st.sub, grades: st.grades || null } : null;
+  st.material = x.material; st.sub = x.sub && MATERIALS[x.material].subs?.[x.sub] ? x.sub : null; st.grades = x.grades?.length ? x.grades : null;
+  delete st.sfRow; st.override = {};
+  L.splice(i, 1); if (cur) L.unshift(cur);
+  APP.editKey = null;
+  if (APP.view === 'result') route(); else renderUnderstood();
 }
 // One main button: "Read my application" until the reading is complete, then "Show my setup".
 function missingField(st) { return !st ? 'task' : (!st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null))); }
@@ -2039,6 +2126,8 @@ function doAsk(text, opt = {}) {
   if (p.machine) Object.assign(st.machine, p.machine);
   if (p.through) st.through = true;
   if (p.ra) st.dims.ra = p.ra;
+  if (p.grades?.length) st.grades = p.grades;
+  if (p.also?.length) st.later = p.also;
   // Offline domain model fills whatever the keyword rules did not catch.
   if (NLU.ready) {
     try {
@@ -2189,7 +2278,7 @@ function result() {
   const engageV = typeof p.engage.value === 'number' ? (p.engage.unit === 'mm' ? lenOut(p.engage.value) : p.engage.value) : esc(p.engage.value);
   const engageU = typeof p.engage.value === 'number' && p.engage.unit === 'mm' ? lenU() : esc(p.engage.unit || '');
   const est = p.est ? '<span class="est" title="Starting estimate — NOGA has not published this value">EST</span>' : '';
-  const summary = `${R.familyName}, ${diaOut(R.dia)}, #${R.grit.grit} for ${(MATERIALS[st.material]?.name || 'your material').toLowerCase()}.`;
+  const summary = `${R.familyName}, ${diaOut(R.dia)}, #${R.grit.grit} for ${(MATERIALS[st.material]?.name || 'your material').toLowerCase()}${st.grades?.length ? ' ' + st.grades.join(' + ') : ''}.`;
   const gritsAvail = R.family === 'diamond' ? STONE_GRITS : (R.family === 'disc' ? GRITS.filter(g => g.grit <= 1000) : (R.family === 'crosshole' && R.dia === 11 ? GRITS.filter(g => [600, 800, 1000].includes(g.grit)) : GRITS));
   const diasAvail = R.family === 'surface' || R.family === 'shank' ? [6, 15, 25, 40, 60, 100] : R.family === 'crosshole' ? [1.5, 3, 5, 7, 11] : R.family === 'point' ? [1, 1.5, 2, 2.5, 3] : R.family === 'disc' ? [13, 19, 22, 25, 30] : [];
   return `<div class="res-top">
@@ -2197,6 +2286,7 @@ function result() {
     <div class="row"><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing competitor ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
   </div>
   ${R.warnings.map(w => `<div class="callout warn">${I.warn}<div><b>${esc(w.t)}</b>${esc(w.d)}</div></div>`).join('')}
+  ${laterBlock(st, true)}
   <div class="grid2" style="margin-top:14px">
     <div>
       <section class="panel" aria-labelledby="tTool">
@@ -2269,7 +2359,8 @@ function setupText(R, extra = '') {
   const L = [];
   L.push('UFIBER SETUP SHEET'); L.push('');
   L.push(`Task: ${TASKS[st.task]?.name || ''}`); L.push(`Feature: ${FEATURES[R.inputs.feature] || ''}`);
-  L.push(`Material: ${MATERIALS[st.material]?.name || ''}${st.sub && MATERIALS[st.material]?.subs ? ' — ' + MATERIALS[st.material].subs[st.sub] : ''}`);
+  L.push(`Material: ${MATERIALS[st.material]?.name || ''}${st.sub && MATERIALS[st.material]?.subs ? ' — ' + MATERIALS[st.material].subs[st.sub] : ''}${st.grades?.length ? ' — ' + st.grades.join(', ') : ''}`);
+  if (st.later?.length) L.push(`Also in this job (separate setup): ${st.later.map(laterLabel).join('; ')}`);
   const dims = Object.entries(d).filter(([, v]) => v).map(([k, v]) => `${k} ${v}${k === 'ra' ? ' µm' : ' mm'}`).join(', '); if (dims) L.push(`Dimensions: ${dims}`);
   if (TASKS[st.task]?.mode === 'deburr') L.push(`Burr: ${st.burr}`);
   L.push(`Machine: ${MACHINES[st.machine.type]}${st.machine.maxRpm ? ', max ' + st.machine.maxRpm + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}`);
@@ -2677,8 +2768,9 @@ document.addEventListener('click', e => {
   if (d.task && t.classList.contains('tile') && !d.pick) { APP.ws = newState(); APP.ws.task = d.task; if (TASKS[d.task].feature) APP.ws.feature = TASKS[d.task].feature; APP.wizI = 1; go('find'); return; }
   if (d.recent) { const r = store.get('ufg_recent', [])[+d.recent]; if (r) { APP.ws = r.st; go('result'); } return; }
   if (t.id === 'clrRecent') { store.set('ufg_recent', []); rerender(); return; }
+  if (d.later !== undefined) { switchLater(+d.later); return; }
   if (d.edit) { APP.editKey = APP.editKey === d.edit ? null : d.edit; renderUnderstood(); return; }
-  if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') APP.ws.sub = null; if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
+  if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }
   if (t.id === 'goWiz') { APP.wizI = 0; go('find'); return; }
   // wizard
@@ -2687,7 +2779,7 @@ document.addEventListener('click', e => {
     if (d.pick === 'task') { st.feature = TASKS[d.v].feature || (['cross', 'bore'].includes(st.feature) ? null : st.feature); st.override = {}; }
     if (d.pick === 'feature' && d.v === 'cross') { st.task = 'crosshole'; }
     if (d.pick === 'feature' && d.v === 'bore') { st.task = 'id_finish'; }
-    if (d.pick === 'material') { st.sub = null; if (MATERIALS[d.v].subs) { route(); return; } }
+    if (d.pick === 'material') { st.sub = null; st.grades = null; if (MATERIALS[d.v].subs) { route(); return; } }
     APP.wizI = Math.min((APP.wizI || 0) + 1, wizSteps(st).length - 1); route(); return;
   }
   if (d.sub) { APP.ws.sub = APP.ws.sub === d.sub ? null : d.sub; document.querySelectorAll('[data-sub]').forEach(b => b.setAttribute('aria-pressed', b.dataset.sub === APP.ws.sub)); return; }
@@ -3492,7 +3584,9 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
 function applyAi(r) {
   const D = APP.doc; if (!r || typeof r !== 'object') { D.aiErr = 'No usable answer. Try again.'; return; }
   applyExtraction(r, null);
-  D.ai = { summary: String(r.summary || '').slice(0, 300), callouts: (Array.isArray(r.callouts) ? r.callouts : []).map(String).slice(0, 6), questions: (Array.isArray(r.questions) ? r.questions : []).map(q => typeof q === 'string' ? q : q && q.ask).filter(Boolean).slice(0, 3) };
+  const later = (APP.ws?.later || []).flatMap(x => x.grades || []).map(g => g.toLowerCase());
+  const aboutLater = q => later.some(g => q.toLowerCase().includes(g) || q.toLowerCase().replace(/[\s-]/g, '').includes(g.replace(/[\s-]/g, '')));
+  D.ai = { summary: String(r.summary || '').slice(0, 300), callouts: (Array.isArray(r.callouts) ? r.callouts : []).map(String).slice(0, 6), questions: (Array.isArray(r.questions) ? r.questions : []).map(q => typeof q === 'string' ? q : q && q.ask).filter(Boolean).filter(q => !aboutLater(q)).slice(0, 3) };
   APP.parsed = { ...(APP.parsed || {}), fromDoc: true };
   renderUnderstood();
 }
@@ -3700,6 +3794,8 @@ function extractionSpec() {
  "feature": ${enumKeys(FEATURES)} | null,
  "material": ${enumKeys(MATERIALS)} | null,
  "sub": material sub-type key if clear (carbon: annealed|treated; stainless: aust|mart; hardened: le55|gt55; castiron: grey|pearl; aluminum: wrought|cast|hisi; hrsa: ni|co|fe) or null,
+ "grades": [the workpiece grades named for THIS material, as written: "EN AW-5083", "AW7075", "1.4301", "316L"] or [],
+ "later": [every OTHER workpiece material the job names that this setup does not cover: {"material": ${enumKeys(MATERIALS)}, "sub": key or null, "grades": [...]}] or [],
  "burr": "light" | "medium" | "heavy" | null,
  "burrMm": burr height or thickness in mm if a number is stated, else null,
  "dims": {"main": mm|null, "cross": mm|null, "slotW": mm|null, "slotL": mm|null, "depth": mm|null, "width": mm|null, "groove": mm|null, "hole": mm|null, "ra": µm|null},
@@ -3711,7 +3807,9 @@ function extractionSpec() {
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole; "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
-Materials: 304/316/A2/A4 → stainless aust; 17-4/420/410 → stainless mart; 6061/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
+Several workpiece materials (e.g. "AW5083, AW7075 and stainless 1.4301"): set up ONE now and put each other one in "later". Pick the one the customer says to start with, reading the whole thread including quoted earlier messages and short answers like "-> aluminium, please"; otherwise the first one listed. Grades of the same material (5083 and 7075 are both wrought aluminium) stay together in "grades". Never ask whether a "later" material uses the same setup: it needs its own.
+Never ask about anything the text already answers, quoted replies included.
+Materials: 304/316/A2/A4/1.4301/1.4404 → stainless aust; 17-4/420/410 → stainless mart; EN AW-xxxx, 5083/6061/6082/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.
 Burr: light = thin, feathery, bends with a fingernail; heavy = thick, rolled, over ~0.2 mm at the root. A stated burr height or thickness goes in "burrMm" and sets "burr" (over 0.2 mm = heavy) — it is never a width, depth or hole size.
 Phrases about the CURRENT process ("today we deburr by hand") are not the target machine.
 THE TOOL IS NOT THE PART. A customer often names a tool they already have or want: a brush, hone, stone, 3/8" hone, "ceramic abrasive fiber", a grit number, an item code.
@@ -3760,8 +3858,17 @@ function applyExtraction(r, snapJson) {
   if (task && free('task')) { st.task = task; if (TASKS[task].feature) st.feature = TASKS[task].feature; }
   if (feature && free('feature') && !TASKS[st.task]?.feature) st.feature = feature;
   if (!st.feature && st.task) st.feature = SUGGEST_FEATURE[st.task] || null;
-  if (material && free('material')) { st.material = material; st.sub = MATERIALS[material].subs && MATERIALS[material].subs[r.sub] ? r.sub : null; }
+  if (material && free('material')) {
+    const same = st.material === material;
+    st.material = material; st.sub = MATERIALS[material].subs && MATERIALS[material].subs[r.sub] ? r.sub : null;
+    st.grades = cleanGrades(r.grades) || (same ? st.grades : null) || null;
+  }
   else if (st.material && r.sub && free('sub') && MATERIALS[st.material].subs?.[r.sub]) st.sub = r.sub;
+  if (Array.isArray(r.later) && free('material')) {
+    const L = r.later.filter(x => x && MATERIALS[x.material] && x.material !== st.material).slice(0, 3)
+      .map(x => ({ material: x.material, sub: MATERIALS[x.material].subs?.[x.sub] ? x.sub : null, grades: cleanGrades(x.grades) }));
+    st.later = L.length ? L : null;
+  }
   if (['light', 'medium', 'heavy'].includes(r.burr) && free('burr')) { st.burr = r.burr; APP.parsed = { ...(APP.parsed || {}), burr: r.burr }; }
   const bm = Number(r.burrMm);
   if (r.burrMm != null && isFinite(bm) && bm > 0 && bm < 20 && free('burr')) { st.burrMm = bm; st.burr = burrLevel(bm); APP.parsed = { ...(APP.parsed || {}), burr: st.burr }; }
@@ -3795,7 +3902,7 @@ function answerQuestion(i, value) {
   const q = APP.smart.questions[i]; if (!q) return; const st = APP.ws;
   if (q.field === 'task') { st.task = value; if (TASKS[value].feature) st.feature = TASKS[value].feature; else if (!st.feature) st.feature = SUGGEST_FEATURE[value] || null; }
   else if (q.field === 'feature') st.feature = value;
-  else if (q.field === 'material') { st.material = value; st.sub = null; }
+  else if (q.field === 'material') { st.material = value; st.sub = null; st.grades = null; }
   else if (q.field === 'sub') st.sub = value;
   else if (q.field === 'burr') { st.burr = value; APP.parsed = { ...(APP.parsed || {}), burr: value }; }
   else if (q.field === 'machine') { st.machine.type = value; APP.parsed = { ...(APP.parsed || {}), machine: { type: value } }; }
@@ -3812,7 +3919,7 @@ function offlineQuestions() {
 function answerOffline(i, value) {
   const q = APP.oq?.[i]; if (!q) return; const st = APP.ws;
   if (q.field === 'task') { st.task = value; if (TASKS[value].feature) st.feature = TASKS[value].feature; else if (!st.feature) st.feature = SUGGEST_FEATURE[value] || null; }
-  else if (q.field === 'material') { st.material = value; st.sub = null; }
+  else if (q.field === 'material') { st.material = value; st.sub = null; st.grades = null; }
   else if (q.field === 'burr') { st.burr = value; APP.parsed = { ...(APP.parsed || {}), burr: value }; }
   else if (q.field === 'machine') { st.machine.type = value; APP.parsed = { ...(APP.parsed || {}), machine: { type: value } }; }
   else if (q.field === 'main') { const v = lenIn(value); if (!v) return; st.dims.main = v; }
@@ -3838,7 +3945,7 @@ function compactRec(R) {
 function aiContext() {
   const st = APP.ws, R = APP.rec; const row = R?.sfRow ? sfRow(R.sfRow) : null;
   const ctx = {
-    job: { task: TASKS[st.task]?.name, feature: FEATURES[R?.inputs?.feature] || null, material: MATERIALS[st.material]?.name, material_subtype: st.sub && MATERIALS[st.material]?.subs ? MATERIALS[st.material].subs[st.sub] : null, noga_table_row: row ? `${row.id}: ${sfLabel(row)} (ISO ${row.iso})` : null, burr: TASKS[st.task]?.mode === 'deburr' ? st.burr : null, dims_mm: st.dims, machine: { type: MACHINES[st.machine.type], max_rpm: st.machine.maxRpm || null, taper: st.machine.iface || null, uneven_or_long_run: !!st.machine.uneven }, user_description: APP.askText || null, replacing_competitor: st.fromX || null },
+    job: { task: TASKS[st.task]?.name, feature: FEATURES[R?.inputs?.feature] || null, material: MATERIALS[st.material]?.name, material_subtype: st.sub && MATERIALS[st.material]?.subs ? MATERIALS[st.material].subs[st.sub] : null, material_grades: st.grades || null, other_materials_separate_setup: st.later?.length ? st.later.map(laterLabel) : null, noga_table_row: row ? `${row.id}: ${sfLabel(row)} (ISO ${row.iso})` : null, burr: TASKS[st.task]?.mode === 'deburr' ? st.burr : null, dims_mm: st.dims, machine: { type: MACHINES[st.machine.type], max_rpm: st.machine.maxRpm || null, taper: st.machine.iface || null, uneven_or_long_run: !!st.machine.uneven }, user_description: APP.askText || null, replacing_competitor: st.fromX || null },
     current_setup: compactRec(R),
     steps: R?.steps || [],
     similar_cases: (APP.matches || []).map(c => ({ id: c.id, source: c.src === 'noga' ? 'NOGA test' : 'reference application', part: c.part, material: c.mat, tool: c.tool, rpm: c.rpm, feed: c.feed, doc: c.doc, result: c.after, lesson: c.lesson })),
@@ -3930,7 +4037,7 @@ function variantState(ch = {}) {
   const st = JSON.parse(JSON.stringify(APP.ws)); st.override = { ...(st.override || {}) };
   if (ch.task && TASKS[ch.task]) { st.task = ch.task; if (TASKS[ch.task].feature) st.feature = TASKS[ch.task].feature; }
   if (ch.feature && FEATURES[ch.feature]) st.feature = ch.feature;
-  if (ch.material && MATERIALS[ch.material]) { st.material = ch.material; st.sub = null; delete st.sfRow; }
+  if (ch.material && MATERIALS[ch.material]) { st.material = ch.material; st.sub = null; st.grades = null; delete st.sfRow; }
   if (ch.material_sub && MATERIALS[st.material]?.subs?.[ch.material_sub]) { st.sub = ch.material_sub; delete st.sfRow; }
   if (['light', 'medium', 'heavy'].includes(ch.burr)) st.burr = ch.burr;
   if (ch.machine_type && MACHINES[ch.machine_type]) st.machine.type = ch.machine_type;
@@ -4023,7 +4130,7 @@ const SHARE = (() => {
   const b64e = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const b64d = (s) => decodeURIComponent(escape(atob(s.replace(/-/g, '+').replace(/_/g, '/'))));
   // short keys keep the link readable
-  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x', through: 'w' };
+  const K = { task: 't', feature: 'f', material: 'm', sub: 's', burr: 'b', burrMm: 'h', dims: 'd', machine: 'c', override: 'o', sfRow: 'r', fromX: 'x', through: 'w', grades: 'g' };
 
   function encode(st) {
     if (!st || !st.task) return '';
@@ -4032,6 +4139,7 @@ const SHARE = (() => {
       const v = st[long];
       if (v === null || v === undefined || v === '') continue;
       if (typeof v === 'object' && !Object.keys(v).length) continue;
+      if ((long === 'burr' || long === 'burrMm') && TASKS[st.task]?.mode !== 'deburr') continue;
       out[short] = v;
     }
     try { return b64e(JSON.stringify(out)); } catch (e) { return ''; }
@@ -4062,6 +4170,7 @@ const SHARE = (() => {
     if (st.override.grit && !GRITS.some(g => g.grit === st.override.grit) && !STONE_GRITS.some(g => g.grit === st.override.grit)) delete st.override.grit;
     if (st.fromX && typeof st.fromX !== 'string') delete st.fromX;
     if (st.through !== undefined) st.through = st.through === true;
+    st.grades = cleanGrades(st.grades);
     return st;
   }
   /** The address someone can paste to a colleague. */

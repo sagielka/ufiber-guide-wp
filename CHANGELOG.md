@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.4 – 2026-10-19
+- Workpiece grades are read and kept. "AW5083, AW7075" shows as
+  "Aluminum (Wrought) · AW-5083 + AW-7075" on the chip, in the setup summary,
+  in shared links and in the text sent to the AI chat.
+- The grade picks NOGA's row. Wrought aluminium is two rows: 5083 (and other
+  1xxx/3xxx/5xxx grades) now runs on the not-hardenable row, 7075 (2xxx/6xxx/
+  7xxx) on the hardenable one. A mix stays on the slower hardenable row and
+  says so, with the speed overlap taken from the table (Vc 165–320 m/min for
+  5083 + 7075 polishing).
+- A second material in the same job is no longer dropped. "AW5083, AW7075 and
+  stainless 1.4301" sets up the aluminium and keeps the stainless as "Also in
+  this job". One tap sets it up next, and the aluminium waits its turn.
+- The AI reading picks the material the customer said to start with, quoted
+  replies included, and no longer asks whether another material shares the
+  setup. A question about a material that already has its own setup is dropped.
+- Offline reading: the Czech "Předmět:" (Subject) header read as EDM and made
+  the job "Hard / EDM"; "CNC milling center" now reads as a machining centre;
+  a bare 2024 is a year unless it carries a temper or an AW.
+- A link to a polishing setup no longer carries a burr level.
+
 ## 1.6.3 – 2026-10-16
 - Cross-hole jobs on a lathe or Swiss-type machine get their own setup. The
   steps stop and lock the main spindle, put the brush in an axial live tool on
