@@ -1244,7 +1244,7 @@ const MAT_WORDS = [
   [/\b(copper|cu\b|c110)\b/i, 'copper'],
   [/\b(cast iron|grey iron|gray iron|ductile|nodular|gg25|ggg)\b/i, 'castiron'],
   [/\b(hardened|hrc|tool steel|d2|h13|skd|nak|m2|hss)\b/i, 'hardened'],
-  [/\b(peek|delrin|pom|nylon|pa6|abs|plastic|composite|cfrp|gfrp|resin|acetal|ptfe|pp\b)\b/i, 'plastic'],
+  [/\b(peek|delrin|pom(-?c)?|nylon|pa6|abs|(engineering |thermo)?plastics?|composites?|cfrp|gfrp|resins?|acetal|ptfe|n?pp|pp-?[hc]|polypropylene|polyethylene|polyester|polycarbonate|polymers?|pet(-?p)?|pbt|hdpe|ldpe|uhmw(-?pe)?|pvdf|pfa|fep|pvc|cpvc|pps|pei|ultem|pai|torlon|ertalyte|ketron|techtron|duratron|fluorosint|semitron|vespel|polyimide)\b/i, 'plastic'],
   [/\b(steel|4140|1045|s45c|scm|en8|en24|1018|a36|carbon)\b/i, 'carbon'],
 ];
 /* Email signatures are full of numbers that look like material grades: a phone
@@ -1273,8 +1273,16 @@ function dedupeDims(st) {
    phrases out before anything looks for a material. */
 function scrubToolWords(s) {
   return String(s)
+    // "we need fine grits type ceramic", "ceramic grit": the brush again, not the part
+    .replace(/\b(?:fine|coarse|medium)?\s*grits?\s*(?:type\s*)?(?:of\s*)?(?:ceramic|diamond|carbide)\b/gi, ' ')
+    .replace(/\b(?:ceramic|diamond|carbide)\s*(?:type|grits?|abrasive|media)\b/gi, ' ')
     .replace(/\b(ceramic|diamond|carbide|abrasive|nylon|aluminium oxide|aluminum oxide|silicon carbide|cbn)[\w\s-]{0,24}?(fib(?:er|re)s?|brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|tool|bristle)/gi, ' ')
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
+}
+/* "Case 1 … Case 2 …": one email, several jobs. The guide sets up one at a time. */
+function caseCount(text) {
+  const n = new Set([...String(text || '').matchAll(/(?:^|\n)\s*(?:case|part|application|job)\s*(?:no\.?|#)?\s*(\d{1,2})\b/gi)].map(m => +m[1]));
+  return n.size;
 }
 const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
 function burrSize(t) {
@@ -1289,8 +1297,15 @@ const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
   const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
-  // material
-  for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
+  // material. A labelled line ("Material : PET-P", "all part materials are
+  // engineering plastics") says what the part is made of; other mentions can be
+  // anything ("they use sandpaper on stainless and plastic"), so the label wins.
+  const labelled = [...t.matchAll(/\bmaterials?\b[^\n:=]{0,20}?(?:[:=]|\bis\b|\bare\b)\s*([^\n;]{1,60})/gi)].map(x => ' ' + x[1].split(/\.(?:\s|$)/)[0] + ' ');
+  for (const seg of labelled) {
+    for (const [re, m, sub] of MAT_WORDS) { if (re.test(seg)) { out.material = m; if (sub) out.sub = sub; break; } }
+    if (out.material) break;
+  }
+  if (!out.material) for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
   const hrc = t.match(/(\d{2})\s*hrc/i); if (hrc) { if (!out.material || out.material === 'carbon') out.material = 'hardened'; out.sub = Number(hrc[1]) > 55 ? 'gt55' : 'le55'; }
   if (out.material === 'carbon' && /(quench|tempered|heat[- ]treat|through[- ]hard)/i.test(t)) out.sub = 'treated';
   // named grades pick the NOGA row; a second material named by grade is a second setup.
@@ -1691,7 +1706,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.4';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.5';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3198,8 +3213,8 @@ if (typeof module !== 'undefined') module.exports = { USAGE };
 /* Outlook .msg reader.
    A .msg is an OLE compound file, not text. Reading it as text produces numbers
    that are not in the message, so the guide parses the container properly and
-   pulls out the subject and body streams. If that fails it says so rather than
-   guessing. */
+   pulls out the subject, the body and the attachments (pictures pasted into the
+   body are attachments too). If that fails it says so rather than guessing. */
 function msgRead(buf) {
   const d = new DataView(buf), u8 = new Uint8Array(buf);
   if (buf.byteLength < 512) return null;
@@ -3258,10 +3273,22 @@ function msgRead(buf) {
     if (!nameLen) { entries.push(null); continue; }
     let name = '';
     for (let i = 0; i < nameLen - 2; i += 2) name += String.fromCharCode(dv.getUint16(p + i, true));
-    entries.push({ name, type: dv.getUint8(p + 0x42), start: dv.getUint32(p + 0x74, true), size: dv.getUint32(p + 0x78, true) });
+    entries.push({ name, type: dv.getUint8(p + 0x42), left: dv.getUint32(p + 0x44, true), right: dv.getUint32(p + 0x48, true),
+      child: dv.getUint32(p + 0x4c, true), start: dv.getUint32(p + 0x74, true), size: dv.getUint32(p + 0x78, true) });
   }
   const root = entries.find(e => e && e.type === 5);
   if (!root) return null;
+  // the children of a storage sit in a sibling tree under its child pointer
+  const kids = (parent) => {
+    const out = [], seen = new Set();
+    const visit = (j) => {
+      if (j == null || j >= entries.length || !entries[j] || seen.has(j) || seen.size > 4096) return;
+      seen.add(j); visit(entries[j].left); out.push(entries[j]); visit(entries[j].right);
+    };
+    visit(parent.child);
+    return out;
+  };
+  const top = kids(root);
 
   // small streams live inside the root's mini stream
   let miniData = null, miniFat = null;
@@ -3284,7 +3311,10 @@ function msgRead(buf) {
     }
     return out.subarray(0, e.size);
   };
-  const find = (suffix) => entries.find(e => e && e.type === 2 && e.name.indexOf(suffix) >= 0);
+  // the message's own properties are direct children of the root; an attached
+  // e-mail carries its own subject and body deeper in the tree
+  const findIn = (list, suffix) => list.find(e => e && e.type === 2 && e.name.indexOf(suffix) >= 0);
+  const find = (suffix) => findIn(top, suffix) || (top.length ? null : findIn(entries, suffix));
   const text = (e) => {
     if (!e) return '';
     const b = readStream(e);
@@ -3304,8 +3334,19 @@ function msgRead(buf) {
     if (h) body = text(h).replace(/<[^>]+>/g, ' ');
   }
   const clean = (s) => s.replace(/\u0000/g, '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
-  const out = { subject: clean(subject), body: clean(body) };
-  if (!out.subject && !out.body) return null;
+  // Attachments, including pictures pasted into the body: each is a storage
+  // __attach_version1.0_#… holding the bytes (3701 0102), a file name and a type.
+  const files = [];
+  for (const a of top) {
+    if (!a || a.type !== 1 || a.name.indexOf('__attach_version1.0_') !== 0) continue;
+    const ch = kids(a), data = findIn(ch, '__substg1.0_37010102');
+    if (!data || !data.size) continue;                      // embedded messages and links have no byte stream
+    const fname = clean(text(findIn(ch, '__substg1.0_3707001F')) || text(findIn(ch, '__substg1.0_3704001F')) || text(findIn(ch, '__substg1.0_3707001E')) || '');
+    const mime = clean(text(findIn(ch, '__substg1.0_370E001F')) || text(findIn(ch, '__substg1.0_370E001E')) || '').toLowerCase();
+    files.push({ name: fname, mime, size: data.size, bytes: readStream(data) });
+  }
+  const out = { subject: clean(subject), body: clean(body), files };
+  if (!out.subject && !out.body && !files.length) return null;
   return out;
 }
 if (typeof module !== 'undefined') module.exports = { msgRead };
@@ -3462,15 +3503,31 @@ function parseEml(raw) {
   res.body = text.replace(/\n{3,}/g, '\n\n').trim();
   return res;
 }
-function msgText(buf) {
-  // A .msg is an OLE compound file. Parse the container and take the real
-  // subject and body; scraping the raw bytes invents numbers that are not in
-  // the message, which is worse than reading nothing.
-  try {
-    const m = msgRead(buf);
-    if (m && (m.body || m.subject)) return ((m.subject ? 'Subject: ' + m.subject + '\n\n' : '') + m.body).slice(0, 8000);
-  } catch (e) { }
-  return '';
+function msgText(buf) { return msgOpen(buf).text; }
+/* A .msg is an OLE compound file. Parse the container and take the real
+   subject, body and attachments; scraping the raw bytes invents numbers that
+   are not in the message, which is worse than reading nothing.
+   Pictures pasted into an Outlook body are attachments too, and they are
+   usually the drawing. Signature logos are small, so pictures under 12 kB are
+   left out, and the largest few are kept. */
+function msgOpen(buf) {
+  let m = null;
+  try { m = msgRead(buf); } catch (e) { }
+  if (!m) return { text: '', files: [], skipped: 0 };
+  const text = (m.subject || m.body) ? ((m.subject ? 'Subject: ' + m.subject + '\n\n' : '') + m.body).slice(0, 8000) : '';
+  const useful = (m.files || []).filter(a => {
+    const n = (a.name || '').toLowerCase();
+    const pdf = a.mime.includes('pdf') || n.endsWith('.pdf');
+    const img = a.mime.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/.test(n);
+    return pdf || (img && a.size >= 12000);
+  }).sort((a, b) => b.size - a.size);
+  const keep = useful.slice(0, 4);
+  const files = keep.map((a, i) => {
+    const n = a.name || ('attachment-' + (i + 1) + (a.mime.includes('pdf') ? '.pdf' : a.mime.includes('jpeg') ? '.jpg' : '.png'));
+    const type = a.mime || (/\.pdf$/i.test(n) ? 'application/pdf' : /\.jpe?g$/i.test(n) ? 'image/jpeg' : 'image/png');
+    return new File([a.bytes], n, { type });
+  });
+  return { text, files, skipped: useful.length - keep.length };
 }
 function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('load ' + src)); document.head.appendChild(s); }); }
 async function pdfLib() {
@@ -3533,9 +3590,11 @@ async function addFiles(fileList) {
         entry.status = `Email read${e.files.length ? ` — ${e.files.length} attachment${e.files.length > 1 ? 's' : ''} found` : ''}`;
         if (e.files.length) { renderAttach(); await addFiles(e.files); }
       } else if (entry.kind === 'msg') {
-        const t = msgText(await f.arrayBuffer()); D.text += `EMAIL (Outlook .msg)\n${t}\n\n`;
-        entry.status = t ? 'Email text extracted. Attachments inside .msg aren\'t opened — drop the drawing file too.'
-          : 'This .msg could not be read. Paste the email text into the box instead — guessing from the file would invent numbers.';
+        const o = msgOpen(await f.arrayBuffer()), t = o.text; D.text += `EMAIL (Outlook .msg)\n${t}\n\n`;
+        const n = o.files.length;
+        entry.status = !t && !n ? 'This .msg could not be read. Paste the email text into the box instead — guessing from the file would invent numbers.'
+          : (t ? 'Email read' : 'No email text found') + (n ? ` — ${n} picture${n > 1 ? 's' : ''} / drawing${n > 1 ? 's' : ''} found${o.skipped ? ` (the ${n} largest)` : ''}` : ' — no drawings inside. If there is one, drop it too.');
+        if (n) { renderAttach(); await addFiles(o.files); }
       } else if (entry.kind === 'html') { D.text += htmlText(await f.text()) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'text') { D.text += (await f.text()).slice(0, 20000) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'pdf') {
@@ -3547,6 +3606,7 @@ async function addFiles(fileList) {
     } catch (err) { entry.status = entry.kind === 'pdf' ? 'Couldn\'t open this PDF here. Try a screenshot of the drawing instead.' : 'Couldn\'t read this file.'; entry.err = true; }
     renderAttach();
   }
+  D.cases = caseCount(D.text);
   // local reading straight away — free and instant
   if (D.text.trim()) { const ex = excerpt(D); const ta = $('#askT'); if (ta) ta.value = ex; doAsk(ex, { ai: false }); }
   renderAttach();
@@ -3577,7 +3637,10 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     applyAi(r);
   } catch (e) {
     const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.' }[e && e.code];
-    D.aiErr = msg === undefined ? 'Something went wrong reading the document. Try again.' : msg;
+    // say why: a bare "something went wrong" can't be acted on or reported
+    const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
+    if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }
+    D.aiErr = msg === undefined ? `Something went wrong reading the document${why ? ` (${why})` : ''}. Try again.` : msg;
     if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null;
   } finally { D.aiBusy = false; renderAttach(); updateGo(); }
 }
@@ -3610,6 +3673,7 @@ function renderAttach() {
     ${canAi && !busy && (D.aiErr || (hasImg && !imgOk)) ? `<div class="att-ai">${hasImg && !imgOk ? '<p class="tiny" style="margin:6px 0 0">This view can\'t send images to Claude — only the text will be read.</p>' : ''}
       ${D.aiErr ? `<div class="callout warn">${I.warn}<div>${esc(D.aiErr)}</div></div>` : ''}</div>`
       : (!canAi && hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
+    ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.</div></div>` : ''}
     ${D.ai ? `<div class="att-res">${D.ai.summary ? `<p style="margin:0 0 8px"><b>Customer need:</b> ${esc(D.ai.summary)}</p>` : ''}
       ${D.ai.callouts.length ? `<div class="tiny" style="margin-top:6px">From the email / drawing</div><ul class="watch" style="margin-top:4px">${D.ai.callouts.map(c => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${esc(c)}</span></li>`).join('')}</ul>` : ''}
       ${D.ai.questions.length ? `<div class="tiny" style="margin-top:10px">Still unknown — ask the customer</div><ul class="watch" style="margin-top:4px">${D.ai.questions.map(c => `<li>${I.info.replace('<svg', '<svg style="color:var(--warn)"')}<span>${esc(c)}</span></li>`).join('')}</ul><button class="btn ghost small" id="copyQs" style="margin-top:6px">${I.copy} Copy questions</button>` : ''}</div>` : ''}
@@ -4334,7 +4398,7 @@ const NLU = (() => {
     NUMRE.lastIndex = 0;
     while ((m = NUMRE.exec(text))) {
       const r = top('numrole', numContext(text, m.index, m.index + m[0].length));
-      out.nums.push({ value: parseFloat(m[0].replace(',', '.')), raw: m[0], role: val(r, 'numrole'), p: r.p });
+      out.nums.push({ value: parseFloat(m[0].replace(',', '.')), raw: m[0], at: m.index, role: val(r, 'numrole'), p: r.p });
     }
     return out;
   }
@@ -4369,8 +4433,20 @@ const NLU = (() => {
     for (const [k, v] of Object.entries(dims)) if (st.dims[k] === undefined) st.dims[k] = v;
     // Cross-hole work needs two diameters. If the model only placed one, fall back to
     // the plain reading: the brush enters the larger hole, the smaller one crosses it.
+    // Only numbers that are sizes count: the model placed them as one, or they carry
+    // Ø / dia / mm / ". "BT40" and the part number "15-430509-00" once became a
+    // Ø40 bore with a Ø15 cross hole.
+    const SIZE_ROLES = ['main', 'cross', 'hole', 'width', 'depth', 'groove'];
+    const isSize = (n) => {
+      if (SIZE_ROLES.includes(n.role)) return true;
+      if (n.at == null) return false;
+      const b = text.slice(Math.max(0, n.at - 8), n.at), a = text.slice(n.at + n.raw.length, n.at + n.raw.length + 6);
+      if (/[A-Za-z]$/.test(b) && !/(?:dia|ø|Ø)\.?$/i.test(b)) return false;          // BT40, M16, R8
+      if (/\d-$/.test(b) || /^-\d/.test(a)) return false;                              // 15-430509-00
+      return /(?:[øØ⌀]|\bdia(?:meter)?\.?)\s*$/i.test(b) || /^\s*(?:mm\b|")/i.test(a);
+    };
     if (st.task === 'crosshole' && !(st.dims.main && st.dims.cross)) {
-      const cand = p.nums.map(n => n.value).filter(v => v >= 0.5 && v <= 60 && !['rpm', 'hrc', 'qty', 'feed', 'ra', 'grit'].includes(p.nums.find(x => x.value === v)?.role));
+      const cand = p.nums.filter(n => n.value >= 0.5 && n.value <= 60 && isSize(n)).map(n => n.value);
       const uniq = [...new Set(cand)].sort((x, y) => y - x);
       if (uniq.length >= 2) { st.dims.main = uniq[0]; st.dims.cross = uniq[1]; }
     }

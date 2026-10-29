@@ -755,7 +755,7 @@ const MAT_WORDS = [
   [/\b(copper|cu\b|c110)\b/i, 'copper'],
   [/\b(cast iron|grey iron|gray iron|ductile|nodular|gg25|ggg)\b/i, 'castiron'],
   [/\b(hardened|hrc|tool steel|d2|h13|skd|nak|m2|hss)\b/i, 'hardened'],
-  [/\b(peek|delrin|pom|nylon|pa6|abs|plastic|composite|cfrp|gfrp|resin|acetal|ptfe|pp\b)\b/i, 'plastic'],
+  [/\b(peek|delrin|pom(-?c)?|nylon|pa6|abs|(engineering |thermo)?plastics?|composites?|cfrp|gfrp|resins?|acetal|ptfe|n?pp|pp-?[hc]|polypropylene|polyethylene|polyester|polycarbonate|polymers?|pet(-?p)?|pbt|hdpe|ldpe|uhmw(-?pe)?|pvdf|pfa|fep|pvc|cpvc|pps|pei|ultem|pai|torlon|ertalyte|ketron|techtron|duratron|fluorosint|semitron|vespel|polyimide)\b/i, 'plastic'],
   [/\b(steel|4140|1045|s45c|scm|en8|en24|1018|a36|carbon)\b/i, 'carbon'],
 ];
 /* Email signatures are full of numbers that look like material grades: a phone
@@ -784,8 +784,16 @@ function dedupeDims(st) {
    phrases out before anything looks for a material. */
 function scrubToolWords(s) {
   return String(s)
+    // "we need fine grits type ceramic", "ceramic grit": the brush again, not the part
+    .replace(/\b(?:fine|coarse|medium)?\s*grits?\s*(?:type\s*)?(?:of\s*)?(?:ceramic|diamond|carbide)\b/gi, ' ')
+    .replace(/\b(?:ceramic|diamond|carbide)\s*(?:type|grits?|abrasive|media)\b/gi, ' ')
     .replace(/\b(ceramic|diamond|carbide|abrasive|nylon|aluminium oxide|aluminum oxide|silicon carbide|cbn)[\w\s-]{0,24}?(fib(?:er|re)s?|brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|tool|bristle)/gi, ' ')
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
+}
+/* "Case 1 … Case 2 …": one email, several jobs. The guide sets up one at a time. */
+function caseCount(text) {
+  const n = new Set([...String(text || '').matchAll(/(?:^|\n)\s*(?:case|part|application|job)\s*(?:no\.?|#)?\s*(\d{1,2})\b/gi)].map(m => +m[1]));
+  return n.size;
 }
 const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
 function burrSize(t) {
@@ -800,8 +808,15 @@ const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
   const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
   const out = { understood: [] };
-  // material
-  for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
+  // material. A labelled line ("Material : PET-P", "all part materials are
+  // engineering plastics") says what the part is made of; other mentions can be
+  // anything ("they use sandpaper on stainless and plastic"), so the label wins.
+  const labelled = [...t.matchAll(/\bmaterials?\b[^\n:=]{0,20}?(?:[:=]|\bis\b|\bare\b)\s*([^\n;]{1,60})/gi)].map(x => ' ' + x[1].split(/\.(?:\s|$)/)[0] + ' ');
+  for (const seg of labelled) {
+    for (const [re, m, sub] of MAT_WORDS) { if (re.test(seg)) { out.material = m; if (sub) out.sub = sub; break; } }
+    if (out.material) break;
+  }
+  if (!out.material) for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
   const hrc = t.match(/(\d{2})\s*hrc/i); if (hrc) { if (!out.material || out.material === 'carbon') out.material = 'hardened'; out.sub = Number(hrc[1]) > 55 ? 'gt55' : 'le55'; }
   if (out.material === 'carbon' && /(quench|tempered|heat[- ]treat|through[- ]hard)/i.test(t)) out.sub = 'treated';
   // named grades pick the NOGA row; a second material named by grade is a second setup.

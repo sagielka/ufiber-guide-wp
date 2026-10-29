@@ -127,7 +127,7 @@ const NLU = (() => {
     NUMRE.lastIndex = 0;
     while ((m = NUMRE.exec(text))) {
       const r = top('numrole', numContext(text, m.index, m.index + m[0].length));
-      out.nums.push({ value: parseFloat(m[0].replace(',', '.')), raw: m[0], role: val(r, 'numrole'), p: r.p });
+      out.nums.push({ value: parseFloat(m[0].replace(',', '.')), raw: m[0], at: m.index, role: val(r, 'numrole'), p: r.p });
     }
     return out;
   }
@@ -162,8 +162,20 @@ const NLU = (() => {
     for (const [k, v] of Object.entries(dims)) if (st.dims[k] === undefined) st.dims[k] = v;
     // Cross-hole work needs two diameters. If the model only placed one, fall back to
     // the plain reading: the brush enters the larger hole, the smaller one crosses it.
+    // Only numbers that are sizes count: the model placed them as one, or they carry
+    // Ø / dia / mm / ". "BT40" and the part number "15-430509-00" once became a
+    // Ø40 bore with a Ø15 cross hole.
+    const SIZE_ROLES = ['main', 'cross', 'hole', 'width', 'depth', 'groove'];
+    const isSize = (n) => {
+      if (SIZE_ROLES.includes(n.role)) return true;
+      if (n.at == null) return false;
+      const b = text.slice(Math.max(0, n.at - 8), n.at), a = text.slice(n.at + n.raw.length, n.at + n.raw.length + 6);
+      if (/[A-Za-z]$/.test(b) && !/(?:dia|ø|Ø)\.?$/i.test(b)) return false;          // BT40, M16, R8
+      if (/\d-$/.test(b) || /^-\d/.test(a)) return false;                              // 15-430509-00
+      return /(?:[øØ⌀]|\bdia(?:meter)?\.?)\s*$/i.test(b) || /^\s*(?:mm\b|")/i.test(a);
+    };
     if (st.task === 'crosshole' && !(st.dims.main && st.dims.cross)) {
-      const cand = p.nums.map(n => n.value).filter(v => v >= 0.5 && v <= 60 && !['rpm', 'hrc', 'qty', 'feed', 'ra', 'grit'].includes(p.nums.find(x => x.value === v)?.role));
+      const cand = p.nums.filter(n => n.value >= 0.5 && n.value <= 60 && isSize(n)).map(n => n.value);
       const uniq = [...new Set(cand)].sort((x, y) => y - x);
       if (uniq.length >= 2) { st.dims.main = uniq[0]; st.dims.cross = uniq[1]; }
     }

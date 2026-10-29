@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.6.5 – 2026-10-30
+- Outlook .msg files now give up their pictures. A drawing pasted into the
+  email body is stored as an attachment inside the .msg; it is read out and
+  passed on like a dropped image or PDF. Pictures under 12 kB (signature logos)
+  are left out and the four largest are kept. The status line says how many
+  drawings were found instead of asking for the file to be dropped again.
+- A labelled material wins. "Material : NPP" and "all part materials are
+  engineering plastics" set the material, even when the email also mentions
+  stainless or ceramic in passing.
+- "We need fine grits type ceramic" is the brush, not the part. It used to make
+  a plastic part "Carbide / ceramic / glass".
+- Plastics read: PP, NPP, PET / PET-P, PVDF, PFA, PPS, PEI, PAI, UHMW, PVC,
+  polypropylene, Ertalyte, Ketron, Techtron and plural "plastics".
+- Sizes have to look like sizes. With no diameters in the email, the offline
+  model filled a cross-hole job with any two numbers — "BT40" and the part number
+  "15-430509-00" became a Ø40 bore and a Ø15 cross hole. Now only numbers it
+  places as a size, or that carry Ø, dia, mm or ", count.
+- An email describing several jobs ("Case 1 … Case 2 …") gets a note that the
+  guide sets up the first and how to set up the next.
+- When reading with Claude fails, the message says why instead of only
+  "Something went wrong".
+
 ## 1.6.4 – 2026-10-19
 - Workpiece grades are read and kept. "AW5083, AW7075" shows as
   "Aluminum (Wrought) · AW-5083 + AW-7075" on the chip, in the setup summary,

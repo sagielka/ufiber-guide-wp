@@ -15,7 +15,7 @@ vm.runInContext(
   [fs.readFileSync(path.join(SRC, 'cases_block.txt'), 'utf8'),
    load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js'), load('share.js')].join('\n') +
   '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;\n;globalThis.__C = typeof AI_CASES === "function" ? AI_CASES : null;\n;globalThis.__CASES = typeof CASES !== "undefined" ? CASES : [];' +
-  '\n;globalThis.__E = { parseText, recommend, gradesIn, gradeInfo, cleanGrades, SHARE, scrubContact, scrubToolWords, dedupeDims, msgRead, NLU,' +
+  '\n;globalThis.__E = { parseText, recommend, gradesIn, gradeInfo, cleanGrades, SHARE, scrubContact, scrubToolWords, dedupeDims, msgRead, caseCount, NLU,' +
   ' skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
   ' newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {},' +
   ' machine: { type: "mc", maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} }) };',
@@ -247,6 +247,96 @@ Can you suggest any tools and conditions for this?`;
     ok('the model is told a tested result outranks the tables', /prefer the tested figure/.test(cases));
     ok('the index stays small enough to send every turn', cases.length < 20000, cases.length);
   }
+}
+
+
+/* ---- PTSC / MCAM email, 1.6.5: plastics, part numbers, pasted drawings ---- */
+{
+  const mail = `Subject: PTSC-MCAM_ First NogaMT Trials_ Information support Ceramic Brush solution to Improve Deburring and Surface Finish_
+
+Customer is interested and request trials before purchase. Now customer is trying competitor.
+
+Case 1.
+Part Name : 15-430509-00 Adapter, APT, Chemical, 1/4" Port (Fitting)
+Material : NPP
+Problem is : Burr inside at cross hole.
+Target : Break and Deburr all sharp corner and edges.
+
+Case 2
+Part Name : Membrane family
+Material : PET-P
+Problem is : Lay pattern direction and Roughness
+
+Notes:
+All part materials are engineering plastics. We will need fine grits type ceramic. (Customer informed that they use Sand papers to polish the surface finish of stainless steel and plastic materials, for these engineering plastic materials, they have to use a very fine sand paper to get required surface)
+Customer will be using our ceramic brushes on BT40 spindle machines (So, pls select BT40 arbor if you recommend using our floatting arbor with our ceramic brush)`;
+  const p = E.parseText(mail);
+  ok('"fine grits type ceramic" is the brush, not a carbide part', p.material !== 'carbide', p.material);
+  ok('"Material : NPP" reads as plastic, ahead of stainless named in passing', p.material === 'plastic', p.material);
+  ok('PET-P, PP, PVDF and plurals read as plastic', ['Material: PET-P', 'material is PP', 'PVDF body', 'engineering plastics'].every(x => E.parseText(x).material === 'plastic'));
+  ok('a ceramic part is still read as ceramic', E.parseText('alumina ceramic insulator, material: ceramic').material === 'carbide');
+  ok('the job is the cross hole on a BT40 machining centre', p.task === 'crosshole' && p.machine?.type === 'mc' && p.machine?.iface === 'BT40', p);
+  ok('neither BT40 nor the part number becomes a size', !p.dims || (!Object.values(p.dims).includes(40) && !Object.values(p.dims).includes(15)), p.dims);
+  ok('two cases in one email are counted', E.caseCount(mail) === 2, E.caseCount(mail));
+  ok('"Part Name" is not a case', E.caseCount('Part Name : X\nPart number 12') === 0);
+  // the offline model must not invent the sizes either
+  if (fs.existsSync(path.join(SRC, 'model_block.txt'))) {
+    vm.runInContext(fs.readFileSync(path.join(SRC, 'model_block.txt'), 'utf8') + '\n;globalThis.__M = NLU_MODEL;', ctx);
+    E.NLU.load(ctx.__M);
+    const st = E.newState(); Object.assign(st, { task: p.task, feature: p.feature, material: p.material });
+    if (p.machine) Object.assign(st.machine, p.machine);
+    E.NLU.toState(mail, st);
+    ok('the offline model does not turn BT40 and 15-430509 into Ø40 / Ø15', st.dims.main !== 40 && st.dims.cross !== 15, st.dims);
+    const st2 = E.newState(); st2.task = 'crosshole'; st2.feature = 'cross';
+    E.NLU.toState('cross hole deburring, main bore Ø3.96 mm, cross hole Ø3.05 mm', st2);
+    ok('real marked sizes still fill a cross-hole job', st2.dims.main === 3.96 && st2.dims.cross === 3.05, st2.dims);
+  }
+}
+
+/* ---- a .msg carries its pictures as attachments (1.6.5) ---- */
+{
+  // a minimal compound file: root -> subject, body, two attachment storages
+  const enc16 = (str) => { const b = new Uint8Array(str.length * 2); for (let i = 0; i < str.length; i++) { b[2 * i] = str.charCodeAt(i) & 255; b[2 * i + 1] = str.charCodeAt(i) >> 8; } return b; };
+  const NOS = 0xffffffff, END = 0xfffffffe;
+  const ents = [{ name: 'Root Entry', type: 5, kids: [] }];
+  const add = (parent, name, type, data) => { const e = { name, type, data, kids: [] }; ents.push(e); ents[parent].kids.push(ents.length - 1); return ents.length - 1; };
+  add(0, '__substg1.0_0037001F', 2, enc16('Drawing for the cross hole'));
+  add(0, '__substg1.0_1000001F', 2, enc16('Material : PP\nPlease see the picture.'));
+  const big = new Uint8Array(30000).map((_, i) => (i * 7) & 255), logo = new Uint8Array(3000).fill(9);
+  const a0 = add(0, '__attach_version1.0_#00000000', 1);
+  add(a0, '__substg1.0_37010102', 2, big); add(a0, '__substg1.0_3707001F', 2, enc16('image001.png')); add(a0, '__substg1.0_370E001F', 2, enc16('image/png'));
+  const a1 = add(0, '__attach_version1.0_#00000001', 1);
+  add(a1, '__substg1.0_37010102', 2, logo); add(a1, '__substg1.0_3707001F', 2, enc16('logo.jpg')); add(a1, '__substg1.0_370E001F', 2, enc16('image/jpeg'));
+  // an attachment's own subject must not replace the message's
+  add(a1, '__substg1.0_0037001F', 2, enc16('WRONG subject'));
+  const S = 512, secs = [], fat = [];
+  for (const e of ents) if (e.data) { e.start = secs.length; const n = Math.ceil(e.data.length / S); for (let i = 0; i < n; i++) { secs.push(e.data.subarray(i * S, i * S + S)); fat.push(i < n - 1 ? secs.length : END); } }
+  const dirStart = secs.length, nDir = Math.ceil(ents.length / 4);
+  const dir = new Uint8Array(nDir * S), dv = new DataView(dir.buffer);
+  ents.forEach((e, i) => {
+    const o = i * 128, nm = enc16(e.name); dir.set(nm, o); dv.setUint16(o + 0x40, nm.length + 2, true); dv.setUint8(o + 0x42, e.type); dv.setUint8(o + 0x43, 1);
+    dv.setUint32(o + 0x44, NOS, true); dv.setUint32(o + 0x48, NOS, true);
+    // children as a right-leaning chain: valid, and it exercises the sibling walk
+    dv.setUint32(o + 0x4c, e.kids.length ? e.kids[0] : NOS, true);
+    const parent = ents.find(x => x.kids.includes(i)); if (parent) { const k = parent.kids, j = k.indexOf(i); if (j + 1 < k.length) dv.setUint32(o + 0x48, k[j + 1], true); }
+    dv.setUint32(o + 0x74, e.data ? e.start : END, true); dv.setUint32(o + 0x78, e.data ? e.data.length : 0, true);
+  });
+  for (let i = ents.length; i < nDir * 4; i++) { dv.setUint32(i * 128 + 0x44, NOS, true); dv.setUint32(i * 128 + 0x48, NOS, true); dv.setUint32(i * 128 + 0x4c, NOS, true); }
+  for (let i = 0; i < nDir; i++) { secs.push(dir.subarray(i * S, i * S + S)); fat.push(i < nDir - 1 ? secs.length : END); }
+  let nFat = 1; while (Math.ceil((secs.length + nFat) / 128) > nFat) nFat++;
+  const fatStart = secs.length; for (let i = 0; i < nFat; i++) fat.push(0xfffffffd);
+  while (fat.length < nFat * 128) fat.push(NOS);
+  const out = new Uint8Array(S * (1 + secs.length + nFat)), hv = new DataView(out.buffer);
+  out.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+  hv.setUint16(0x18, 0x3e, true); hv.setUint16(0x1a, 3, true); hv.setUint16(0x1c, 0xfffe, true); hv.setUint16(0x1e, 9, true); hv.setUint16(0x20, 6, true);
+  hv.setUint32(0x2c, nFat, true); hv.setUint32(0x30, dirStart, true); hv.setUint32(0x38, 1, true); hv.setUint32(0x3c, END, true); hv.setUint32(0x44, END, true);
+  for (let i = 0; i < 109; i++) hv.setUint32(0x4c + i * 4, i < nFat ? fatStart + i : NOS, true);
+  secs.forEach((b, i) => out.set(b, S * (1 + i)));
+  fat.forEach((v, i) => hv.setUint32(S * (1 + fatStart) + i * 4, v, true));
+  const m = E.msgRead(out.buffer);
+  ok('a .msg still gives its subject and body', m && m.subject === 'Drawing for the cross hole' && /Material : PP/.test(m.body), m && m.subject);
+  ok('a picture pasted into a .msg is read out byte for byte', m && m.files.length === 2 && m.files[0].name === 'image001.png' && m.files[0].mime === 'image/png'
+    && m.files[0].bytes.length === big.length && m.files[0].bytes.every((v, i) => v === big[i]), m && m.files.map(f => [f.name, f.size]));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

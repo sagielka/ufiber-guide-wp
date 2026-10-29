@@ -1,8 +1,8 @@
 /* Outlook .msg reader.
    A .msg is an OLE compound file, not text. Reading it as text produces numbers
    that are not in the message, so the guide parses the container properly and
-   pulls out the subject and body streams. If that fails it says so rather than
-   guessing. */
+   pulls out the subject, the body and the attachments (pictures pasted into the
+   body are attachments too). If that fails it says so rather than guessing. */
 function msgRead(buf) {
   const d = new DataView(buf), u8 = new Uint8Array(buf);
   if (buf.byteLength < 512) return null;
@@ -61,10 +61,22 @@ function msgRead(buf) {
     if (!nameLen) { entries.push(null); continue; }
     let name = '';
     for (let i = 0; i < nameLen - 2; i += 2) name += String.fromCharCode(dv.getUint16(p + i, true));
-    entries.push({ name, type: dv.getUint8(p + 0x42), start: dv.getUint32(p + 0x74, true), size: dv.getUint32(p + 0x78, true) });
+    entries.push({ name, type: dv.getUint8(p + 0x42), left: dv.getUint32(p + 0x44, true), right: dv.getUint32(p + 0x48, true),
+      child: dv.getUint32(p + 0x4c, true), start: dv.getUint32(p + 0x74, true), size: dv.getUint32(p + 0x78, true) });
   }
   const root = entries.find(e => e && e.type === 5);
   if (!root) return null;
+  // the children of a storage sit in a sibling tree under its child pointer
+  const kids = (parent) => {
+    const out = [], seen = new Set();
+    const visit = (j) => {
+      if (j == null || j >= entries.length || !entries[j] || seen.has(j) || seen.size > 4096) return;
+      seen.add(j); visit(entries[j].left); out.push(entries[j]); visit(entries[j].right);
+    };
+    visit(parent.child);
+    return out;
+  };
+  const top = kids(root);
 
   // small streams live inside the root's mini stream
   let miniData = null, miniFat = null;
@@ -87,7 +99,10 @@ function msgRead(buf) {
     }
     return out.subarray(0, e.size);
   };
-  const find = (suffix) => entries.find(e => e && e.type === 2 && e.name.indexOf(suffix) >= 0);
+  // the message's own properties are direct children of the root; an attached
+  // e-mail carries its own subject and body deeper in the tree
+  const findIn = (list, suffix) => list.find(e => e && e.type === 2 && e.name.indexOf(suffix) >= 0);
+  const find = (suffix) => findIn(top, suffix) || (top.length ? null : findIn(entries, suffix));
   const text = (e) => {
     if (!e) return '';
     const b = readStream(e);
@@ -107,8 +122,19 @@ function msgRead(buf) {
     if (h) body = text(h).replace(/<[^>]+>/g, ' ');
   }
   const clean = (s) => s.replace(/\u0000/g, '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
-  const out = { subject: clean(subject), body: clean(body) };
-  if (!out.subject && !out.body) return null;
+  // Attachments, including pictures pasted into the body: each is a storage
+  // __attach_version1.0_#… holding the bytes (3701 0102), a file name and a type.
+  const files = [];
+  for (const a of top) {
+    if (!a || a.type !== 1 || a.name.indexOf('__attach_version1.0_') !== 0) continue;
+    const ch = kids(a), data = findIn(ch, '__substg1.0_37010102');
+    if (!data || !data.size) continue;                      // embedded messages and links have no byte stream
+    const fname = clean(text(findIn(ch, '__substg1.0_3707001F')) || text(findIn(ch, '__substg1.0_3704001F')) || text(findIn(ch, '__substg1.0_3707001E')) || '');
+    const mime = clean(text(findIn(ch, '__substg1.0_370E001F')) || text(findIn(ch, '__substg1.0_370E001E')) || '').toLowerCase();
+    files.push({ name: fname, mime, size: data.size, bytes: readStream(data) });
+  }
+  const out = { subject: clean(subject), body: clean(body), files };
+  if (!out.subject && !out.body && !files.length) return null;
   return out;
 }
 if (typeof module !== 'undefined') module.exports = { msgRead };

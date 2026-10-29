@@ -55,15 +55,31 @@ function parseEml(raw) {
   res.body = text.replace(/\n{3,}/g, '\n\n').trim();
   return res;
 }
-function msgText(buf) {
-  // A .msg is an OLE compound file. Parse the container and take the real
-  // subject and body; scraping the raw bytes invents numbers that are not in
-  // the message, which is worse than reading nothing.
-  try {
-    const m = msgRead(buf);
-    if (m && (m.body || m.subject)) return ((m.subject ? 'Subject: ' + m.subject + '\n\n' : '') + m.body).slice(0, 8000);
-  } catch (e) { }
-  return '';
+function msgText(buf) { return msgOpen(buf).text; }
+/* A .msg is an OLE compound file. Parse the container and take the real
+   subject, body and attachments; scraping the raw bytes invents numbers that
+   are not in the message, which is worse than reading nothing.
+   Pictures pasted into an Outlook body are attachments too, and they are
+   usually the drawing. Signature logos are small, so pictures under 12 kB are
+   left out, and the largest few are kept. */
+function msgOpen(buf) {
+  let m = null;
+  try { m = msgRead(buf); } catch (e) { }
+  if (!m) return { text: '', files: [], skipped: 0 };
+  const text = (m.subject || m.body) ? ((m.subject ? 'Subject: ' + m.subject + '\n\n' : '') + m.body).slice(0, 8000) : '';
+  const useful = (m.files || []).filter(a => {
+    const n = (a.name || '').toLowerCase();
+    const pdf = a.mime.includes('pdf') || n.endsWith('.pdf');
+    const img = a.mime.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/.test(n);
+    return pdf || (img && a.size >= 12000);
+  }).sort((a, b) => b.size - a.size);
+  const keep = useful.slice(0, 4);
+  const files = keep.map((a, i) => {
+    const n = a.name || ('attachment-' + (i + 1) + (a.mime.includes('pdf') ? '.pdf' : a.mime.includes('jpeg') ? '.jpg' : '.png'));
+    const type = a.mime || (/\.pdf$/i.test(n) ? 'application/pdf' : /\.jpe?g$/i.test(n) ? 'image/jpeg' : 'image/png');
+    return new File([a.bytes], n, { type });
+  });
+  return { text, files, skipped: useful.length - keep.length };
 }
 function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('load ' + src)); document.head.appendChild(s); }); }
 async function pdfLib() {
@@ -126,9 +142,11 @@ async function addFiles(fileList) {
         entry.status = `Email read${e.files.length ? ` — ${e.files.length} attachment${e.files.length > 1 ? 's' : ''} found` : ''}`;
         if (e.files.length) { renderAttach(); await addFiles(e.files); }
       } else if (entry.kind === 'msg') {
-        const t = msgText(await f.arrayBuffer()); D.text += `EMAIL (Outlook .msg)\n${t}\n\n`;
-        entry.status = t ? 'Email text extracted. Attachments inside .msg aren\'t opened — drop the drawing file too.'
-          : 'This .msg could not be read. Paste the email text into the box instead — guessing from the file would invent numbers.';
+        const o = msgOpen(await f.arrayBuffer()), t = o.text; D.text += `EMAIL (Outlook .msg)\n${t}\n\n`;
+        const n = o.files.length;
+        entry.status = !t && !n ? 'This .msg could not be read. Paste the email text into the box instead — guessing from the file would invent numbers.'
+          : (t ? 'Email read' : 'No email text found') + (n ? ` — ${n} picture${n > 1 ? 's' : ''} / drawing${n > 1 ? 's' : ''} found${o.skipped ? ` (the ${n} largest)` : ''}` : ' — no drawings inside. If there is one, drop it too.');
+        if (n) { renderAttach(); await addFiles(o.files); }
       } else if (entry.kind === 'html') { D.text += htmlText(await f.text()) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'text') { D.text += (await f.text()).slice(0, 20000) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'pdf') {
@@ -140,6 +158,7 @@ async function addFiles(fileList) {
     } catch (err) { entry.status = entry.kind === 'pdf' ? 'Couldn\'t open this PDF here. Try a screenshot of the drawing instead.' : 'Couldn\'t read this file.'; entry.err = true; }
     renderAttach();
   }
+  D.cases = caseCount(D.text);
   // local reading straight away — free and instant
   if (D.text.trim()) { const ex = excerpt(D); const ta = $('#askT'); if (ta) ta.value = ex; doAsk(ex, { ai: false }); }
   renderAttach();
@@ -170,7 +189,10 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     applyAi(r);
   } catch (e) {
     const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.' }[e && e.code];
-    D.aiErr = msg === undefined ? 'Something went wrong reading the document. Try again.' : msg;
+    // say why: a bare "something went wrong" can't be acted on or reported
+    const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
+    if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }
+    D.aiErr = msg === undefined ? `Something went wrong reading the document${why ? ` (${why})` : ''}. Try again.` : msg;
     if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null;
   } finally { D.aiBusy = false; renderAttach(); updateGo(); }
 }
@@ -203,6 +225,7 @@ function renderAttach() {
     ${canAi && !busy && (D.aiErr || (hasImg && !imgOk)) ? `<div class="att-ai">${hasImg && !imgOk ? '<p class="tiny" style="margin:6px 0 0">This view can\'t send images to Claude — only the text will be read.</p>' : ''}
       ${D.aiErr ? `<div class="callout warn">${I.warn}<div>${esc(D.aiErr)}</div></div>` : ''}</div>`
       : (!canAi && hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
+    ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.</div></div>` : ''}
     ${D.ai ? `<div class="att-res">${D.ai.summary ? `<p style="margin:0 0 8px"><b>Customer need:</b> ${esc(D.ai.summary)}</p>` : ''}
       ${D.ai.callouts.length ? `<div class="tiny" style="margin-top:6px">From the email / drawing</div><ul class="watch" style="margin-top:4px">${D.ai.callouts.map(c => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${esc(c)}</span></li>`).join('')}</ul>` : ''}
       ${D.ai.questions.length ? `<div class="tiny" style="margin-top:10px">Still unknown — ask the customer</div><ul class="watch" style="margin-top:4px">${D.ai.questions.map(c => `<li>${I.info.replace('<svg', '<svg style="color:var(--warn)"')}<span>${esc(c)}</span></li>`).join('')}</ul><button class="btn ghost small" id="copyQs" style="margin-top:6px">${I.copy} Copy questions</button>` : ''}</div>` : ''}
