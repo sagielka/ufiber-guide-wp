@@ -806,7 +806,9 @@ function burrSize(t) {
 const fmtMm = v => String(+Number(v).toFixed(3));
 const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
-  const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
+  // American drawings write inches with a leading dot and no unit: Ø.156 is 0.156 in.
+  const t = (' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ')
+    .replace(/([øØ⌀]|\bdia(?:meter)?\.?)\s*\.(\d{2,4})(?!\s*(?:mm|"|in\b|\d))/gi, '$10.$2"');
   const out = { understood: [] };
   // material. A labelled line ("Material : PET-P", "all part materials are
   // engineering plastics") says what the part is made of; other mentions can be

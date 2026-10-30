@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.6 – 2026-10-30
+- Pictures from an Outlook email keep the email's order. They were sorted by
+  file size, so with four pictures and room for three, the first job's drawing
+  could be the one left out.
+- Whole pictures go to Claude before the title-block zooms. Each large picture
+  used to bring its own zoom, so three slots held one drawing and its zoom plus
+  one more picture.
+- An email with several jobs ("Case 1 … Case 2 …") asks Claude for the first
+  job only, from its own text and pictures, so Case 2's material or drawing
+  can't fill in Case 1.
+- Inch sizes written the American way read correctly: "Ø.156" is 0.156 in
+  (3.96 mm), in typed text and in what Claude is told to look for on drawings.
+
 ## 1.6.5 – 2026-10-30
 - Outlook .msg files now give up their pictures. A drawing pasted into the
   email body is stored as an attachment inside the .msg; it is read out and

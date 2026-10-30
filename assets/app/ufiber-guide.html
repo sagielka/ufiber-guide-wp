@@ -1295,7 +1295,9 @@ function burrSize(t) {
 const fmtMm = v => String(+Number(v).toFixed(3));
 const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
-  const t = ' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ';
+  // American drawings write inches with a leading dot and no unit: Ø.156 is 0.156 in.
+  const t = (' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ')
+    .replace(/([øØ⌀]|\bdia(?:meter)?\.?)\s*\.(\d{2,4})(?!\s*(?:mm|"|in\b|\d))/gi, '$10.$2"');
   const out = { understood: [] };
   // material. A labelled line ("Material : PET-P", "all part materials are
   // engineering plastics") says what the part is made of; other mentions can be
@@ -1706,7 +1708,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.5';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.6';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3509,7 +3511,7 @@ function msgText(buf) { return msgOpen(buf).text; }
    are not in the message, which is worse than reading nothing.
    Pictures pasted into an Outlook body are attachments too, and they are
    usually the drawing. Signature logos are small, so pictures under 12 kB are
-   left out, and the largest few are kept. */
+   left out, and the first four in the email are kept. */
 function msgOpen(buf) {
   let m = null;
   try { m = msgRead(buf); } catch (e) { }
@@ -3520,7 +3522,10 @@ function msgOpen(buf) {
     const pdf = a.mime.includes('pdf') || n.endsWith('.pdf');
     const img = a.mime.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/.test(n);
     return pdf || (img && a.size >= 12000);
-  }).sort((a, b) => b.size - a.size);
+  });
+  // Keep the email's own order: pictures pasted into the body are stored in the
+  // order they appear, and the first job's drawing comes first. Sorting by size
+  // once sent Case 2's drawings and left Case 1's out.
   const keep = useful.slice(0, 4);
   const files = keep.map((a, i) => {
     const n = a.name || ('attachment-' + (i + 1) + (a.mime.includes('pdf') ? '.pdf' : a.mime.includes('jpeg') ? '.jpg' : '.png'));
@@ -3548,7 +3553,7 @@ async function cropBR(srcCanvas, frac = .5, maxW = 1400) {
 async function readPdf(file) {
   const lib = await pdfLib();
   const pdf = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
-  let text = ''; const images = []; let thumb = null;
+  let text = ''; const images = [], crops = []; let thumb = null;
   for (let p = 1; p <= Math.min(pdf.numPages, 4); p++) {
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent(); text += tc.items.map(i => i.str).join(' ') + '\n';
@@ -3557,10 +3562,10 @@ async function readPdf(file) {
       const vp = page.getViewport({ scale }); const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
       const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
       await page.render({ canvasContext: ctx, viewport: vp }).promise;
-      images.push(await canvasBlob(c)); if (p === 1) { images.push(await cropBR(c)); thumb = c.toDataURL('image/jpeg', .6); }
+      images.push(await canvasBlob(c)); if (p === 1) { crops.push(await cropBR(c)); thumb = c.toDataURL('image/jpeg', .6); }
     }
   }
-  return { text: text.replace(/\s+/g, ' ').trim(), images, thumb, pages: pdf.numPages };
+  return { text: text.replace(/\s+/g, ' ').trim(), images, crops, thumb, pages: pdf.numPages };
 }
 async function readImage(file) {
   const url = URL.createObjectURL(file);
@@ -3569,8 +3574,8 @@ async function readImage(file) {
     const sc = Math.min(1, 2400 / Math.max(img.width, img.height));
     const c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
     const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
-    const full = await canvasBlob(c); const imgs = [full]; if (img.width > 1200 || img.height > 1200) imgs.push(await cropBR(c));
-    return { images: imgs, thumb: c.toDataURL('image/jpeg', .6) };
+    const full = await canvasBlob(c); const crops = []; if (img.width > 1200 || img.height > 1200) crops.push(await cropBR(c));
+    return { images: [full], crops, thumb: c.toDataURL('image/jpeg', .6) };
   } finally { URL.revokeObjectURL(url); }
 }
 const kindOf = f => { const n = (f.name || '').toLowerCase(); const t = f.type || ''; if (n.endsWith('.eml') || t === 'message/rfc822') return 'eml'; if (n.endsWith('.msg')) return 'msg'; if (n.endsWith('.pdf') || t === 'application/pdf') return 'pdf'; if (t.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/.test(n)) return 'image'; if (/\.(html?|htm)$/.test(n) || t === 'text/html') return 'html'; if (t.startsWith('text/') || /\.(txt|csv|md)$/.test(n)) return 'text'; return 'other'; };
@@ -3593,15 +3598,15 @@ async function addFiles(fileList) {
         const o = msgOpen(await f.arrayBuffer()), t = o.text; D.text += `EMAIL (Outlook .msg)\n${t}\n\n`;
         const n = o.files.length;
         entry.status = !t && !n ? 'This .msg could not be read. Paste the email text into the box instead — guessing from the file would invent numbers.'
-          : (t ? 'Email read' : 'No email text found') + (n ? ` — ${n} picture${n > 1 ? 's' : ''} / drawing${n > 1 ? 's' : ''} found${o.skipped ? ` (the ${n} largest)` : ''}` : ' — no drawings inside. If there is one, drop it too.');
+          : (t ? 'Email read' : 'No email text found') + (n ? ` — ${n} picture${n > 1 ? 's' : ''} / drawing${n > 1 ? 's' : ''} found${o.skipped ? ` (the first ${n})` : ''}` : ' — no drawings inside. If there is one, drop it too.');
         if (n) { renderAttach(); await addFiles(o.files); }
       } else if (entry.kind === 'html') { D.text += htmlText(await f.text()) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'text') { D.text += (await f.text()).slice(0, 20000) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'pdf') {
-        const r = await readPdf(f); entry.thumb = r.thumb; D.images.push(...r.images);
+        const r = await readPdf(f); entry.thumb = r.thumb; D.images.push(...r.images); (D.crops || (D.crops = [])).push(...r.crops);
         if (r.text) D.text += `DRAWING / PDF TEXT (${f.name})\n${r.text.slice(0, 6000)}\n\n`;
         entry.status = `${r.pages} page${r.pages > 1 ? 's' : ''}${r.text ? ', text layer read' : ', no text layer (scanned)'}`;
-      } else if (entry.kind === 'image') { const r = await readImage(f); entry.thumb = r.thumb; D.images.push(...r.images); entry.status = 'Image ready'; }
+      } else if (entry.kind === 'image') { const r = await readImage(f); entry.thumb = r.thumb; D.images.push(...r.images); (D.crops || (D.crops = [])).push(...r.crops); entry.status = 'Image ready'; }
       else entry.status = 'This file type can\'t be read. Use .eml, .msg, .txt, PDF or an image.';
     } catch (err) { entry.status = entry.kind === 'pdf' ? 'Couldn\'t open this PDF here. Try a screenshot of the drawing instead.' : 'Couldn\'t read this file.'; entry.err = true; }
     renderAttach();
@@ -3620,9 +3625,12 @@ async function aiRead() {
   aiCtl = new AbortController(); D.aiBusy = true; D.aiErr = null; renderAttach();
   const enumList = (o) => Object.keys(o).join(' | ');
   const maxImg = APP.sampleImages ? APP.sampleImages.maxCount : 0;
-  const imgs = maxImg ? D.images.slice(0, maxImg) : [];
+  // whole pictures first; title-block zooms only if the allowance has room left
+  const imgs = maxImg ? [...D.images, ...(D.crops || [])].slice(0, maxImg) : [];
+  const zooms = Math.max(0, imgs.length - D.images.length);
   const prompt = `You are a NOGA MT application engineer for UFIBER ceramic fiber deburring and finishing tools.
-A customer sent the material below${imgs.length ? ' plus ' + imgs.length + ' image(s) of their drawing or part (a full page, and a zoom of the bottom-right title block)' : ''}.
+A customer sent the material below${imgs.length ? ' plus ' + imgs.length + ' image(s) of their drawing or part, in the order they appear in the email' + (zooms ? ' (the last ' + (zooms > 1 ? zooms + ' are zooms' : 'is a zoom') + ' of a drawing\'s bottom-right title block)' : '') : ''}.${D.cases > 1 ? `
+The email describes ${D.cases} separate jobs (Case 1, Case 2…). Extract ONLY the first one: its material, sizes and burr, read from the text and from the pictures that belong to it. Ignore the other jobs' materials, sizes and drawings; mention them in "summary" only.` : ''}
 Extract the deburring / finishing application. Reply with ONLY one JSON object with these fields:
 ${extractionSpec()}
 plus "callouts": ["up to 6 short requirements from the email/drawing that affect deburring or finish: edge-break limits, Ra, 'burr-free' notes, hardness, coatings, tolerances near edges, quantities"].
@@ -3870,7 +3878,7 @@ function extractionSpec() {
    {"ask": "short question, in the SAME language as your summary above", "field": "task"|"feature"|"material"|"sub"|"burr"|"machine"|"main"|"cross"|"depth"|"width"|"groove"|"hole",
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
-Rules: lengths in mm (convert inches). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole; "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
+Rules: lengths in mm (convert inches; American drawings give inches with a leading dot and no unit, e.g. Ø.156 = 0.156 in = 3.96 mm, and a drawing note like "hole diameter approximately Ø3–4 mm" is a stated size). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole; "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
 Several workpiece materials (e.g. "AW5083, AW7075 and stainless 1.4301"): set up ONE now and put each other one in "later". Pick the one the customer says to start with, reading the whole thread including quoted earlier messages and short answers like "-> aluminium, please"; otherwise the first one listed. Grades of the same material (5083 and 7075 are both wrought aluminium) stay together in "grades". Never ask whether a "later" material uses the same setup: it needs its own.
 Never ask about anything the text already answers, quoted replies included.
 Materials: 304/316/A2/A4/1.4301/1.4404 → stainless aust; 17-4/420/410 → stainless mart; EN AW-xxxx, 5083/6061/6082/7075 → aluminum wrought; ADC12/A356 → aluminum cast; Ti-6Al-4V → titanium; Inconel/Hastelloy → hrsa ni; CoCr → hrsa co; 4140 Q&T → carbon treated; D2/H13 hardened → hardened; carbide/ceramic/glass → carbide.

@@ -339,5 +339,14 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
     && m.files[0].bytes.length === big.length && m.files[0].bytes.every((v, i) => v === big[i]), m && m.files.map(f => [f.name, f.size]));
 }
 
+
+/* ---- American drawings: Ø.156 is inches (1.6.6) ---- */
+{
+  const p = E.parseText('cross hole Ø.120 into main bore Ø.156');
+  ok('Ø.156 / Ø.120 read as inches', p.dims && Math.abs(p.dims.main - 3.962) < 0.01 && Math.abs(p.dims.cross - 3.048) < 0.01, p.dims);
+  const q = E.parseText('cross hole Ø3.05 mm into a Ø3.96 mm bore. Done.');
+  ok('ordinary decimals are left alone', q.dims && q.dims.main === 3.96 && q.dims.cross === 3.05, q.dims);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

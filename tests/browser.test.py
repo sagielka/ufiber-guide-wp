@@ -155,6 +155,20 @@ async def main():
                '"m":"stainless"' in sw and '"g":["1.4301"]' in sw and '"l":["aluminum"]' in sw, sw)
             ok('the stainless setup is on screen', 'stainless steel 1.4301' in (await page.locator('#view').inner_text()).lower())
 
+            # --- a two-job email with four pictures (1.6.6): whole pictures, in email order, before zooms ---
+            pic = await page.evaluate("""async () => {
+                const mk = (n) => new Blob([new Uint8Array(n)], { type: 'image/png' });
+                let got = null; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => { got = { prompt, sizes: (opt.images || []).map(b => b.size) }; return { summary: 'x' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                APP.doc = { files: [], text: 'Case 1.\\nMaterial : NPP\\nCase 2\\nMaterial : PET-P', images: [mk(101), mk(102), mk(103), mk(104)], crops: [mk(901)], cases: 2 };
+                await aiRead();
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify({ sizes: got.sizes, first: /Extract ONLY the first one/.test(got.prompt), inch: /leading dot/.test(got.prompt) }); }""")
+            ok('the first three pictures go to Claude in email order, zooms last', '"sizes":[101,102,103]' in pic, pic)
+            ok('a two-job email asks Claude for the first job only', '"first":true' in pic, pic)
+            ok('Claude is told how American drawings write inches', '"inch":true' in pic, pic)
+
             # --- every tab renders ---
             for tab in ['sf', 'fix', 'competitor', 'learn', 'products']:
                 await page.evaluate(f"() => go('{tab}')")
