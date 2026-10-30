@@ -791,9 +791,39 @@ function scrubToolWords(s) {
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
 }
 /* "Case 1 … Case 2 …": one email, several jobs. The guide sets up one at a time. */
+const JOB_HEAD = /(?:^|\n)[ \t]*(?:case|part|application|job)[ \t]*(?:no\.?|#)?[ \t]*(\d{1,2})\b[^\n]*/gi;
 function caseCount(text) {
-  const n = new Set([...String(text || '').matchAll(/(?:^|\n)\s*(?:case|part|application|job)\s*(?:no\.?|#)?\s*(\d{1,2})\b/gi)].map(m => +m[1]));
+  const n = new Set([...String(text || '').matchAll(JOB_HEAD)].map(m => +m[1]));
   return n.size;
+}
+/* Each job's own text, plus the notes that apply to all of them ("Notes: all
+   parts are plastics, BT40 machines"), which customers put after the last case. */
+function splitJobs(text) {
+  const t = String(text || ''), heads = [], seen = new Set();
+  for (const m of t.matchAll(JOB_HEAD)) { const n = +m[1]; if (!seen.has(n)) { seen.add(n); heads.push({ n, at: m.index }); } }
+  if (heads.length < 2) return null;
+  const jobs = heads.map((h, i) => ({ n: h.n, at: h.at, text: t.slice(h.at, i + 1 < heads.length ? heads[i + 1].at : t.length) }));
+  const last = jobs[jobs.length - 1];
+  const tail = last.text.search(/\n[ \t]*(?:general\s+)?(?:notes?|remarks?|general|for all (?:parts|cases))\b\s*:?|\n[ \t]*(?:rgds|regards|best regards|kind regards|thanks|thank you|br)\b/i);
+  let shared = '';
+  if (tail > 0) {
+    shared = last.text.slice(tail);
+    last.text = last.text.slice(0, tail);
+    const sig = shared.search(/\n[ \t]*(?:rgds|regards|best regards|kind regards|thanks|thank you|br)\b/i);
+    if (sig >= 0) shared = shared.slice(0, sig);
+  }
+  const field = (s, re) => { const m = s.match(re); return m ? m[1].trim().slice(0, 40) : ''; };
+  return {
+    shared: shared.trim(),
+    jobs: jobs.map(j => {
+      const name = field(j.text, /part\s*name\s*[:=]\s*([^\n]+)/i), mat = field(j.text, /material\s*[:=]\s*([^\n]+)/i);
+      return { n: j.n, text: j.text.trim(), label: [name, mat].filter(Boolean).join(', ') };
+    }),
+  };
+}
+function jobText(split, n) {
+  const j = split && split.jobs.find(x => x.n === n); if (!j) return '';
+  return j.text + (split.shared ? '\n\n' + split.shared : '');
 }
 const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
 function burrSize(t) {

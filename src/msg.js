@@ -117,10 +117,11 @@ function msgRead(buf) {
   };
   const subject = text(find('__substg1.0_0037001F')) || text(find('__substg1.0_0037001E'));
   let body = text(find('__substg1.0_1000001F')) || text(find('__substg1.0_1000001E'));
-  if (!body) {                                               // fall back to the RTF-less HTML body
-    const h = find('__substg1.0_1013001F') || find('__substg1.0_10130102');
-    if (h) body = text(h).replace(/<[^>]+>/g, ' ');
-  }
+  // the HTML body says where each pasted picture sits (<img src="cid:…">)
+  const hEntry = find('__substg1.0_1013001F') || find('__substg1.0_10130102');
+  let html = '';
+  try { html = hEntry ? text(hEntry) : ''; } catch (e) { html = ''; }
+  if (!body && html) body = html.replace(/<[^>]+>/g, ' ');   // fall back to the RTF-less HTML body
   const clean = (s) => s.replace(/\u0000/g, '').replace(/\r\n/g, '\n').replace(/[ \t]+\n/g, '\n').trim();
   // Attachments, including pictures pasted into the body: each is a storage
   // __attach_version1.0_#… holding the bytes (3701 0102), a file name and a type.
@@ -131,9 +132,10 @@ function msgRead(buf) {
     if (!data || !data.size) continue;                      // embedded messages and links have no byte stream
     const fname = clean(text(findIn(ch, '__substg1.0_3707001F')) || text(findIn(ch, '__substg1.0_3704001F')) || text(findIn(ch, '__substg1.0_3707001E')) || '');
     const mime = clean(text(findIn(ch, '__substg1.0_370E001F')) || text(findIn(ch, '__substg1.0_370E001E')) || '').toLowerCase();
-    files.push({ name: fname, mime, size: data.size, bytes: readStream(data) });
+    const cid = clean(text(findIn(ch, '__substg1.0_3712001F')) || text(findIn(ch, '__substg1.0_3712001E')) || '');
+    files.push({ name: fname, mime, cid, size: data.size, bytes: readStream(data) });
   }
-  const out = { subject: clean(subject), body: clean(body), files };
+  const out = { subject: clean(subject), body: clean(body), html: html.replace(/\u0000/g, ''), files };
   if (!out.subject && !out.body && !files.length) return null;
   return out;
 }

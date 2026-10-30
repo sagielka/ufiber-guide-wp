@@ -15,7 +15,7 @@ vm.runInContext(
   [fs.readFileSync(path.join(SRC, 'cases_block.txt'), 'utf8'),
    load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js'), load('share.js')].join('\n') +
   '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;\n;globalThis.__C = typeof AI_CASES === "function" ? AI_CASES : null;\n;globalThis.__CASES = typeof CASES !== "undefined" ? CASES : [];' +
-  '\n;globalThis.__E = { parseText, recommend, gradesIn, gradeInfo, cleanGrades, SHARE, scrubContact, scrubToolWords, dedupeDims, msgRead, caseCount, NLU,' +
+  '\n;globalThis.__E = { parseText, recommend, gradesIn, gradeInfo, cleanGrades, SHARE, scrubContact, scrubToolWords, dedupeDims, msgRead, caseCount, splitJobs, jobText, NLU,' +
   ' skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
   ' newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {},' +
   ' machine: { type: "mc", maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} }) };',
@@ -291,6 +291,19 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
     E.NLU.toState('cross hole deburring, main bore Ø3.96 mm, cross hole Ø3.05 mm', st2);
     ok('real marked sizes still fill a cross-hole job', st2.dims.main === 3.96 && st2.dims.cross === 3.05, st2.dims);
   }
+}
+
+/* ---- each job in a multi-case email gets its own text (1.6.8) ---- */
+{
+  const mail = `Dear Sagi\n\nCustomer picked 2 cases to test as below;\n\nCase 1.\nPart Name : 15-430509-00 Adapter\nMaterial : NPP\nProblem is : Burr inside at cross hole.\n\nCase 2\nPart Name : Membrane family\nMaterial : PET-P\nProblem is : Lay pattern direction and Roughness\n\nNotes:\nAll part materials are engineering plastics.\nCustomer will be using our ceramic brushes on BT40 spindle machines\n\nRgds\nNonGG`;
+  const sp = E.splitJobs(mail);
+  ok('two jobs are split out', sp && sp.jobs.length === 2 && sp.jobs[1].n === 2, sp && sp.jobs.map(j => j.n));
+  ok('each job is labelled by its part and material', sp.jobs[1].label === 'Membrane family, PET-P', sp.jobs[1].label);
+  ok('job 1 does not carry job 2', !/PET-P/.test(sp.jobs[0].text) && /NPP/.test(sp.jobs[0].text));
+  ok('the closing notes go with every job, the signature with none', /BT40/.test(E.jobText(sp, 1)) && /BT40/.test(E.jobText(sp, 2)) && !/NonGG/.test(E.jobText(sp, 2)));
+  const p2 = E.parseText(E.jobText(sp, 2));
+  ok('job 2 reads as a plastic surface job, not a cross hole', p2.material === 'plastic' && p2.task !== 'crosshole', p2);
+  ok('a single job is not split', E.splitJobs('Material : PP, cross hole burr') === null);
 }
 
 /* ---- a .msg carries its pictures as attachments (1.6.5) ---- */

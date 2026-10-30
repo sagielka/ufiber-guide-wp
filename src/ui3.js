@@ -368,6 +368,7 @@ document.addEventListener('click', e => {
   if (d.recent) { const r = store.get('ufg_recent', [])[+d.recent]; if (r) { APP.ws = r.st; go('result'); } return; }
   if (t.id === 'clrRecent') { store.set('ufg_recent', []); rerender(); return; }
   if (d.later !== undefined) { switchLater(+d.later); return; }
+  if (d.job !== undefined && APP.doc?.jobs) { setJob(+d.job); return; }
   if (d.edit) { APP.editKey = APP.editKey === d.edit ? null : d.edit; renderUnderstood(); return; }
   if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }

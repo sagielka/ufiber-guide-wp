@@ -164,7 +164,7 @@ async def main():
                 APP.doc = { files: [], text: 'Case 1.\\nMaterial : NPP\\nCase 2\\nMaterial : PET-P', images: [mk(101), mk(102), mk(103), mk(104)], crops: [mk(901)], cases: 2 };
                 await aiRead();
                 APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
-                return JSON.stringify({ sizes: got.sizes, first: /Extract ONLY the first one/.test(got.prompt), inch: /leading dot/.test(got.prompt) }); }""")
+                return JSON.stringify({ sizes: got.sizes, first: /Extract ONLY job 1/.test(got.prompt), inch: /leading dot/.test(got.prompt) }); }""")
             ok('the first three pictures go to Claude in email order, zooms last', '"sizes":[101,102,103]' in pic, pic)
             ok('a two-job email asks Claude for the first job only', '"first":true' in pic, pic)
             ok('Claude is told how American drawings write inches', '"inch":true' in pic, pic)
@@ -193,6 +193,33 @@ async def main():
             ok('pictures are shrunk to what Claude reads before sending', fbj['calls'] and fbj['calls'][0] and fbj['calls'][0][0][0] <= 1568 and fbj['calls'][0][0][1] <= 900000, fb[:200])
             ok('when the request with pictures fails, the text is read alone', len(fbj['calls']) == 2 and fbj['calls'][1] == [] and fbj['summary'] == 'text only' and not fbj['err'], fb[:200])
             ok('and the page says the drawings were not seen', 'Only the email text was read' in fbj['note'], fbj['note'][:200])
+
+            # --- a two-job email: Case 2 gets its own setup and its own pictures (1.6.8) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(400)
+            jb = await page.evaluate("""async () => {
+                const mk = (n, job) => { const b = new Blob([new Uint8Array(n)], { type: 'image/png' }); b.job = job; return b; };
+                const html = '<p>Case 1.</p><p>Material : NPP</p><img src="cid:image001.png@01DC"><p>Case 2</p><p>Material : PET-P</p><img src="cid:image003.png@01DC">';
+                const map = picJobs(html, ['image001.png@01DC', 'image003.png@01DC', '']);
+                let got = null; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => { got = { prompt, sizes: (opt.images || []).map(b => b.size) }; return { summary: 'case 2' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                const text = 'Case 1.\\nPart Name : Adapter\\nMaterial : NPP\\nBurr inside at cross hole.\\n\\nCase 2\\nPart Name : Membrane family\\nMaterial : PET-P\\nLay pattern and roughness\\n\\nNotes:\\nBT40 machines\\n\\nRgds';
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text, images: [mk(101, 1), mk(102, 1), mk(201, 2), mk(202, 2)], crops: [], cases: 2 };
+                APP.doc.jobs = splitJobs(text); APP.doc.job = 1; renderAttach();
+                const btn = document.querySelector('[data-job="2"]'); const label = btn ? btn.innerText : '';
+                btn.click(); await new Promise(r => setTimeout(r, 300));
+                const out = { map, label, box: document.querySelector('#askT').value, sizes: got && got.sizes, only2: got && /Extract ONLY job 2/.test(got.prompt),
+                  now: /Now:\\s*Case 2/.test(document.querySelector('#attach').innerText), mat: APP.ws && APP.ws.material };
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify(out); }""")
+            jbj = json.loads(jb)
+            ok('pasted pictures are matched to their case from the email body', jbj['map'] == [1, 2, None], jb[:160])
+            ok('a button offers Case 2 by name', 'Set up Case 2' in jbj['label'] and 'PET-P' in jbj['label'], jbj['label'])
+            ok('Case 2 puts its own text in the box, with the shared notes', 'PET-P' in jbj['box'] and 'NPP' not in jbj['box'] and 'BT40' in jbj['box'], jbj['box'][:160])
+            ok('Case 2 sends its own pictures to Claude first', jbj['sizes'] == [201, 202, 101], jbj['sizes'])
+            ok('Claude is asked for job 2 only', jbj['only2'] and jbj['now'], {k: jbj[k] for k in ('only2', 'now')})
+            ok('Case 2 is set up as plastic', jbj['mat'] == 'plastic', jbj['mat'])
 
             # --- every tab renders ---
             for tab in ['sf', 'fix', 'competitor', 'learn', 'products']:

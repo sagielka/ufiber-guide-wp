@@ -77,12 +77,33 @@ function msgOpen(buf) {
   // order they appear, and the first job's drawing comes first. Sorting by size
   // once sent Case 2's drawings and left Case 1's out.
   const keep = useful.slice(0, 4);
+  const jobOf = picJobs(m.html || '', keep.map(a => a.cid));
   const files = keep.map((a, i) => {
     const n = a.name || ('attachment-' + (i + 1) + (a.mime.includes('pdf') ? '.pdf' : a.mime.includes('jpeg') ? '.jpg' : '.png'));
     const type = a.mime || (/\.pdf$/i.test(n) ? 'application/pdf' : /\.jpe?g$/i.test(n) ? 'image/jpeg' : 'image/png');
-    return new File([a.bytes], n, { type });
+    const f = new File([a.bytes], n, { type }); if (jobOf[i] != null) f.job = jobOf[i];
+    return f;
   });
   return { text, files, skipped: useful.length - keep.length };
+}
+/* Which job each pasted picture belongs to: the last "Case N" heading before its
+   <img src="cid:…"> in the HTML body. Unknown when the body has no such marks. */
+function picJobs(html, cids) {
+  const out = cids.map(() => null);
+  if (!html || !cids.some(Boolean)) return out;
+  const flat = html.replace(/<img\b[^>]*?src\s*=\s*["']?cid:([^"'\s>]+)[^>]*>/gi, ' \n[[IMG:$1]]\n ').replace(/<br\s*\/?>|<\/(?:p|div|tr|li|h\d)>/gi, '\n').replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+  const heads = [...flat.matchAll(JOB_HEAD)].map(m => ({ n: +m[1], at: m.index }));
+  if (!heads.length) return out;
+  const key = c => String(c || '').toLowerCase().split('@')[0];
+  cids.forEach((c, i) => {
+    if (!c) return;
+    const mk = [...flat.matchAll(/\[\[IMG:([^\]]+)\]\]/g)].find(x => key(x[1]) === key(c));
+    if (!mk) return;
+    const before = heads.filter(h => h.at < mk.index);
+    out[i] = before.length ? before[before.length - 1].n : heads[0].n;
+  });
+  return out;
 }
 function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('load ' + src)); document.head.appendChild(s); }); }
 async function pdfLib() {
@@ -153,20 +174,33 @@ async function addFiles(fileList) {
       } else if (entry.kind === 'html') { D.text += htmlText(await f.text()) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'text') { D.text += (await f.text()).slice(0, 20000) + '\n\n'; entry.status = 'Text read'; }
       else if (entry.kind === 'pdf') {
-        const r = await readPdf(f); entry.thumb = r.thumb; D.images.push(...r.images); (D.crops || (D.crops = [])).push(...r.crops);
+        const r = await readPdf(f); entry.thumb = r.thumb; tagJob(r, f.job); D.images.push(...r.images); (D.crops || (D.crops = [])).push(...r.crops);
         if (r.text) D.text += `DRAWING / PDF TEXT (${f.name})\n${r.text.slice(0, 6000)}\n\n`;
         entry.status = `${r.pages} page${r.pages > 1 ? 's' : ''}${r.text ? ', text layer read' : ', no text layer (scanned)'}`;
-      } else if (entry.kind === 'image') { const r = await readImage(f); entry.thumb = r.thumb; D.images.push(...r.images); (D.crops || (D.crops = [])).push(...r.crops); entry.status = 'Image ready'; }
+      } else if (entry.kind === 'image') { const r = await readImage(f); entry.thumb = r.thumb; tagJob(r, f.job); D.images.push(...r.images); (D.crops || (D.crops = [])).push(...r.crops); entry.status = 'Image ready'; }
       else entry.status = 'This file type can\'t be read. Use .eml, .msg, .txt, PDF or an image.';
     } catch (err) { entry.status = entry.kind === 'pdf' ? 'Couldn\'t open this PDF here. Try a screenshot of the drawing instead.' : 'Couldn\'t read this file.'; entry.err = true; }
     renderAttach();
   }
-  D.cases = caseCount(D.text);
+  D.cases = caseCount(D.text); D.jobs = D.cases > 1 ? splitJobs(D.text) : null; if (D.jobs && !D.job) D.job = D.jobs.jobs[0].n;
   // local reading straight away — free and instant
   if (D.text.trim()) { const ex = excerpt(D); const ta = $('#askT'); if (ta) ta.value = ex; doAsk(ex, { ai: false }); }
   renderAttach();
 }
-function excerpt(D) { return D.text.replace(/\n{3,}/g, '\n\n').trim().slice(0, 1800); }
+const tagJob = (r, job) => { if (job != null) [...r.images, ...r.crops].forEach(b => { try { b.job = job; } catch (e) { } }); };
+function excerpt(D) {
+  if (D.jobs) return jobText(D.jobs, D.job || D.jobs.jobs[0].n).replace(/\n{3,}/g, '\n\n').trim().slice(0, 1800);
+  return D.text.replace(/\n{3,}/g, '\n\n').trim().slice(0, 1800);
+}
+/* Set up another job from the same email: its own text in the box, its own
+   pictures first when Claude reads it. */
+function setJob(n) {
+  const D = APP.doc; if (!D || !D.jobs) return;
+  D.job = n; D.ai = null; D.aiErr = null; D.imgFail = null;
+  const ex = excerpt(D); const ta = $('#askT'); if (ta) ta.value = ex;
+  doAsk(ex, { ai: false }); renderAttach();
+  if (APP.sample) aiRead();
+}
 
 /* ---------- Claude reading ---------- */
 /* Claude scales any picture down to about 1568 px on the long edge before it
@@ -192,12 +226,17 @@ async function aiRead() {
   const enumList = (o) => Object.keys(o).join(' | ');
   const maxImg = APP.sampleImages ? APP.sampleImages.maxCount : 0;
   // whole pictures first; title-block zooms only if the allowance has room left
-  const picked = maxImg ? [...D.images, ...(D.crops || [])].slice(0, maxImg) : [];
+  // this job's pictures first (and pictures not tied to any job), then the rest
+  const sel = D.jobs ? (D.job || D.jobs.jobs[0].n) : null;
+  const mine = b => sel == null || b.job == null || b.job === sel;
+  const pool = [...D.images.filter(mine), ...(D.crops || []).filter(mine), ...D.images.filter(b => !mine(b))];
+  const picked = maxImg ? pool.slice(0, maxImg) : [];
+  const fulls = picked.filter(b => D.images.includes(b)).length;
   const imgs = await Promise.all(picked.map(fitForAi));
-  const zooms = Math.max(0, imgs.length - D.images.length);
+  const zooms = picked.length - fulls, others = picked.filter(b => sel != null && b.job != null && b.job !== sel).length;
   const prompt = `You are a NOGA MT application engineer for UFIBER ceramic fiber deburring and finishing tools.
-A customer sent the material below${imgs.length ? ' plus ' + imgs.length + ' image(s) of their drawing or part, in the order they appear in the email' + (zooms ? ' (the last ' + (zooms > 1 ? zooms + ' are zooms' : 'is a zoom') + ' of a drawing\'s bottom-right title block)' : '') : ''}.${D.cases > 1 ? `
-The email describes ${D.cases} separate jobs (Case 1, Case 2…). Extract ONLY the first one: its material, sizes and burr, read from the text and from the pictures that belong to it. Ignore the other jobs' materials, sizes and drawings; mention them in "summary" only.` : ''}
+A customer sent the material below${imgs.length ? ' plus ' + imgs.length + ' image(s) of their drawing or part, in the order they appear in the email' + (zooms ? ' (' + zooms + (zooms > 1 ? ' of them are zooms' : ' of them is a zoom') + ' of a drawing\'s bottom-right title block)' : '') : ''}.${D.cases > 1 ? `
+The email describes ${D.cases} separate jobs (Case 1, Case 2…). Extract ONLY job ${sel || 1}${D.jobs ? ' (' + (D.jobs.jobs.find(j => j.n === sel)?.label || 'Case ' + sel) + ')' : ''}: its material, sizes and burr, read from its own text and the pictures that belong to it${others ? ` (the last ${others} picture${others > 1 ? 's belong' : ' belongs'} to another job — use only for context)` : ''}. Ignore the other jobs' materials, sizes and drawings; mention them in "summary" only.` : ''}
 Extract the deburring / finishing application. Reply with ONLY one JSON object with these fields:
 ${extractionSpec()}
 plus "callouts": ["up to 6 short requirements from the email/drawing that affect deburring or finish: edge-break limits, Ra, 'burr-free' notes, hardness, coatings, tolerances near edges, quantities"].
@@ -257,7 +296,7 @@ function renderAttach() {
     ${canAi && !busy && (D.aiErr || (hasImg && !imgOk)) ? `<div class="att-ai">${hasImg && !imgOk ? '<p class="tiny" style="margin:6px 0 0">This view can\'t send images to Claude — only the text will be read.</p>' : ''}
       ${D.aiErr ? `<div class="callout warn">${I.warn}<div>${esc(D.aiErr)}</div></div>` : ''}</div>`
       : (!canAi && hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
-    ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.</div></div>` : ''}
+    ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>${D.jobs ? `The guide sets them up one at a time. Now: <b>Case ${D.job}${(() => { const l = D.jobs.jobs.find(j => j.n === D.job)?.label; return l ? ' — ' + esc(l) : ''; })()}</b>.<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${D.jobs.jobs.filter(j => j.n !== D.job).map(j => `<button class="btn small" data-job="${j.n}">Set up Case ${j.n}${j.label ? ' — ' + esc(j.label) : ''} ${I.arrow}</button>`).join('')}</div>` : `The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.`}</div></div>` : ''}
     ${D.ai && D.imgFail ? `<div class="callout warn">${I.warn}<div><b>Only the email text was read</b>The pictures couldn't be sent to Claude (${esc(D.imgFail)}), so sizes on the drawing were not seen. Type them in the box, or try again.</div></div>` : ''}
     ${D.ai ? `<div class="att-res">${D.ai.summary ? `<p style="margin:0 0 8px"><b>Customer need:</b> ${esc(D.ai.summary)}</p>` : ''}
       ${D.ai.callouts.length ? `<div class="tiny" style="margin-top:6px">From the email / drawing</div><ul class="watch" style="margin-top:4px">${D.ai.callouts.map(c => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${esc(c)}</span></li>`).join('')}</ul>` : ''}

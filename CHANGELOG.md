@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.8 – 2026-10-30
+- An email with several jobs ("Case 1 … Case 2 …") now offers each one. The
+  guide starts with Case 1 and shows a button per remaining case, named by
+  its part and material ("Set up Case 2 — Membrane family, PET-P"). One tap
+  puts that case's text in the box, with the notes that apply to every case
+  ("all parts are plastics, BT40 machines") and without the signature, and
+  reads it with Claude.
+- Pictures pasted into an Outlook email are matched to their case from where
+  they sit in the email body. The case being set up sends its own pictures
+  to Claude first.
+
 ## 1.6.7 – 2026-10-30
 - Pictures are shrunk to what Claude actually reads (1568 px on the long edge,
   under 0.9 MB) before they are sent. Three full-size drawings in one request
