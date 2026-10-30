@@ -44,14 +44,15 @@ const AISERVER = (() => {
       });
     } catch (e) {
       if (e && e.name === 'AbortError') throw fail('cancelled');
-      throw fail('unreachable');
+      throw fail('network');                                   // the request never got an answer
     }
     let d = null;
-    try { d = await r.json(); } catch (e) { throw fail('unreachable'); }
+    // a page that is not JSON is the web server or a firewall talking: say which status
+    try { d = await r.json(); } catch (e) { throw fail(r.status === 413 ? 'http_413_too_large' : r.status >= 500 ? 'http_' + r.status + '_server' : 'http_' + r.status); }
     if (!d || !d.ok) {
-      const reason = (d && d.reason) || 'unreachable';
-      // the guide knows these two by name; anything else is just "unavailable"
-      throw fail(reason === 'rate_limited' ? 'rate_limited' : reason === 'unconfigured' ? 'not_granted' : 'unreachable');
+      // WordPress errors carry a code, the guide's endpoint a reason
+      const reason = String((d && (d.reason || d.code)) || 'http_' + r.status).slice(0, 60);
+      throw fail(reason === 'rate_limited' ? 'rate_limited' : reason === 'unconfigured' ? 'not_granted' : reason);
     }
     return d;
   }

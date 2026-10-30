@@ -350,6 +350,10 @@ final class NUFG_AI {
 			$body['system'] = substr( $system, 0, 4000 );
 		}
 
+		// a reading with three drawings can outlast the host's default 30 s
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( self::TIMEOUT + 15 );
+		}
 		$res = wp_remote_post( self::ENDPOINT, array(
 			'timeout' => self::TIMEOUT,
 			'headers' => self::headers(),
@@ -357,7 +361,9 @@ final class NUFG_AI {
 		) );
 
 		if ( is_wp_error( $res ) ) {
-			return self::no( 'unreachable' );
+			// timeout vs. no connection: both used to read as "unreachable"
+			$msg = strtolower( $res->get_error_message() );
+			return self::no( false !== strpos( $msg, 'timed out' ) || false !== strpos( $msg, 'timeout' ) ? 'timeout' : 'unreachable' );
 		}
 		$code = (int) wp_remote_retrieve_response_code( $res );
 		if ( 200 !== $code ) {

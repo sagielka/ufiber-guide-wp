@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.7 – 2026-10-30
+- Pictures are shrunk to what Claude actually reads (1568 px on the long edge,
+  under 0.9 MB) before they are sent. Three full-size drawings in one request
+  made the site's AI endpoint fail with "unreachable".
+- If a reading with pictures still fails on the way, the email text is read on
+  its own and the page says the drawings were not seen, instead of showing
+  only an error.
+- The error says what actually happened: no connection, a timeout, a web-server
+  status (e.g. 413 too large) or the endpoint's own reason, instead of
+  "unreachable" for all of them.
+- The site endpoint allows the PHP request to run past the host's default 30 s
+  while it waits up to 45 s for Claude.
+
 ## 1.6.6 – 2026-10-30
 - Pictures from an Outlook email keep the email's order. They were sorted by
   file size, so with four pictures and room for three, the first job's drawing

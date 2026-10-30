@@ -169,6 +169,31 @@ async def main():
             ok('a two-job email asks Claude for the first job only', '"first":true' in pic, pic)
             ok('Claude is told how American drawings write inches', '"inch":true' in pic, pic)
 
+            # --- a failed request with pictures falls back to the text (1.6.7) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(400)
+            fb = await page.evaluate("""async () => {
+                const c = document.createElement('canvas'); c.width = 3000; c.height = 2000;
+                const x = c.getContext('2d'); for (let i = 0; i < 4000; i++) { x.fillStyle = `rgb(${i % 255},${(i * 7) % 255},${(i * 13) % 255})`; x.fillRect((i * 37) % 3000, (i * 53) % 2000, 40, 40); }
+                const big = await new Promise(r => c.toBlob(r, 'image/jpeg', .95));
+                const calls = []; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => {
+                    const sizes = []; for (const b of (opt.images || [])) { const bm = await createImageBitmap(b); sizes.push([bm.width, b.size]); }
+                    calls.push(sizes);
+                    if (sizes.length) { const e = new Error('unreachable'); e.code = 'unreachable'; throw e; }
+                    return { summary: 'text only' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text: 'Material : PP, cross hole', images: [big], crops: [], cases: 0 };
+                await aiRead();
+                const out = { calls, imgFail: APP.doc.imgFail, summary: APP.doc.ai && APP.doc.ai.summary, err: APP.doc.aiErr,
+                  note: document.querySelector('#attach') ? document.querySelector('#attach').innerText : '' };
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify(out); }""")
+            fbj = json.loads(fb)
+            ok('pictures are shrunk to what Claude reads before sending', fbj['calls'] and fbj['calls'][0] and fbj['calls'][0][0][0] <= 1568 and fbj['calls'][0][0][1] <= 900000, fb[:200])
+            ok('when the request with pictures fails, the text is read alone', len(fbj['calls']) == 2 and fbj['calls'][1] == [] and fbj['summary'] == 'text only' and not fbj['err'], fb[:200])
+            ok('and the page says the drawings were not seen', 'Only the email text was read' in fbj['note'], fbj['note'][:200])
+
             # --- every tab renders ---
             for tab in ['sf', 'fix', 'competitor', 'learn', 'products']:
                 await page.evaluate(f"() => go('{tab}')")

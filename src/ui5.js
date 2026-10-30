@@ -169,14 +169,31 @@ async function addFiles(fileList) {
 function excerpt(D) { return D.text.replace(/\n{3,}/g, '\n\n').trim().slice(0, 1800); }
 
 /* ---------- Claude reading ---------- */
+/* Claude scales any picture down to about 1568 px on the long edge before it
+   looks at it, so sending more only makes the request heavier. Three 2400 px
+   drawings in one request were enough for the site's endpoint to give up. */
+const AI_EDGE = 1568, AI_BYTES = 900000;
+async function fitForAi(blob) {
+  try {
+    if (!blob || typeof createImageBitmap !== 'function') return blob;
+    const bm = await createImageBitmap(blob);
+    const sc = Math.min(1, AI_EDGE / Math.max(bm.width, bm.height));
+    if (sc === 1 && blob.size <= AI_BYTES) return blob;
+    const c = document.createElement('canvas'); c.width = Math.round(bm.width * sc); c.height = Math.round(bm.height * sc);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bm, 0, 0, c.width, c.height);
+    for (const q of [.85, .7, .55]) { const b = await canvasBlob(c, 'image/jpeg', q); if (b && b.size <= AI_BYTES) return b; }
+    return await canvasBlob(c, 'image/jpeg', .45);
+  } catch (e) { return blob; }
+}
 let aiCtl = null;
 async function aiRead() {
   const D = APP.doc; if (!D || !APP.sample) return;
-  aiCtl = new AbortController(); D.aiBusy = true; D.aiErr = null; renderAttach();
+  aiCtl = new AbortController(); D.aiBusy = true; D.aiErr = null; D.imgFail = null; renderAttach();
   const enumList = (o) => Object.keys(o).join(' | ');
   const maxImg = APP.sampleImages ? APP.sampleImages.maxCount : 0;
   // whole pictures first; title-block zooms only if the allowance has room left
-  const imgs = maxImg ? [...D.images, ...(D.crops || [])].slice(0, maxImg) : [];
+  const picked = maxImg ? [...D.images, ...(D.crops || [])].slice(0, maxImg) : [];
+  const imgs = await Promise.all(picked.map(fitForAi));
   const zooms = Math.max(0, imgs.length - D.images.length);
   const prompt = `You are a NOGA MT application engineer for UFIBER ceramic fiber deburring and finishing tools.
 A customer sent the material below${imgs.length ? ' plus ' + imgs.length + ' image(s) of their drawing or part, in the order they appear in the email' + (zooms ? ' (the last ' + (zooms > 1 ? zooms + ' are zooms' : 'is a zoom') + ' of a drawing\'s bottom-right title block)' : '') : ''}.${D.cases > 1 ? `
@@ -191,10 +208,19 @@ CUSTOMER MATERIAL:
 ${D.text.slice(0, 14000) || '(no text — images only)'}
 """${(() => { const u = ($('#askT')?.value || '').trim(); return u && u !== excerpt(D) ? `\n\nNOTES TYPED BY THE USER (take these as correct where they differ):\n"""\n${u.slice(0, 3000)}\n"""` : ''; })()}`;
   try {
-    const r = await APP.sample.json(prompt, { images: imgs.length ? imgs : undefined, signal: aiCtl.signal });
+    let r;
+    try { r = await APP.sample.json(prompt, { images: imgs.length ? imgs : undefined, signal: aiCtl.signal }); }
+    catch (e) {
+      // the request with pictures failed on the way: read the email text alone
+      // rather than nothing, and say the drawings were not seen
+      if (!imgs.length || !/^(unreachable|network|http_|upstream_|image_|empty|timeout)/.test(String(e && e.code))) throw e;
+      try { console.warn('UFIBER Guide: reading with pictures failed, retrying with text only', e); } catch (_) { }
+      r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), { signal: aiCtl.signal });
+      D.imgFail = String(e && e.code || 'failed');
+    }
     applyAi(r);
   } catch (e) {
-    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.' }[e && e.code];
+    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.' }[e && e.code];
     // say why: a bare "something went wrong" can't be acted on or reported
     const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
     if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }
@@ -232,6 +258,7 @@ function renderAttach() {
       ${D.aiErr ? `<div class="callout warn">${I.warn}<div>${esc(D.aiErr)}</div></div>` : ''}</div>`
       : (!canAi && hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
     ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.</div></div>` : ''}
+    ${D.ai && D.imgFail ? `<div class="callout warn">${I.warn}<div><b>Only the email text was read</b>The pictures couldn't be sent to Claude (${esc(D.imgFail)}), so sizes on the drawing were not seen. Type them in the box, or try again.</div></div>` : ''}
     ${D.ai ? `<div class="att-res">${D.ai.summary ? `<p style="margin:0 0 8px"><b>Customer need:</b> ${esc(D.ai.summary)}</p>` : ''}
       ${D.ai.callouts.length ? `<div class="tiny" style="margin-top:6px">From the email / drawing</div><ul class="watch" style="margin-top:4px">${D.ai.callouts.map(c => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${esc(c)}</span></li>`).join('')}</ul>` : ''}
       ${D.ai.questions.length ? `<div class="tiny" style="margin-top:10px">Still unknown — ask the customer</div><ul class="watch" style="margin-top:4px">${D.ai.questions.map(c => `<li>${I.info.replace('<svg', '<svg style="color:var(--warn)"')}<span>${esc(c)}</span></li>`).join('')}</ul><button class="btn ghost small" id="copyQs" style="margin-top:6px">${I.copy} Copy questions</button>` : ''}</div>` : ''}
