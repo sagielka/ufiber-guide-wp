@@ -1738,7 +1738,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.9';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.10';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2067,7 +2067,7 @@ function home() {
   ${recent.length ? `<div class="section-t"><h2 class="h2">Your recent setups</h2><button class="btn ghost small" id="clrRecent">Clear</button></div><div class="recent">${recent.map((r, i) => `<button data-recent="${i}"><span><b class="num" style="font-size:18px">${esc(r.sku)}</b> <span class="muted small">${esc(r.label)}</span></span>${I.arrow.replace('<svg', '<svg width="18" height="18"')}</button>`).join('')}</div>` : ''}
   <div class="section-t"><h2 class="h2">Already running a brush?</h2></div>
   <div class="tiles" style="max-width:740px"><a class="tile" href="#/fix" style="text-decoration:none;color:inherit"><span class="ic">${I.fix}</span><span>Something isn't right<small>Burrs remain, fast wear, rounded edges, broken fibers — fix it step by step</small></span></a>
-  <a class="tile" href="#/replace" style="text-decoration:none;color:inherit"><span class="ic">${I.swap}</span><span>Switching from competitor?<small>Convert competitor item codes to UFIBER and check your program</small></span></a></div>`;
+  <a class="tile" href="#/replace" style="text-decoration:none;color:inherit"><span class="ic">${I.swap}</span><span>Switching from a competitor?<small>Convert competitor item codes (competitor and others) to UFIBER and check your program</small></span></a></div>`;
 }
 function heroArt() {
   const shots = [
@@ -2966,7 +2966,7 @@ window.addEventListener('hashchange', onUrl); window.addEventListener('popstate'
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('[data-unit]').forEach(b => b.setAttribute('aria-pressed', b.dataset.unit === APP.units)); route(); });
 
 /* ============================================================
-   UFIBER Guide — Replace competitor with UFIBER
+   UFIBER Guide — Replace a competitor brush (competitor and others) with UFIBER
    competitor grades brushes by color (no grit numbers). The color →
    grit mapping below follows NOGA MT's own case-study workbook
    (Pink→#2000, Red→#1200, White→#1000, Blue→#800). competitor grinding
@@ -3085,9 +3085,9 @@ function gritAlts(out, grit, skuFn) {
 
 function replaceView() {
   const R = APP.xr || (APP.xr = { text: '', items: [] });
-  return `<h1 class="h2" style="font-size:34px">Replace competitor with UFIBER</h1>
-  <p class="muted" style="margin:4px 0 0;max-width:68ch">Paste one or many competitor item codes — from a quote, a tool list or the label on the brush. You get the UFIBER item, the holder, and what to change in the program.</p>
-  <div class="ask" style="max-width:860px"><label for="xIn" class="sr">competitor item codes</label>
+  return `<h1 class="h2" style="font-size:34px">Replace a competitor brush with UFIBER</h1>
+  <p class="muted" style="margin:4px 0 0;max-width:68ch">Paste one or many competitor item codes (competitor and others) — from a quote, a tool list or the label on the brush. You get the UFIBER item, the holder, and what to change in the program.</p>
+  <div class="ask" style="max-width:860px"><label for="xIn" class="sr">Competitor item codes</label>
     <textarea id="xIn" placeholder="One code per line, e.g.\nA21-CB25M\nCH-A12-5M\nS25M">${esc(R.text)}</textarea>
     <div class="ask-bar"><div class="examples" style="margin:0">${X_EXAMPLES.map(x => `<button class="chip" data-xex="${x}">${x}</button>`).join('')}</div><button class="btn primary" id="xGo">${I.swap} Convert</button></div></div>
   <details class="acc" style="max-width:860px;margin-top:12px"${R.pickOpen ? ' open' : ''}><summary><span class="ic">${GLYPH.small}</span>Don't know the code? Pick it</summary><div class="body">${xPicker()}</div></details>
@@ -4832,7 +4832,7 @@ const ANSWERS = {
       `It takes **End and Point brushes, ceramic fibre discs and diamond stones** — not surface or cross-hole brushes, which need controlled depth and speed in a machine. Hand-held brushing runs 1,000–3,000 RPM.`,
     props: [{ label: 'Switch to hand-held', changes: { machine_type: 'hand' } }],
   }),
-  competitor_q: () => ({ md: `The **Replace competitor** tab converts competitor codes to UFIBER items and checks your existing program against the UFIBER limits. Paste your codes there.`, props: [], go: 'replace' }),
+  competitor_q: () => ({ md: `The **Replace competitor** tab converts competitor codes (competitor and others) to UFIBER items and checks your existing program against the UFIBER limits. Paste your codes there.`, props: [], go: 'replace' }),
   material_change: (slots) => {
     if (!slots.material) return { md: `Which material should I try? I can re-run the same job on any material in NOGA's table.`, props: [] };
     const v = variantAnswer({ material: slots.material });
@@ -4988,7 +4988,7 @@ function offlineAnswer(question) {
 <script>
 document.getElementById('printDate').textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 document.getElementById('foot').innerHTML = `<span><b>UFIBER Guide</b> v${APP_VERSION}</span><span class="sep">·</span><span>build ${APP_BUILT}</span><span class="sep">·</span><span>${NLU.ready ? 'offline model included' : 'offline model unavailable'}</span><span class="sep">·</span><span>Parameters from NOGA MT published data — validate on a test part</span>`;
-document.getElementById('tabbar').innerHTML = [['#/','find','Find',I.find],['#/speeds','speeds','Speeds',I.gauge],['#/fix','fix','Fix',I.fix],['#/replace','replace','competitor',I.swap]].map(([h,k,l,ic])=>`<a href="${h}" data-navk="${k}">${ic}<span>${l}</span></a>`).join('') + `<button data-more aria-label="More: Learn, Products">${I.more}<span>More</span></button>`;
+document.getElementById('tabbar').innerHTML = [['#/','find','Find',I.find],['#/speeds','speeds','Speeds',I.gauge],['#/fix','fix','Fix',I.fix],['#/replace','replace','Competitor',I.swap]].map(([h,k,l,ic])=>`<a href="${h}" data-navk="${k}">${ic}<span>${l}</span></a>`).join('') + `<button data-more aria-label="More: Learn, Products">${I.more}<span>More</span></button>`;
 </script>
 <script>/* ============================================================
    UFIBER Guide — embed mode (only when loaded with ?embed=1)
@@ -5016,7 +5016,7 @@ document.getElementById('tabbar').innerHTML = [['#/','find','Find',I.find],['#/s
   // Narrow containers: all sections as a scrollable strip under the header (a fixed bottom bar is useless in an auto-height frame)
   const tb = document.getElementById('tabbar');
   if (tb) {
-    tb.innerHTML = [['#/', 'find', 'Find', I.find], ['#/speeds', 'speeds', 'Speeds', I.gauge], ['#/fix', 'fix', 'Fix', I.fix], ['#/replace', 'replace', 'competitor', I.swap], ['#/learn', 'learn', 'Learn', I.learn], ['#/products', 'products', 'Products', I.prod]]
+    tb.innerHTML = [['#/', 'find', 'Find', I.find], ['#/speeds', 'speeds', 'Speeds', I.gauge], ['#/fix', 'fix', 'Fix', I.fix], ['#/replace', 'replace', 'Competitor', I.swap], ['#/learn', 'learn', 'Learn', I.learn], ['#/products', 'products', 'Products', I.prod]]
       .map(([h, k, l, ic]) => `<a href="${h}" data-navk="${k}">${ic}<span>${l}</span></a>`).join('');
     try { document.querySelectorAll('[data-navk]').forEach(a => a.setAttribute('aria-current', 'false')); route(true); } catch (e) { }
   }

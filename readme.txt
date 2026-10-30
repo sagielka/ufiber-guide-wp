@@ -4,10 +4,10 @@ Tags: elementor, widget, deburring, ceramic fiber, tool selector
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.6.9
+Stable tag: 1.6.10
 License: GPLv2 or later
 
-UFIBER tool selector, speeds & feeds, troubleshooter, competitor converter and product builder as an Elementor widget and shortcode.
+UFIBER tool selector, speeds & feeds, troubleshooter, competitor converter (competitor and others) and product builder as an Elementor widget and shortcode.
 
 == Description ==
 * Elementor widget "UFIBER Guide" (category NOGA MT) with start section, units, logo bar, height and frame styling.

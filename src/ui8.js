@@ -231,7 +231,7 @@ const ANSWERS = {
       `It takes **End and Point brushes, ceramic fibre discs and diamond stones** — not surface or cross-hole brushes, which need controlled depth and speed in a machine. Hand-held brushing runs 1,000–3,000 RPM.`,
     props: [{ label: 'Switch to hand-held', changes: { machine_type: 'hand' } }],
   }),
-  competitor_q: () => ({ md: `The **Replace competitor** tab converts competitor codes to UFIBER items and checks your existing program against the UFIBER limits. Paste your codes there.`, props: [], go: 'replace' }),
+  competitor_q: () => ({ md: `The **Replace competitor** tab converts competitor codes (competitor and others) to UFIBER items and checks your existing program against the UFIBER limits. Paste your codes there.`, props: [], go: 'replace' }),
   material_change: (slots) => {
     if (!slots.material) return { md: `Which material should I try? I can re-run the same job on any material in NOGA's table.`, props: [] };
     const v = variantAnswer({ material: slots.material });

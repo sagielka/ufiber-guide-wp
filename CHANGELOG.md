@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.10 – 2026-10-30
+- "Replace competitor" is now "Replace competitor": the menu, the mobile tab bar,
+  the home tile ("Switching from a competitor?"), the page heading, the
+  Elementor widget and the settings screen. competitor codes convert as before;
+  other brands are added as their catalogues arrive.
+
 ## 1.6.9 – 2026-10-30
 - The pictures sent with a reading now share one size budget (about 1.1 MB
   together, about 1.5 MB as sent). Many hosts drop any request over 2 MB

@@ -40,7 +40,7 @@ function home() {
   ${recent.length ? `<div class="section-t"><h2 class="h2">Your recent setups</h2><button class="btn ghost small" id="clrRecent">Clear</button></div><div class="recent">${recent.map((r, i) => `<button data-recent="${i}"><span><b class="num" style="font-size:18px">${esc(r.sku)}</b> <span class="muted small">${esc(r.label)}</span></span>${I.arrow.replace('<svg', '<svg width="18" height="18"')}</button>`).join('')}</div>` : ''}
   <div class="section-t"><h2 class="h2">Already running a brush?</h2></div>
   <div class="tiles" style="max-width:740px"><a class="tile" href="#/fix" style="text-decoration:none;color:inherit"><span class="ic">${I.fix}</span><span>Something isn't right<small>Burrs remain, fast wear, rounded edges, broken fibers — fix it step by step</small></span></a>
-  <a class="tile" href="#/replace" style="text-decoration:none;color:inherit"><span class="ic">${I.swap}</span><span>Switching from competitor?<small>Convert competitor item codes to UFIBER and check your program</small></span></a></div>`;
+  <a class="tile" href="#/replace" style="text-decoration:none;color:inherit"><span class="ic">${I.swap}</span><span>Switching from a competitor?<small>Convert competitor item codes (competitor and others) to UFIBER and check your program</small></span></a></div>`;
 }
 function heroArt() {
   const shots = [

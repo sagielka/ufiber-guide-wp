@@ -24,7 +24,7 @@
   // Narrow containers: all sections as a scrollable strip under the header (a fixed bottom bar is useless in an auto-height frame)
   const tb = document.getElementById('tabbar');
   if (tb) {
-    tb.innerHTML = [['#/', 'find', 'Find', I.find], ['#/speeds', 'speeds', 'Speeds', I.gauge], ['#/fix', 'fix', 'Fix', I.fix], ['#/replace', 'replace', 'competitor', I.swap], ['#/learn', 'learn', 'Learn', I.learn], ['#/products', 'products', 'Products', I.prod]]
+    tb.innerHTML = [['#/', 'find', 'Find', I.find], ['#/speeds', 'speeds', 'Speeds', I.gauge], ['#/fix', 'fix', 'Fix', I.fix], ['#/replace', 'replace', 'Competitor', I.swap], ['#/learn', 'learn', 'Learn', I.learn], ['#/products', 'products', 'Products', I.prod]]
       .map(([h, k, l, ic]) => `<a href="${h}" data-navk="${k}">${ic}<span>${l}</span></a>`).join('');
     try { document.querySelectorAll('[data-navk]').forEach(a => a.setAttribute('aria-current', 'false')); route(true); } catch (e) { }
   }

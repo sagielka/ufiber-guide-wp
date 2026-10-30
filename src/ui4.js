@@ -1,5 +1,5 @@
 /* ============================================================
-   UFIBER Guide — Replace competitor with UFIBER
+   UFIBER Guide — Replace a competitor brush (competitor and others) with UFIBER
    competitor grades brushes by color (no grit numbers). The color →
    grit mapping below follows NOGA MT's own case-study workbook
    (Pink→#2000, Red→#1200, White→#1000, Blue→#800). competitor grinding
@@ -118,9 +118,9 @@ function gritAlts(out, grit, skuFn) {
 
 function replaceView() {
   const R = APP.xr || (APP.xr = { text: '', items: [] });
-  return `<h1 class="h2" style="font-size:34px">Replace competitor with UFIBER</h1>
-  <p class="muted" style="margin:4px 0 0;max-width:68ch">Paste one or many competitor item codes — from a quote, a tool list or the label on the brush. You get the UFIBER item, the holder, and what to change in the program.</p>
-  <div class="ask" style="max-width:860px"><label for="xIn" class="sr">competitor item codes</label>
+  return `<h1 class="h2" style="font-size:34px">Replace a competitor brush with UFIBER</h1>
+  <p class="muted" style="margin:4px 0 0;max-width:68ch">Paste one or many competitor item codes (competitor and others) — from a quote, a tool list or the label on the brush. You get the UFIBER item, the holder, and what to change in the program.</p>
+  <div class="ask" style="max-width:860px"><label for="xIn" class="sr">Competitor item codes</label>
     <textarea id="xIn" placeholder="One code per line, e.g.\nA21-CB25M\nCH-A12-5M\nS25M">${esc(R.text)}</textarea>
     <div class="ask-bar"><div class="examples" style="margin:0">${X_EXAMPLES.map(x => `<button class="chip" data-xex="${x}">${x}</button>`).join('')}</div><button class="btn primary" id="xGo">${I.swap} Convert</button></div></div>
   <details class="acc" style="max-width:860px;margin-top:12px"${R.pickOpen ? ' open' : ''}><summary><span class="ic">${GLYPH.small}</span>Don't know the code? Pick it</summary><div class="body">${xPicker()}</div></details>
