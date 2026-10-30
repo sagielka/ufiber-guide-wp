@@ -13,10 +13,10 @@ const ctx = { console, module: { exports: {} }, navigator: { language: 'en' }, l
 vm.createContext(ctx);
 vm.runInContext(
   [fs.readFileSync(path.join(SRC, 'cases_block.txt'), 'utf8'),
-   load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui7.js'), load('share.js')].join('\n') +
+   load('engine.js'), load('sf.js'), load('msg.js'), load('nlu.js'), load('ui1.js'), load('ui4.js'), load('ui7.js'), load('share.js')].join('\n') +
   '\n;globalThis.__F = typeof AI_FACTS === "function" ? AI_FACTS : null;\n;globalThis.__C = typeof AI_CASES === "function" ? AI_CASES : null;\n;globalThis.__CASES = typeof CASES !== "undefined" ? CASES : [];' +
   '\n;globalThis.__E = { parseText, recommend, gradesIn, gradeInfo, cleanGrades, SHARE, scrubContact, scrubToolWords, dedupeDims, msgRead, caseCount, splitJobs, jobText, NLU,' +
-  ' skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
+  ' xParse, xConvert, xFind, xCompact, skuSurface, skuCross, skuPoint, skuDisc, DISC_GRITS, ACCESSORIES, MAX_RPM, SURFACE, SURFACE_LIMITS, GRITS,' +
   ' newState: () => ({ task: null, feature: null, material: null, sub: null, burr: "light", dims: {},' +
   ' machine: { type: "mc", maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} }) };',
   ctx
@@ -402,6 +402,58 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('the Ø15 #1000 on a shank is UF1615', s19.sku === 'UF1615', s19.sku);
   ok('it cites the measured spread', s19.why.some(w => /Ø28\.9 at the tips/.test(w.d) && /Ø19 cross hole/.test(w.d)), s19.why.map(w => w.t));
   ok('a #1000 Ø15 surface brush now fits a Ø19 bore, a #600 one does not', vm.runInContext('sfShankFits(19, 1000).some(f => f.d === 15) && !sfShankFits(19, 600).length', ctx));
+}
+
+
+/* ---- competitor cross-reference, checked row by row against the catalogues (1.6.17) ----
+   competitor: a distributor listings + a distributor. competitor: competitor catalogue pages and brush-info sheet sent to NOGA, Jun-2024. */
+{
+  const X = (c) => E.xConvert(E.xParse(c));
+  const sku = (c) => X(c).uf?.sku;
+  // competitor surface: colour → grit (pink #2000, red #1200, white #1000, blue #800), every size
+  const surf = { A13: [6, 15], A11: [6, 15, 25, 40, 60, 100], A21: [6, 15, 25, 40, 60, 100], A31: [6, 15, 25, 40, 60, 100], A32: [6, 15, 25, 40, 60, 100] };
+  const g = { A13: 2000, A11: 1200, A21: 1000, A31: 800, A32: 800 };
+  let bad = [];
+  for (const [c, ds] of Object.entries(surf)) for (const d of ds) { const code = `${c}-CB${String(d).padStart(2, '0')}M`; const want = E.skuSurface(d, g[c]).sku; if (sku(code) !== want) bad.push([code, sku(code), want]); }
+  ok('every competitor surface brush maps to the same size and its colour grit', !bad.length, bad);
+  ok('A32-CB100M is UF1500 (confirmed by NOGA)', sku('A32-CB100M') === 'UF1500', sku('A32-CB100M'));
+  // competitor crosshole: bore ranges per colour; blue Ø7 is 10–14, red Ø7 is 10–20
+  ok('red Ø7 crosshole → UF2770 #1200, same Ø10–20 range', sku('CH-A12-7M') === 'UF2770' && X('CH-A12-7M').notes.some(n => /Same bore range.*10–20/.test(n)), X('CH-A12-7M').notes);
+  ok('blue Ø7 crosshole is competitor Ø10–14, not 10–20', sku('CH-A33-7M') === 'UF2570' && X('CH-A33-7M').notes.some(n => /competitor Ø7 brush covers Ø10–14/.test(n)), X('CH-A33-7M').notes);
+  ok('-TL suffix and Ø1.5 read', sku('CH-A12-5M-TL') === 'UF2750' && sku('CH-A12-1.5M') === 'UF2715');
+  ok('competitor L brush: length and shank change are flagged', X('CH-A33-7L').status === 'close' && X('CH-A33-7L').notes.some(n => /180 mm/.test(n)) && X('CH-A33-7L').notes.some(n => /Ø8 shank/.test(n)), X('CH-A33-7L').notes);
+  ok('red Ø11 crosshole → #1000 (Ø11 has no #1200)', sku('CH-A12-11M') === 'UF2611');
+  // competitor Extra-Large A34: surface brush on a shank
+  ok('CH-A34-15 (bores 20–25) → Ø15 surface brush on shank UF5001', X('CH-A34-15').uf?.dia === 15 && X('CH-A34-15').holders.some(h => h.sku === 'UF5001'), X('CH-A34-15'));
+  ok('CH-A34-25 (bores 30–35) → Ø25 on shank UF5003', X('CH-A34-25').uf?.dia === 25 && X('CH-A34-25').holders.some(h => h.sku === 'UF5003'));
+  ok('CH-SH-6 shank is understood', X('CH-SH-6').uf?.sku === 'UF5001');
+  // competitor end, sleeves
+  ok('A21-EB06M → flat end brush #1000, A13-EB03M → Ø3 point #2000', sku('A21-EB06M') === 'UF4650' && sku('A13-EB03M') === 'UF3830', [sku('A21-EB06M'), sku('A13-EB03M')]);
+  ok('S25M sleeve → UF5525 with a collet change (Ø8 → Ø10)', sku('S25M') === 'UF5525' && X('S25M').notes.some(n => /Ø8 to Ø10/.test(n)));
+  // competitor surface sets: pink ≈ P1200, blue ≈ P400; sleeve shanks Ø6/6/8/10/12/14
+  const vs = [[6, 6], [15, 6], [25, 8], [40, 10], [60, 12], [100, 14]];
+  bad = [];
+  for (const [d, ds] of vs) { const code = `CN-CB${String(d).padStart(2, '0')}MS`; if (sku(code) !== E.skuSurface(d, 1200).sku) bad.push([code, sku(code)]); const o = X(code); const S = E.SURFACE[d]; if (ds !== S.ds && !o.notes.some(n => new RegExp(`Ø${ds} shank`).test(n))) bad.push([code, 'shank note']); }
+  ok('every competitor pink surface set maps to the same size #1200, with shank changes noted', !bad.length, bad);
+  ok('competitor blue (H) surface brush → #400', sku('CN-CB15HS') === 'UF1315' && sku('CN-06H') === 'UF1306', [sku('CN-CB15HS'), sku('CN-06H')]);
+  // competitor cross-hole: pink A12 ≈ P1200 (not competitor red A12 by name only), Ø9 has no UFIBER size
+  ok('competitor CN-A12-7M (pink) → UF2770 #1200', sku('CN-A12-7M') === 'UF2770');
+  ok('competitor CN-A12-1.5M → UF2715, Ø3–5 vs Ø3.5–5 flagged', sku('CN-A12-1.5M') === 'UF2715' && X('CN-A12-1.5M').notes.some(n => /Ø3–5/.test(n)));
+  ok('competitor Ø9 pink → UFIBER Ø7 #1200 (covers Ø10–20)', sku('CN-A12-9M') === 'UF2770' && X('CN-A12-9M').status === 'close');
+  ok('competitor Ø9 blue → Ø7 #400 plus Ø11 #600 for Ø14–18', sku('CN-A33-9M') === 'UF2370' && X('CN-A33-9M').alts.some(a => a.sku === 'UF2411'), X('CN-A33-9M').alts);
+  ok('competitor blue Ø11 → Ø11 #600 (no #400 in Ø11)', sku('CN-A33-11M') === 'UF2411', sku('CN-A33-11M'));
+  ok('competitor blue cross-hole grit is flagged as not stated', X('CN-A33-5M').notes.some(n => /gives no grit for blue/.test(n)));
+  // competitor micro-hole, stones, others
+  ok('CB31R-S1.5 → Ø1.5 point #1200, CB31B-S2.5 → Ø2.5 point #400', sku('CB31R-S1.5') === 'UF3715' && sku('CB31B-S2.5') === 'UF3325', [sku('CB31R-S1.5'), sku('CB31B-S2.5')]);
+  ok('competitor oil stones → UFIBER Ø3 diamond stone by grit (#800, #400, #220→#200)', sku('CN-PB-3B') === 'UF9430' && sku('CN-PO-3B') === 'UF9230' && sku('CN-PM-3B') === 'UF9130', [sku('CN-PB-3B'), sku('CN-PO-3B'), sku('CN-PM-3B')]);
+  ok('competitor ball hone has no UFIBER equivalent', X('BD-10M').status === 'none');
+  ok('maker CB31M-01550 → UF1615', sku('CB31M-01550') === 'UF1615' && X('CB31M-01550').status === 'direct');
+  ok('unknown code is reported, not guessed', X('ZZ-123').status === 'unknown' && !X('ZZ-123').uf);
+  // finding codes in a customer's text
+  const found = E.xFind('Hi, we use competitor A21-CB25M and CH-A33-7M on 4140, also competitor CN-A12-5M. A floating holder and a stone are on the bench. Ø25 brush, S25M sleeve.');
+  ok('codes in an email are found, words are not', JSON.stringify(found) === JSON.stringify(['A21-CB25M', 'CH-A33-7M', 'CN-A12-5M', 'S25M']), found);
+  ok('a plain size or grade is not taken for a code', E.xFind('Ø25 brush, 1.4301, #1000, 6000 rpm, M6x1').length === 0);
+  ok('the compact form carries the SKU for the AI', E.xCompact(X('CN-CB25MS')).ufiber_sku === 'UF1725');
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

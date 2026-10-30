@@ -40,7 +40,7 @@ function home() {
   ${recent.length ? `<div class="section-t"><h2 class="h2">Your recent setups</h2><button class="btn ghost small" id="clrRecent">Clear</button></div><div class="recent">${recent.map((r, i) => `<button data-recent="${i}"><span><b class="num" style="font-size:18px">${esc(r.sku)}</b> <span class="muted small">${esc(r.label)}</span></span>${I.arrow.replace('<svg', '<svg width="18" height="18"')}</button>`).join('')}</div>` : ''}
   <div class="section-t"><h2 class="h2">Already running a brush?</h2></div>
   <div class="tiles" style="max-width:740px"><a class="tile" href="#/fix" style="text-decoration:none;color:inherit"><span class="ic">${I.fix}</span><span>Something isn't right<small>Burrs remain, fast wear, rounded edges, broken fibers — fix it step by step</small></span></a>
-  <a class="tile" href="#/replace" style="text-decoration:none;color:inherit"><span class="ic">${I.swap}</span><span>Switching from a competitor?<small>Convert competitor item codes (competitor and others) to UFIBER and check your program</small></span></a></div>`;
+  <a class="tile" href="#/replace" style="text-decoration:none;color:inherit"><span class="ic">${I.swap}</span><span>Switching from a competitor?<small>Convert competitor item codes (competitor, competitor, maker) to UFIBER and check your program</small></span></a></div>`;
 }
 function heroArt() {
   const shots = [
@@ -96,7 +96,7 @@ function renderUnderstood() {
   if (picker === 'material') pick = `<p class="small" style="margin:12px 0 0"><b>Which material?</b></p><div class="mini-tiles">${Object.entries(MATERIALS).map(([k, m]) => `<button class="chip${st.material === k ? ' on' : ''}" data-set="material" data-v="${k}">${m.name}</button>`).join('')}</div>`;
   if (picker === 'feature') pick = `<p class="small" style="margin:12px 0 0"><b>Where is the feature?</b></p><div class="mini-tiles">${Object.entries(FEATURES).filter(([k]) => k !== 'cross' && k !== 'bore').map(([k, f]) => `<button class="chip${st.feature === k ? ' on' : ''}" data-set="feature" data-v="${k}">${f}</button>`).join('')}</div>`;
   el.innerHTML = `<div class="understood fade-in"><b>Here's what I understood</b> <span class="tiny">— tap anything to change it</span>
-    <div class="u-list">${chips.join('')}</div>${laterBlock(st)}${smartBlock()}${pick}
+    <div class="u-list">${chips.join('')}</div>${laterBlock(st)}${typeof xFoundBlock === 'function' ? xFoundBlock() : ''}${smartBlock()}${pick}
     <div class="row" style="margin-top:12px">${missing ? `<span class="small muted">${APP.smart.busy ? 'Filling in the gaps…' : 'One more answer and you\'re set.'}</span>` : ''}
     <button class="btn ghost small" id="goWiz">Refine step by step</button>
     <span id="goSlot" style="margin-left:auto"></span></div></div>`;
@@ -312,7 +312,7 @@ function result() {
   const diasAvail = R.family === 'surface' || R.family === 'shank' ? [6, 15, 25, 40, 60, 100] : R.family === 'crosshole' ? [1.5, 3, 5, 7, 11] : R.family === 'point' ? [1, 1.5, 2, 2.5, 3] : R.family === 'disc' ? [13, 19, 22, 25, 30] : [];
   return `<div class="res-top">
     <div><p class="tiny" style="margin:0"><a href="#/" data-nav="home">← Back${APP.doc?.files?.length ? ' to the email' : ''}</a><span class="muted"> · </span><a href="#/find" data-nav="edit">Edit answers</a></p><h1 class="h2" style="font-size:34px;margin-top:4px">Your starting setup</h1><p class="muted" style="margin:4px 0 0">${esc(summary)}</p></div>
-    <div class="row"><button class="btn small" id="newApp" title="Forget this job and start a new one. Your machine and units are kept.">+ New application</button><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing competitor ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
+    <div class="row"><button class="btn small" id="newApp" title="Forget this job and start a new one. Your machine and units are kept.">+ New application</button><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing ${esc(/^(competitor|competitor|maker) /.test(st.fromX) ? st.fromX : 'competitor ' + st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
   </div>
   ${R.warnings.map(w => `<div class="callout warn">${I.warn}<div><b>${esc(w.t)}</b>${esc(w.d)}</div></div>`).join('')}
   ${laterBlock(st, true)}
@@ -403,7 +403,7 @@ function setupText(R, extra = '') {
   if (p.sequence) L.push(`Grit sequence: ${p.sequence.map(g => '#' + g).join(' > ')}`);
   L.push(''); L.push('STEPS'); R.steps.forEach((s, i) => L.push(`${i + 1}. ${s}`));
   if (R.warnings.length) { L.push(''); L.push('CHECK'); R.warnings.forEach(w => L.push(`- ${w.t}: ${w.d}`)); }
-  if (st.fromX) { L.push(''); L.push(`Replacing competitor ${st.fromX}`); }
+  if (st.fromX) { L.push(''); L.push(`Replacing ${/^(competitor|competitor|maker) /.test(st.fromX) ? st.fromX : 'competitor ' + st.fromX}`); }
   const doc = typeof docSummaryText === 'function' ? docSummaryText() : ''; if (doc) { L.push(''); L.push(doc); }
   if (extra) { L.push(''); L.push(extra); }
   L.push(''); L.push('Starting parameters only — validate on a test part.');

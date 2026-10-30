@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.6.17 – 2026-10-30
+- Competitor cross-reference re-checked against the catalogues. competitor was
+  checked against a distributor and a distributor, competitor against competitor's own
+  catalogue pages and brush-info sheet sent to NOGA.
+- Fixed: competitor blue Ø7 cross-hole (CH-A33-7) covers bores Ø10–14, not
+  Ø10–20. Only the red Ø7 (CH-A12-7) goes to Ø20.
+- competitor cross-hole brushes now flag a shank change. The L brushes have
+  Ø4/6/8/12 shanks, and their length is now right per colour: 170 mm for
+  red, 180 mm for blue.
+- New competitor items: Extra-Large cross-hole CH-A34-15/20/25 (bores Ø20–35)
+  becomes a UFIBER surface brush on a shank. Also added the CH-SH-6/8
+  shanks, CH-P… ceramic stones and TM-SH lathe holders.
+- competitor added: surface sets CN-CB…MS (pink ≈ P1200 → #1200) and CN-CB…HS
+  (blue ≈ P400 → #400), with their sleeve shank and speed differences.
+  Also cross-hole CN-A12/A33 Ø1.5–11, with Ø9 mapped to Ø7 or Ø11 because
+  UFIBER has no Ø9. Plus micro-hole CB31R/B-S Ø1–3 (point brushes), oil-stone
+  heads CN-PB/PO/PM (diamond stones), and the PD, CPD and BD lines.
+- maker CB31M-01550 → UF1615.
+- Competitor codes in what a customer types or drops in (ask box, email,
+  drawing text) are found and converted under "Here's what I understood",
+  with a button to the full conversion. Ordinary words like "stone" or
+  "floating" are not taken for codes.
+- The AI now gets those conversions in its context and a
+  convert_competitor_codes lookup. It is told never to work out an
+  equivalent itself.
+
 ## 1.6.16 – 2026-10-30
 - A Ø15 surface brush on a shank now fits from a Ø19 bore (#1000 and finer),
   instead of Ø20. Source: maker's spread test of the brush that matches UF1615
