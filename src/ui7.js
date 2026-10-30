@@ -67,7 +67,7 @@ ${text.slice(0, 6000)}
     applyExtraction(r, APP.smart.snap);
   } catch (e) {
     if (e && e.code === 'cancelled') return;
-    APP.smart.err = { not_granted: 'AI reading is off for this view — the quick reading above still works.', rate_limited: 'AI is busy — try again in a minute.' }[e && e.code] || 'AI reading didn\'t finish — the quick reading above still works.';
+    APP.smart.err = { not_granted: 'AI reading is off for this view — the quick reading above still works.', rate_limited: 'AI is busy — try again in a minute.', visitor_limit: `This site's hourly AI allowance is used up — try again in about ${(e && e.wait) || 60} min.`, overloaded: 'Claude is overloaded — try again in a minute.' }[e && e.code] || 'AI reading didn\'t finish — the quick reading above still works.';
     if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null;
   } finally { if (APP.smart.ctl === ctl) { APP.smart.busy = false; renderUnderstood(); } }
 }
@@ -330,7 +330,7 @@ SETUP_CONTEXT: ${aiContext()}`;
   try { const r = await APP.sample(turns, opts); turn.content = r.text; if (r.truncated) turn.err = 'Answer cut short — ask for less at a time.'; }
   catch (e) {
     if (e && e.code === 'cancelled') { turn.content = e.text || turn.content || '(stopped)'; }
-    else { turn.content = e && e.text ? e.text : ''; turn.err = { not_granted: 'Claude isn\'t allowed in this view.', rate_limited: 'Too many requests — try again in a minute.', refused: 'Claude couldn\'t answer that.', tools_unavailable: 'Tools are unavailable here.' }[e && e.code] || 'Something went wrong — try again.'; if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null; if (e && e.code === 'tools_unavailable') APP.sampleTools = null; }
+    else { turn.content = e && e.text ? e.text : ''; turn.err = { not_granted: 'Claude isn\'t allowed in this view.', rate_limited: 'Too many requests — try again in a minute.', visitor_limit: `This site's hourly AI allowance is used up — try again in about ${(e && e.wait) || 60} min.`, overloaded: 'Claude is overloaded — try again in a minute.', refused: 'Claude couldn\'t answer that.', tools_unavailable: 'Tools are unavailable here.' }[e && e.code] || 'Something went wrong — try again.'; if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null; if (e && e.code === 'tools_unavailable') APP.sampleTools = null; }
   } finally { turn.live = false; C.busy = false; C.ctl = null; renderChat(); }
 }
 function propIsCurrent(p) {

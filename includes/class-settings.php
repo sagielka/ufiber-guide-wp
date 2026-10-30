@@ -32,6 +32,7 @@ class NUFG_Settings {
 		register_setting( 'nufg', 'nufg_ai_workspace', array( 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => '' ) );
 		register_setting( 'nufg', NUFG_AI::KEY_OPTION, array( 'type' => 'string', 'sanitize_callback' => array( __CLASS__, 'save_key' ), 'default' => '' ) );
 		register_setting( 'nufg', 'nufg_ai_enabled', array( 'type' => 'boolean', 'sanitize_callback' => array( __CLASS__, 'bool' ), 'default' => 0 ) );
+		register_setting( 'nufg', 'nufg_ai_per_hour', array( 'type' => 'integer', 'sanitize_callback' => array( __CLASS__, 'per_hour' ), 'default' => 20 ) );
 		register_setting(
 			'nufg',
 			NUFG_Plugin::OPTION,
@@ -80,6 +81,11 @@ class NUFG_Settings {
 			return (string) get_option( NUFG_AI::KEY_OPTION, '' );
 		}
 		return $enc;
+	}
+
+	public static function per_hour( $v ) {
+		$n = (int) $v;
+		return max( 5, min( 500, $n ? $n : 20 ) );
 	}
 
 	public static function bool( $v ) {
@@ -276,7 +282,10 @@ class NUFG_Settings {
 							<?php $hint = NUFG_AI::key_hint(); $fixed = NUFG_AI::key_is_constant(); ?>
 							<label><input type="checkbox" name="nufg_ai_enabled" value="1" <?php checked( get_option( 'nufg_ai_enabled', 0 ), 1 ); ?> <?php disabled( '' === $hint ); ?>>
 								<?php esc_html_e( 'Let the guide read a customer e-mail or drawing, summarise it and ask follow-up questions.', 'noga-ufiber-guide' ); ?></label>
-							<p class="description"><?php esc_html_e( 'Each reading is a paid request, capped at 20 an hour per visitor. The guide works without this; it falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Each reading is a paid request. The guide works without this; it falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
+							<p><label><?php esc_html_e( 'Readings per visitor per hour', 'noga-ufiber-guide' ); ?>
+								<input type="number" name="nufg_ai_per_hour" min="5" max="500" step="1" style="width:80px" value="<?php echo esc_attr( NUFG_AI::per_hour() ); ?>"></label>
+								<span class="description"><?php esc_html_e( 'Retries of the same reading (a lighter picture set, a firmer question) do not count against this. Raise it while you test.', 'noga-ufiber-guide' ); ?></span></p>
 							<?php $lim = NUFG_AI::post_limit(); if ( '' !== $lim ) : ?>
 								<p class="description"><?php printf( esc_html__( 'This server accepts requests up to %s (PHP post_max_size). A reading with drawings is kept under about 1.5 MB; if readings with pictures fail, raise this to 8M with your host.', 'noga-ufiber-guide' ), '<code>' . esc_html( $lim ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
 							<?php endif; ?>

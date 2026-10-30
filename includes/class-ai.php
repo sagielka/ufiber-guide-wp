@@ -113,6 +113,12 @@ final class NUFG_AI {
 		exit;
 	}
 
+	/** Readings per visitor per hour, from the settings screen. */
+	public static function per_hour() {
+		$n = (int) get_option( 'nufg_ai_per_hour', self::CALLS_PER_HOUR );
+		return max( 5, min( 500, $n ? $n : self::CALLS_PER_HOUR ) );
+	}
+
 	/** The largest request this server accepts, for the settings screen. */
 	public static function post_limit() {
 		$v = trim( (string) ini_get( 'post_max_size' ) );
@@ -337,8 +343,12 @@ final class NUFG_AI {
 		if ( ! NUFG_Usage::token_ok( $req ) ) {
 			return self::no( 'rejected' );
 		}
-		if ( ! NUFG_Usage::rate_ok( 'ai', self::CALLS_PER_HOUR ) ) {
-			return self::no( 'rate_limited', 429 );
+		// A retry of the same reading (lighter pictures, a firmer prompt) is not
+		// a new reading: it has its own, looser allowance.
+		$limit = self::per_hour();
+		$retry = (bool) $req->get_param( 'retry' );
+		if ( ! NUFG_Usage::rate_ok( $retry ? 'ai_retry' : 'ai', $retry ? $limit * 3 : $limit ) ) {
+			return new WP_REST_Response( array( 'ok' => false, 'reason' => 'visitor_limit', 'limit' => $limit, 'wait' => NUFG_Usage::$wait ), 429 );
 		}
 
 		// Over PHP's post_max_size the body is dropped before WordPress sees it,
@@ -381,7 +391,7 @@ final class NUFG_AI {
 		$code = (int) wp_remote_retrieve_response_code( $res );
 		if ( 200 !== $code ) {
 			// Never pass the upstream message through: it can carry account details.
-			return self::no( 429 === $code ? 'rate_limited' : 'upstream_' . $code );
+			return self::no( 429 === $code ? 'rate_limited' : ( 529 === $code ? 'overloaded' : 'upstream_' . $code ) );
 		}
 		$data = json_decode( wp_remote_retrieve_body( $res ), true );
 		$text = '';

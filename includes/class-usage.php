@@ -98,16 +98,29 @@ final class NUFG_Usage {
 	}
 
 	/** Caps one visitor to a sane number of writes per hour. */
+	/**
+	 * A fixed one-hour window per visitor. Each call used to restart the hour,
+	 * so someone who kept trying stayed locked out for good.
+	 */
 	public static function rate_ok( $bucket, $limit ) {
 		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '0';
 		$key = 'nufg_rl_' . $bucket . '_' . md5( $ip );
-		$n   = (int) get_transient( $key );
-		if ( $n >= $limit ) {
+		$now = time();
+		$w   = get_transient( $key );
+		if ( ! is_array( $w ) || empty( $w['until'] ) || $w['until'] <= $now ) {
+			$w = array( 'n' => 0, 'until' => $now + HOUR_IN_SECONDS );
+		}
+		if ( (int) $w['n'] >= $limit ) {
+			self::$wait = max( 1, (int) ceil( ( $w['until'] - $now ) / 60 ) );
 			return false;
 		}
-		set_transient( $key, $n + 1, HOUR_IN_SECONDS );
+		$w['n'] = (int) $w['n'] + 1;
+		set_transient( $key, $w, max( 60, $w['until'] - $now ) );
 		return true;
 	}
+
+	/** Minutes until the visitor's window resets, after rate_ok() said no. */
+	public static $wait = 0;
 
 	public static function routes() {
 		$common = array(

@@ -1747,7 +1747,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.13';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.14';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3478,7 +3478,9 @@ const AISERVER = (() => {
     if (!d || !d.ok) {
       // WordPress errors carry a code, the guide's endpoint a reason
       const reason = String((d && (d.reason || d.code)) || 'http_' + r.status).slice(0, 60);
-      throw fail(reason === 'rate_limited' ? 'rate_limited' : reason === 'unconfigured' ? 'not_granted' : reason);
+      const e = fail(reason === 'unconfigured' ? 'not_granted' : reason);
+      if (d && d.limit) { e.limit = d.limit; e.wait = d.wait; }
+      throw e;
     }
     return d;
   }
@@ -3505,6 +3507,7 @@ const AISERVER = (() => {
       images: images.length ? images : undefined,
       system: 'Reply with one JSON object and nothing else. No prose, no code fence.',
       max_tokens: opts.max_tokens || 1500,
+      retry: opts.retry ? 1 : undefined,
     }, opts.signal);
     const t = String(d.text || '').trim();
     const j = AISERVER_JSON(t);
@@ -3775,9 +3778,12 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     const onWay = e => imgs.length && /^(unreachable|network|http_|upstream_|image_|empty|timeout|too_large)/.test(String(e && e.code));
     // an answer that wasn't one clean JSON object: ask once more, shorter
     const firm = `${prompt}\n\nIMPORTANT: answer with exactly ONE JSON object${sel != null ? ' for job ' + sel + ' only' : ''}. Keep "summary" under 40 words and every callout and question under 15 words. No text before or after it.`;
+    // only the first request of a reading counts as a new reading on the site
+    let tries = 0;
+    const call = (pr, im) => APP.sample.json(pr, { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000, retry: tries++ > 0 });
     const ask = async (pr, im) => {
-      try { return await APP.sample.json(pr, { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
-      catch (e) { if (!/^(bad_json|truncated|invalid_json)$/.test(String(e && e.code))) throw e; return APP.sample.json(firm.replace(prompt, pr), { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
+      try { return await call(pr, im); }
+      catch (e) { if (!/^(bad_json|truncated|invalid_json)$/.test(String(e && e.code))) throw e; return call(firm.replace(prompt, pr), im); }
     };
     try { r = await ask(prompt, imgs); }
     catch (e) {
@@ -3797,7 +3803,8 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     }
     applyAi(r);
   } catch (e) {
-    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
+    if (e && e.code === 'visitor_limit') { D.aiErr = `This site allows ${e.limit || 'a set number of'} readings an hour per visitor. Try again in about ${e.wait || 60} minute${e.wait === 1 ? '' : 's'} — or type the sizes in the box; the quick reading needs no allowance.`; return; }
+    const msg = { overloaded: 'Claude is overloaded right now — try again in a minute.', cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
     // say why: a bare "something went wrong" can't be acted on or reported
     const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
     if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }
@@ -4081,7 +4088,7 @@ ${text.slice(0, 6000)}
     applyExtraction(r, APP.smart.snap);
   } catch (e) {
     if (e && e.code === 'cancelled') return;
-    APP.smart.err = { not_granted: 'AI reading is off for this view — the quick reading above still works.', rate_limited: 'AI is busy — try again in a minute.' }[e && e.code] || 'AI reading didn\'t finish — the quick reading above still works.';
+    APP.smart.err = { not_granted: 'AI reading is off for this view — the quick reading above still works.', rate_limited: 'AI is busy — try again in a minute.', visitor_limit: `This site's hourly AI allowance is used up — try again in about ${(e && e.wait) || 60} min.`, overloaded: 'Claude is overloaded — try again in a minute.' }[e && e.code] || 'AI reading didn\'t finish — the quick reading above still works.';
     if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null;
   } finally { if (APP.smart.ctl === ctl) { APP.smart.busy = false; renderUnderstood(); } }
 }
@@ -4344,7 +4351,7 @@ SETUP_CONTEXT: ${aiContext()}`;
   try { const r = await APP.sample(turns, opts); turn.content = r.text; if (r.truncated) turn.err = 'Answer cut short — ask for less at a time.'; }
   catch (e) {
     if (e && e.code === 'cancelled') { turn.content = e.text || turn.content || '(stopped)'; }
-    else { turn.content = e && e.text ? e.text : ''; turn.err = { not_granted: 'Claude isn\'t allowed in this view.', rate_limited: 'Too many requests — try again in a minute.', refused: 'Claude couldn\'t answer that.', tools_unavailable: 'Tools are unavailable here.' }[e && e.code] || 'Something went wrong — try again.'; if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null; if (e && e.code === 'tools_unavailable') APP.sampleTools = null; }
+    else { turn.content = e && e.text ? e.text : ''; turn.err = { not_granted: 'Claude isn\'t allowed in this view.', rate_limited: 'Too many requests — try again in a minute.', visitor_limit: `This site's hourly AI allowance is used up — try again in about ${(e && e.wait) || 60} min.`, overloaded: 'Claude is overloaded — try again in a minute.', refused: 'Claude couldn\'t answer that.', tools_unavailable: 'Tools are unavailable here.' }[e && e.code] || 'Something went wrong — try again.'; if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) APP.sample = null; if (e && e.code === 'tools_unavailable') APP.sampleTools = null; }
   } finally { turn.live = false; C.busy = false; C.ctl = null; renderChat(); }
 }
 function propIsCurrent(p) {

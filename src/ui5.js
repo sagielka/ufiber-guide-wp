@@ -255,9 +255,12 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     const onWay = e => imgs.length && /^(unreachable|network|http_|upstream_|image_|empty|timeout|too_large)/.test(String(e && e.code));
     // an answer that wasn't one clean JSON object: ask once more, shorter
     const firm = `${prompt}\n\nIMPORTANT: answer with exactly ONE JSON object${sel != null ? ' for job ' + sel + ' only' : ''}. Keep "summary" under 40 words and every callout and question under 15 words. No text before or after it.`;
+    // only the first request of a reading counts as a new reading on the site
+    let tries = 0;
+    const call = (pr, im) => APP.sample.json(pr, { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000, retry: tries++ > 0 });
     const ask = async (pr, im) => {
-      try { return await APP.sample.json(pr, { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
-      catch (e) { if (!/^(bad_json|truncated|invalid_json)$/.test(String(e && e.code))) throw e; return APP.sample.json(firm.replace(prompt, pr), { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
+      try { return await call(pr, im); }
+      catch (e) { if (!/^(bad_json|truncated|invalid_json)$/.test(String(e && e.code))) throw e; return call(firm.replace(prompt, pr), im); }
     };
     try { r = await ask(prompt, imgs); }
     catch (e) {
@@ -277,7 +280,8 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
     }
     applyAi(r);
   } catch (e) {
-    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
+    if (e && e.code === 'visitor_limit') { D.aiErr = `This site allows ${e.limit || 'a set number of'} readings an hour per visitor. Try again in about ${e.wait || 60} minute${e.wait === 1 ? '' : 's'} — or type the sizes in the box; the quick reading needs no allowance.`; return; }
+    const msg = { overloaded: 'Claude is overloaded right now — try again in a minute.', cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
     // say why: a bare "something went wrong" can't be acted on or reported
     const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
     if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }

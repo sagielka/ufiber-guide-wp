@@ -226,6 +226,23 @@ async def main():
             bjj = json.loads(bj)
             ok('a reply that is not clean JSON is asked again, firmer, with the same pictures', len(bjj['calls']) == 2 and bjj['calls'][1]['firm'] and bjj['calls'][1]['n'] == 1 and bjj['summary'] == 'second try' and not bjj['err'], bj[:200])
 
+            # --- only the first request of a reading counts; the hourly limit is named (1.6.14) ---
+            rl = await page.evaluate("""async () => {
+                const calls = []; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => { calls.push(!!opt.retry);
+                    if (calls.length === 1) { const e = new Error('bad_json'); e.code = 'bad_json'; throw e; } return { summary: 'ok' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text: 'Material : PP, cross hole', images: [], crops: [], cases: 0 };
+                await aiRead();
+                APP.sample = { json: async () => { const e = new Error('visitor_limit'); e.code = 'visitor_limit'; e.limit = 20; e.wait = 37; throw e; } };
+                await aiRead();
+                const out = { calls, err: APP.doc.aiErr };
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify(out); }""")
+            rlj = json.loads(rl)
+            ok('the first request is a new reading, the retry is marked as a retry', rlj['calls'] == [False, True], rl)
+            ok('the hourly limit says how many and how long to wait', '20 readings an hour' in rlj['err'] and '37 minutes' in rlj['err'], rlj['err'])
+
             # --- a two-job email: Case 2 gets its own setup and its own pictures (1.6.8) ---
             await page.evaluate("() => go('')")
             await page.wait_for_timeout(400)

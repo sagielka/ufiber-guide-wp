@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.14 – 2026-10-30
+- The AI allowance per visitor is a setting: Settings → UFIBER Guide →
+  "Readings per visitor per hour" (default 20, 5–500).
+- Only the first request of a reading counts. Its retries (a lighter picture
+  set, a firmer question) have their own, looser allowance, so one difficult
+  email no longer uses up three or four readings.
+- The hour is a fixed window. Every request used to restart it, so someone
+  who kept trying stayed locked out.
+- When the site's allowance is used up, the message says so, with the limit
+  and how many minutes are left, instead of "Too many requests". Claude being
+  overloaded (529) is reported as such.
+
 ## 1.6.13 – 2026-10-30
 - The setup page has a way out. "← Back to the email" returns to the reading
   with the attachments and the case buttons still there; "+ New application"

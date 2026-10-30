@@ -77,7 +77,9 @@ const AISERVER = (() => {
     if (!d || !d.ok) {
       // WordPress errors carry a code, the guide's endpoint a reason
       const reason = String((d && (d.reason || d.code)) || 'http_' + r.status).slice(0, 60);
-      throw fail(reason === 'rate_limited' ? 'rate_limited' : reason === 'unconfigured' ? 'not_granted' : reason);
+      const e = fail(reason === 'unconfigured' ? 'not_granted' : reason);
+      if (d && d.limit) { e.limit = d.limit; e.wait = d.wait; }
+      throw e;
     }
     return d;
   }
@@ -104,6 +106,7 @@ const AISERVER = (() => {
       images: images.length ? images : undefined,
       system: 'Reply with one JSON object and nothing else. No prose, no code fence.',
       max_tokens: opts.max_tokens || 1500,
+      retry: opts.retry ? 1 : undefined,
     }, opts.signal);
     const t = String(d.text || '').trim();
     const j = AISERVER_JSON(t);
