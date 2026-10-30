@@ -113,6 +113,12 @@ final class NUFG_AI {
 		exit;
 	}
 
+	/** The largest request this server accepts, for the settings screen. */
+	public static function post_limit() {
+		$v = trim( (string) ini_get( 'post_max_size' ) );
+		return '' === $v ? '' : $v;
+	}
+
 	/** Configured means: a key exists and the setting is on. */
 	public static function available() {
 		return self::key() !== '' && (bool) get_option( 'nufg_ai_enabled', 0 );
@@ -333,6 +339,13 @@ final class NUFG_AI {
 		}
 		if ( ! NUFG_Usage::rate_ok( 'ai', self::CALLS_PER_HOUR ) ) {
 			return self::no( 'rate_limited', 429 );
+		}
+
+		// Over PHP's post_max_size the body is dropped before WordPress sees it,
+		// which used to read as an empty prompt. Say what it really was.
+		$len = isset( $_SERVER['CONTENT_LENGTH'] ) ? (int) $_SERVER['CONTENT_LENGTH'] : 0;
+		if ( $len > 0 && '' === (string) $req->get_body() ) {
+			return self::no( 'too_large', 413 );
 		}
 
 		$messages = self::messages( $req );

@@ -1738,7 +1738,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.8';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.9';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3688,25 +3688,29 @@ function setJob(n) {
 
 /* ---------- Claude reading ---------- */
 /* Claude scales any picture down to about 1568 px on the long edge before it
-   looks at it, so sending more only makes the request heavier. Three 2400 px
-   drawings in one request were enough for the site's endpoint to give up. */
-const AI_EDGE = 1568, AI_BYTES = 900000;
-async function fitForAi(blob) {
+   looks at it, so sending more only makes the request heavier. The pictures
+   also share one request through the site, and many hosts refuse a request
+   over 2 MB without a word (PHP post_max_size): the body simply arrives empty.
+   So the whole set is kept under a budget, not just each picture. */
+const AI_EDGE = 1568, AI_TOTAL = 1100000;
+async function fitForAi(blob, budget, edge = AI_EDGE) {
   try {
     if (!blob || typeof createImageBitmap !== 'function') return blob;
     const bm = await createImageBitmap(blob);
-    const sc = Math.min(1, AI_EDGE / Math.max(bm.width, bm.height));
-    if (sc === 1 && blob.size <= AI_BYTES) return blob;
+    const sc = Math.min(1, edge / Math.max(bm.width, bm.height));
+    if (sc === 1 && blob.size <= budget) return blob;
     const c = document.createElement('canvas'); c.width = Math.round(bm.width * sc); c.height = Math.round(bm.height * sc);
     const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bm, 0, 0, c.width, c.height);
-    for (const q of [.85, .7, .55]) { const b = await canvasBlob(c, 'image/jpeg', q); if (b && b.size <= AI_BYTES) return b; }
-    return await canvasBlob(c, 'image/jpeg', .45);
+    let b = null;
+    for (const q of [.85, .72, .6, .5]) { b = await canvasBlob(c, 'image/jpeg', q); if (b && b.size <= budget) return b; }
+    return edge > 1000 ? fitForAi(b || blob, budget, Math.round(edge * .75)) : b;
   } catch (e) { return blob; }
 }
+const fitAll = (list, total = AI_TOTAL) => Promise.all(list.map(b => fitForAi(b, Math.floor(total / Math.max(1, list.length)))));
 let aiCtl = null;
 async function aiRead() {
   const D = APP.doc; if (!D || !APP.sample) return;
-  aiCtl = new AbortController(); D.aiBusy = true; D.aiErr = null; D.imgFail = null; renderAttach();
+  aiCtl = new AbortController(); D.aiBusy = true; D.aiErr = null; D.imgFail = null; D.imgWhy = null; renderAttach();
   const enumList = (o) => Object.keys(o).join(' | ');
   const maxImg = APP.sampleImages ? APP.sampleImages.maxCount : 0;
   // whole pictures first; title-block zooms only if the allowance has room left
@@ -3716,7 +3720,7 @@ async function aiRead() {
   const pool = [...D.images.filter(mine), ...(D.crops || []).filter(mine), ...D.images.filter(b => !mine(b))];
   const picked = maxImg ? pool.slice(0, maxImg) : [];
   const fulls = picked.filter(b => D.images.includes(b)).length;
-  const imgs = await Promise.all(picked.map(fitForAi));
+  const imgs = await fitAll(picked);
   const zooms = picked.length - fulls, others = picked.filter(b => sel != null && b.job != null && b.job !== sel).length;
   const prompt = `You are a NOGA MT application engineer for UFIBER ceramic fiber deburring and finishing tools.
 A customer sent the material below${imgs.length ? ' plus ' + imgs.length + ' image(s) of their drawing or part, in the order they appear in the email' + (zooms ? ' (' + zooms + (zooms > 1 ? ' of them are zooms' : ' of them is a zoom') + ' of a drawing\'s bottom-right title block)' : '') : ''}.${D.cases > 1 ? `
@@ -3732,18 +3736,26 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
 """${(() => { const u = ($('#askT')?.value || '').trim(); return u && u !== excerpt(D) ? `\n\nNOTES TYPED BY THE USER (take these as correct where they differ):\n"""\n${u.slice(0, 3000)}\n"""` : ''; })()}`;
   try {
     let r;
+    const onWay = e => imgs.length && /^(unreachable|network|http_|upstream_|image_|empty|timeout|too_large)/.test(String(e && e.code));
     try { r = await APP.sample.json(prompt, { images: imgs.length ? imgs : undefined, signal: aiCtl.signal }); }
     catch (e) {
-      // the request with pictures failed on the way: read the email text alone
-      // rather than nothing, and say the drawings were not seen
-      if (!imgs.length || !/^(unreachable|network|http_|upstream_|image_|empty|timeout)/.test(String(e && e.code))) throw e;
-      try { console.warn('UFIBER Guide: reading with pictures failed, retrying with text only', e); } catch (_) { }
-      r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), { signal: aiCtl.signal });
-      D.imgFail = String(e && e.code || 'failed');
+      if (!onWay(e)) throw e;
+      // the request with pictures failed on the way: first try this job's main
+      // picture alone, smaller; then the email text alone, saying so
+      try { console.warn('UFIBER Guide: reading with pictures failed, retrying lighter', e); } catch (_) { }
+      try {
+        const one = await fitAll(picked.slice(0, 1), 450000);
+        r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, ' plus 1 image of their drawing or part (the others could not be sent).'), { images: one, signal: aiCtl.signal });
+        D.imgFail = 'part'; D.imgWhy = String(e && e.code || 'failed');
+      } catch (e2) {
+        if (e2 && e2.code === 'cancelled') throw e2;
+        r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), { signal: aiCtl.signal });
+        D.imgFail = 'all'; D.imgWhy = String(e2 && e2.code || e && e.code || 'failed');
+      }
     }
     applyAi(r);
   } catch (e) {
-    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.' }[e && e.code];
+    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
     // say why: a bare "something went wrong" can't be acted on or reported
     const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
     if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }
@@ -3780,8 +3792,9 @@ function renderAttach() {
     ${canAi && !busy && (D.aiErr || (hasImg && !imgOk)) ? `<div class="att-ai">${hasImg && !imgOk ? '<p class="tiny" style="margin:6px 0 0">This view can\'t send images to Claude — only the text will be read.</p>' : ''}
       ${D.aiErr ? `<div class="callout warn">${I.warn}<div>${esc(D.aiErr)}</div></div>` : ''}</div>`
       : (!canAi && hasImg && !D.text.trim() ? `<div class="callout note">${I.info}<div><b>Reading drawings needs Claude</b>Open this page in the Claude viewer to read images and scanned PDFs, or type the key details (material, sizes, feature) above.</div></div>` : '')}
-    ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>${D.jobs ? `The guide sets them up one at a time. Now: <b>Case ${D.job}${(() => { const l = D.jobs.jobs.find(j => j.n === D.job)?.label; return l ? ' — ' + esc(l) : ''; })()}</b>.<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${D.jobs.jobs.filter(j => j.n !== D.job).map(j => `<button class="btn small" data-job="${j.n}">Set up Case ${j.n}${j.label ? ' — ' + esc(j.label) : ''} ${I.arrow}</button>`).join('')}</div>` : `The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.`}</div></div>` : ''}
-    ${D.ai && D.imgFail ? `<div class="callout warn">${I.warn}<div><b>Only the email text was read</b>The pictures couldn't be sent to Claude (${esc(D.imgFail)}), so sizes on the drawing were not seen. Type them in the box, or try again.</div></div>` : ''}
+    ${D.cases > 1 ? `<div class="callout note">${I.info}<div><b>This email describes ${D.cases} separate jobs</b>${D.jobs ? `The guide sets them up one at a time. Now: <b>Case ${D.job}${(() => { const l = D.jobs.jobs.find(j => j.n === D.job)?.label; return l ? ' — ' + esc(l) : ''; })()}</b><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${D.jobs.jobs.filter(j => j.n !== D.job).map(j => `<button class="btn small" data-job="${j.n}">Set up Case ${j.n}${j.label ? ' — ' + esc(j.label) : ''} ${I.arrow}</button>`).join('')}</div>` : `The guide sets up one job at a time and starts with the first. To set up another, paste just that job's text into the box.`}</div></div>` : ''}
+    ${D.ai && D.imgFail === 'all' ? `<div class="callout warn">${I.warn}<div><b>Only the email text was read</b>The pictures couldn't be sent to Claude (${esc(D.imgWhy || 'failed')}), so sizes on the drawing were not seen. Type them in the box, or try again.</div></div>` : ''}
+    ${D.ai && D.imgFail === 'part' ? `<div class="callout note">${I.info}<div><b>Read with one picture</b>All the pictures together were too much for the site (${esc(D.imgWhy || 'failed')}), so Claude read the email with its first picture only. Check the sizes below.</div></div>` : ''}
     ${D.ai ? `<div class="att-res">${D.ai.summary ? `<p style="margin:0 0 8px"><b>Customer need:</b> ${esc(D.ai.summary)}</p>` : ''}
       ${D.ai.callouts.length ? `<div class="tiny" style="margin-top:6px">From the email / drawing</div><ul class="watch" style="margin-top:4px">${D.ai.callouts.map(c => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${esc(c)}</span></li>`).join('')}</ul>` : ''}
       ${D.ai.questions.length ? `<div class="tiny" style="margin-top:10px">Still unknown — ask the customer</div><ul class="watch" style="margin-top:4px">${D.ai.questions.map(c => `<li>${I.info.replace('<svg', '<svg style="color:var(--warn)"')}<span>${esc(c)}</span></li>`).join('')}</ul><button class="btn ghost small" id="copyQs" style="margin-top:6px">${I.copy} Copy questions</button>` : ''}</div>` : ''}

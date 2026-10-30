@@ -277,6 +277,9 @@ class NUFG_Settings {
 							<label><input type="checkbox" name="nufg_ai_enabled" value="1" <?php checked( get_option( 'nufg_ai_enabled', 0 ), 1 ); ?> <?php disabled( '' === $hint ); ?>>
 								<?php esc_html_e( 'Let the guide read a customer e-mail or drawing, summarise it and ask follow-up questions.', 'noga-ufiber-guide' ); ?></label>
 							<p class="description"><?php esc_html_e( 'Each reading is a paid request, capped at 20 an hour per visitor. The guide works without this; it falls back to its offline model.', 'noga-ufiber-guide' ); ?></p>
+							<?php $lim = NUFG_AI::post_limit(); if ( '' !== $lim ) : ?>
+								<p class="description"><?php printf( esc_html__( 'This server accepts requests up to %s (PHP post_max_size). A reading with drawings is kept under about 1.5 MB; if readings with pictures fail, raise this to 8M with your host.', 'noga-ufiber-guide' ), '<code>' . esc_html( $lim ) . '</code>' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></p>
+							<?php endif; ?>
 
 							<h4 style="margin-bottom:4px"><?php esc_html_e( 'API key', 'noga-ufiber-guide' ); ?></h4>
 							<?php $t = get_transient( 'nufg_ai_test_result' ); if ( $t ) : delete_transient( 'nufg_ai_test_result' ); ?>

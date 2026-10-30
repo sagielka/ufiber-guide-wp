@@ -191,8 +191,26 @@ async def main():
                 return JSON.stringify(out); }""")
             fbj = json.loads(fb)
             ok('pictures are shrunk to what Claude reads before sending', fbj['calls'] and fbj['calls'][0] and fbj['calls'][0][0][0] <= 1568 and fbj['calls'][0][0][1] <= 900000, fb[:200])
-            ok('when the request with pictures fails, the text is read alone', len(fbj['calls']) == 2 and fbj['calls'][1] == [] and fbj['summary'] == 'text only' and not fbj['err'], fb[:200])
+            ok('when every request with pictures fails, one picture is tried, then the text alone', len(fbj['calls']) == 3 and len(fbj['calls'][1]) == 1 and fbj['calls'][2] == [] and fbj['summary'] == 'text only' and not fbj['err'], fb[:200])
             ok('and the page says the drawings were not seen', 'Only the email text was read' in fbj['note'], fbj['note'][:200])
+
+            # --- three big pictures stay under the site's request budget; one picture is the next try (1.6.9) ---
+            bud = await page.evaluate("""async () => {
+                const mkBig = async (seed) => { const c = document.createElement('canvas'); c.width = 3000; c.height = 2000;
+                  const x = c.getContext('2d'); for (let i = 0; i < 6000; i++) { x.fillStyle = `rgb(${(i * seed) % 255},${(i * 7) % 255},${(i * 13) % 255})`; x.fillRect((i * 37) % 3000, (i * 53) % 2000, 30, 30); }
+                  return new Promise(r => c.toBlob(r, 'image/jpeg', .95)); };
+                const calls = []; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => { const im = opt.images || []; calls.push(im.map(b => b.size));
+                    if (im.length > 1) { const e = new Error('too_large'); e.code = 'too_large'; throw e; } return { summary: 'one' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text: 'Material : PP, cross hole', images: [await mkBig(3), await mkBig(5), await mkBig(11)], crops: [], cases: 0 };
+                await aiRead();
+                const out = { calls, imgFail: APP.doc.imgFail, note: document.querySelector('#attach') ? document.querySelector('#attach').innerText : '' };
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify(out); }""")
+            budj = json.loads(bud)
+            ok('three big pictures together stay under about 1.1 MB', budj['calls'] and sum(budj['calls'][0]) <= 1100000, budj['calls'][:1])
+            ok('if the set is refused, the first picture alone is read', len(budj['calls']) == 2 and len(budj['calls'][1]) == 1 and budj['imgFail'] == 'part' and 'Read with one picture' in budj['note'], bud[:200])
 
             # --- a two-job email: Case 2 gets its own setup and its own pictures (1.6.8) ---
             await page.evaluate("() => go('')")

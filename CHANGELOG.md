@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.9 – 2026-10-30
+- The pictures sent with a reading now share one size budget (about 1.1 MB
+  together, about 1.5 MB as sent). Many hosts drop any request over 2 MB
+  without a word (PHP post_max_size); the endpoint then saw an empty request
+  and the reading came back "empty".
+- The endpoint now says "too_large" when a request was dropped for its size,
+  instead of "empty".
+- If the pictures together are still refused, the guide tries again with the
+  job's first picture alone before falling back to the text, and says so.
+- Settings → UFIBER Guide shows the server's request limit (post_max_size),
+  with a note to raise it to 8M if readings with pictures fail.
+- No stray full stop under the case name in a multi-case email.
+
 ## 1.6.8 – 2026-10-30
 - An email with several jobs ("Case 1 … Case 2 …") now offers each one. The
   guide starts with Case 1 and shows a button per remaining case, named by
