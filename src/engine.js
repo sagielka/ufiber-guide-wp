@@ -735,6 +735,14 @@ function finalize(R, st) {
       (R.family === 'surface' || R.family === 'shank' ? (hi > lo ? `Their ${pol ? 'polishing' : 'deburring'} speeds overlap at Vc ${lo}–${hi} m/min, so one setup covers both. ` : '') : '') +
       `This setup follows the ${(used.details || '').toLowerCase()} row (${used.grade}), the slower of the two.`);
   }
+  // sizes Claude worked out from other drawing dimensions: say so, and keep it at Medium
+  const estK = (st.est || []).filter(k => st.dims && st.dims[k] != null);
+  if (estK.length) {
+    const nm = { main: 'main bore', cross: 'cross hole', width: 'working width', depth: 'depth', groove: 'groove', hole: 'hole' };
+    R.notes.push(`Estimated from the drawing: ${estK.map(k => `${nm[k] || k} ≈ ${+Number(st.dims[k]).toFixed(1)} mm`).join(', ')}. The size was worked out from other dimensions, not read directly — confirm it before quoting.`);
+    if (R.conf.level === 'high') R.conf.level = 'medium';
+    R.conf.reasons.push('A size was estimated from the drawing.');
+  }
   // a "main bore" several times the cross hole is usually an entry counterbore or
   // a port, not the bore that meets the cross hole
   const dm = st.dims || {};

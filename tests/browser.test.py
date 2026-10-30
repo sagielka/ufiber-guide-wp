@@ -243,6 +243,23 @@ async def main():
             ok('the first request is a new reading, the retry is marked as a retry', rlj['calls'] == [False, True], rl)
             ok('the hourly limit says how many and how long to wait', '20 readings an hour' in rlj['err'] and '37 minutes' in rlj['err'], rlj['err'])
 
+            # --- a width worked out from the drawing shows as an estimate until it is confirmed (1.6.15) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(300)
+            es = await page.evaluate("""async () => {
+                const wait = (ms) => new Promise(r => setTimeout(r, ms));
+                doAsk('Membrane, PET-P, lay pattern and roughness on the O-ring sealing faces', { ai: false });
+                applyExtraction({ task: 'marks', feature: 'face', material: 'plastic', dims: { width: 15 }, estimated: ['width'], summary: 'x', questions: [] }, null);
+                renderUnderstood(); await wait(100);
+                const before = document.querySelector('#understood').innerText;
+                document.querySelector('[data-edit="width"]').click(); await wait(100);
+                document.querySelector('#chipNum').value = '16'; document.querySelector('[data-setdim="width"]').click(); await wait(100);
+                const after = document.querySelector('#understood').innerText;
+                return JSON.stringify({ before, after, est: APP.ws.est, w: APP.ws.dims.width }); }""")
+            esj = json.loads(es)
+            ok('an estimated width is shown as one', 'est. from drawing' in esj['before'] and '≈15' in esj['before'], esj['before'][:200])
+            ok('typing the width replaces the estimate', esj['w'] == 16 and not esj['est'] and 'est. from drawing' not in esj['after'], es[:300])
+
             # --- a two-job email: Case 2 gets its own setup and its own pictures (1.6.8) ---
             await page.evaluate("() => go('')")
             await page.wait_for_timeout(400)

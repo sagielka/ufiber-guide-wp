@@ -380,5 +380,16 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('the real Ø3.96 / Ø3.05 pair is not flagged and picks the Ø1.5 brush', !good.warnings.some(w => /main bore size/.test(w.t)) && good.sku === 'UF2815', good.sku);
 }
 
+
+/* ---- a width estimated from the drawing sizes the brush, and says so (1.6.15) ---- */
+{
+  const st = E.newState(); Object.assign(st, { task: 'marks', feature: 'face', material: 'plastic', dims: { width: 15 }, est: ['width'] });
+  const R = E.recommend(st);
+  ok('an estimated 15 mm seal band gives the Ø25 brush', R.dia === 25 && R.sku === 'UF1925', R.sku);
+  ok('and the setup says the width was estimated, at Medium confidence', R.notes.some(n => /Estimated from the drawing: working width ≈ 15/.test(n)) && R.conf.level !== 'high', R.conf);
+  const st2 = E.newState(); Object.assign(st2, { task: 'marks', feature: 'face', material: 'plastic', dims: { width: 15 } });
+  ok('a stated width is not called an estimate', !E.recommend(st2).notes.some(n => /Estimated from the drawing/.test(n)));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

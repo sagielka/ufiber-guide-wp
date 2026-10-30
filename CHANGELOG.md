@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.15 – 2026-10-30
+- When a face, seal or polishing job states no width, Claude now works it out
+  from the drawing's other dimensions instead of leaving it empty: for a round
+  seal or face around a port, hole Ø + 2 × each land and groove dimensioned
+  "all around" (Ø.250 hole, .060 land, .115 groove → about Ø15 mm). The brush
+  is sized from that, as from a stated width. On the MCAM membrane this gives
+  Ø25 instead of the Ø40 default.
+- An estimated size is shown as one: "Width (est. from drawing) ≈15 mm" on the
+  chip, a note on the setup, and Medium confidence until someone confirms it.
+- Size chips can be edited in place: tap Bore, Cross hole or Width, type the
+  size, OK. A typed size replaces an estimate. A face job with no width shows
+  "Width: not found" to tap, instead of quietly assuming Ø40.
+
 ## 1.6.14 – 2026-10-30
 - The AI allowance per visitor is a setting: Settings → UFIBER Guide →
   "Readings per visitor per hour" (default 20, 5–500).

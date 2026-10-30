@@ -371,6 +371,12 @@ document.addEventListener('click', e => {
   if (d.job !== undefined && APP.doc?.jobs) { if (APP.view !== '') go(''); setJob(+d.job); return; }
   if (t.id === 'newApp') { clearAsk(); go(''); return; }
   if (d.edit) { APP.editKey = APP.editKey === d.edit ? null : d.edit; renderUnderstood(); return; }
+  if (d.setdim) {
+    const v = lenIn($('#chipNum')?.value || '');
+    if (v > 0) { APP.ws.dims = APP.ws.dims || {}; APP.ws.dims[d.setdim] = v; if (APP.ws.est) { APP.ws.est = APP.ws.est.filter(k => k !== d.setdim); if (!APP.ws.est.length) APP.ws.est = null; } }
+    if (APP.ws.dims.main && APP.ws.dims.cross && APP.ws.dims.cross > APP.ws.dims.main) [APP.ws.dims.main, APP.ws.dims.cross] = [APP.ws.dims.cross, APP.ws.dims.main];
+    APP.editKey = null; renderUnderstood(); updateGo(); return;
+  }
   if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }
   if (t.id === 'goWiz') { APP.wizI = 0; go('find'); return; }

@@ -21,6 +21,7 @@ function extractionSpec() {
  "burr": "light" | "medium" | "heavy" | null,
  "burrMm": burr height or thickness in mm if a number is stated, else null,
  "dims": {"main": mm|null, "cross": mm|null, "slotW": mm|null, "slotL": mm|null, "depth": mm|null, "width": mm|null, "groove": mm|null, "hole": mm|null, "ra": µm|null},
+ "estimated": [names of the "dims" fields you worked out from other dimensions on the drawing rather than read directly, e.g. ["width"]] or [],
  "through": true if the cross hole or slot opens on BOTH sides of the main bore (drilled across the part, "on the diameter", "both sides"), false if one side only, null if not stated,
  "machine": {"type": ${enumKeys(MACHINES)} | null, "maxRpm": number|null, "iface": "BT30"|"BT40"|null},
  "summary": "one short sentence restating the job, in the language of the job description itself",
@@ -29,6 +30,7 @@ function extractionSpec() {
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches; American drawings give inches with a leading dot and no unit, e.g. Ø.156 = 0.156 in = 3.96 mm, and a drawing note like "hole diameter approximately Ø3–4 mm" is a stated size). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole;
+WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
 CROSS-HOLE SIZES COME FROM THE INTERSECTION: "main" and "cross" are the two holes that actually MEET where the burr is. Entry counterbores, port or fitting bores (flare, thread, O-ring seat), outside diameters, flanges and the part's overall size are NOT the main bore, even when the brush passes through them on the way in. On a drawing, find the burr area (a circle, arrow or note) and follow each hole from there; the two smallest diameters that run into that spot are usually the pair. A size stated in words for the burr area ("hole diameter approximately Ø3–4 mm") outranks any number you pick off the drawing. If you can't tell which diameters meet, leave them null and ask.
  "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
 Several workpiece materials (e.g. "AW5083, AW7075 and stainless 1.4301"): set up ONE now and put each other one in "later". Pick the one the customer says to start with, reading the whole thread including quoted earlier messages and short answers like "-> aluminium, please"; otherwise the first one listed. Grades of the same material (5083 and 7075 are both wrought aluminium) stay together in "grades". Never ask whether a "later" material uses the same setup: it needs its own.
@@ -99,6 +101,8 @@ function applyExtraction(r, snapJson) {
   const d = r.dims || {}; st.dims = st.dims || {};
   if (st.burrMm != null && Number(d.width) === st.burrMm) d.width = null;
   ['main', 'cross', 'slotW', 'slotL', 'depth', 'width', 'groove', 'hole', 'ra'].forEach(k => { const v = Number(d[k]); if (d[k] != null && isFinite(v) && v > 0 && v < 5000 && free(k)) st.dims[k] = v; });
+  // sizes worked out from other drawing dimensions are shown as estimates until someone confirms them
+  if (Array.isArray(r.estimated)) { const E = r.estimated.filter(k => ['main', 'cross', 'depth', 'width', 'groove', 'hole'].includes(k) && st.dims[k] != null && free(k)); st.est = E.length ? E : null; }
   if (typeof r.through === 'boolean' && st.task === 'crosshole') st.through = r.through;
   if (st.dims.main && st.dims.cross && st.dims.cross > st.dims.main) [st.dims.main, st.dims.cross] = [st.dims.cross, st.dims.main];
   const m = r.machine || {};

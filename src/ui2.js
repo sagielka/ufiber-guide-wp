@@ -72,10 +72,13 @@ function renderUnderstood() {
   if (!(TASKS[st.task]?.feature)) add('feature', 'Feature', labelOf('feature', st), !st.feature);
   add('material', 'Material', labelOf('material', st), !st.material);
   const d = st.dims || {};
-  if (d.main) chips.push(`<span class="u-chip">Bore <b>${diaOut(d.main)}</b></span>`);
-  if (d.cross) chips.push(`<span class="u-chip">Cross hole <b>${diaOut(d.cross)}${st.through ? ', through both walls' : ''}</b></span>`);
+  const est = k => (st.est || []).includes(k);
+  if (d.main) chips.push(`<button class="u-chip${est('main') ? ' miss' : ''}" data-edit="main">Bore <b>${est('main') ? '≈' : ''}${diaOut(d.main)}</b></button>`);
+  if (d.cross) chips.push(`<button class="u-chip${est('cross') ? ' miss' : ''}" data-edit="cross">Cross hole <b>${est('cross') ? '≈' : ''}${diaOut(d.cross)}${st.through ? ', through both walls' : ''}</b></button>`);
   if (d.slotW || d.slotL) chips.push(`<span class="u-chip">Slot <b>${[d.slotW, d.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}</b></span>`);
-  if (d.width) chips.push(`<span class="u-chip">Width <b>${lenOut(d.width)} ${lenU()}</b></span>`);
+  if (d.width) chips.push(`<button class="u-chip${est('width') ? ' miss' : ''}" data-edit="width" title="${est('width') ? 'Worked out from other dimensions on the drawing — tap to correct' : ''}">${est('width') ? 'Width (est. from drawing)' : 'Width'} <b>${est('width') ? '≈' : ''}${lenOut(d.width)} ${lenU()}</b></button>`);
+  // a face job with no width gets a default brush size: offer the width instead of hiding that
+  else if (st.task && st.task !== 'crosshole' && ['face', 'edge'].includes(st.feature)) chips.push(`<button class="u-chip miss" data-edit="width">Width: <b>not found</b></button>`);
   if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
   if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
@@ -85,6 +88,10 @@ function renderUnderstood() {
   const aiCovers = APP.smart.questions.some(q => q.field === missing) || (APP.smart.busy && missing);
   const picker = APP.editKey || (aiCovers ? null : missing);
   let pick = '';
+  if (['main', 'cross', 'width'].includes(picker)) {
+    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)' }[picker];
+    pick = `<p class="small" style="margin:12px 0 0"><b>${lbl}</b></p><div class="row" style="gap:6px;margin-top:6px"><input id="chipNum" type="number" step="0.01" min="0" inputmode="decimal" style="width:110px" value="${d[picker] ? lenVal(d[picker]) : ''}"> <span class="small">${lenU()}</span><button class="btn small" data-setdim="${picker}">OK</button></div>`;
+  }
   if (picker === 'task') pick = `<p class="small" style="margin:12px 0 0"><b>What do you need to do?</b></p><div class="mini-tiles">${Object.entries(TASKS).map(([k, t]) => `<button class="chip${st.task === k ? ' on' : ''}" data-set="task" data-v="${k}">${t.short}</button>`).join('')}</div>`;
   if (picker === 'material') pick = `<p class="small" style="margin:12px 0 0"><b>Which material?</b></p><div class="mini-tiles">${Object.entries(MATERIALS).map(([k, m]) => `<button class="chip${st.material === k ? ' on' : ''}" data-set="material" data-v="${k}">${m.name}</button>`).join('')}</div>`;
   if (picker === 'feature') pick = `<p class="small" style="margin:12px 0 0"><b>Where is the feature?</b></p><div class="mini-tiles">${Object.entries(FEATURES).filter(([k]) => k !== 'cross' && k !== 'bore').map(([k, f]) => `<button class="chip${st.feature === k ? ' on' : ''}" data-set="feature" data-v="${k}">${f}</button>`).join('')}</div>`;
@@ -224,6 +231,8 @@ function machineStep(st) {
 function saveDims() {
   const st = APP.ws; const d = st.dims = st.dims || {};
   const g = id => $('#' + id) ? lenIn($('#' + id).value) : undefined;
+  // a size someone typed or confirmed is no longer an estimate
+  if (st.est) { st.est = st.est.filter(k => !(({ main: 'dMain', cross: 'dCross', depth: 'dDepth', hole: 'dHole', width: 'dW', groove: 'dG' })[k] && $('#' + ({ main: 'dMain', cross: 'dCross', depth: 'dDepth', hole: 'dHole', width: 'dW', groove: 'dG' })[k]))); if (!st.est.length) st.est = null; }
   [['dMain', 'main'], ['dCross', 'cross'], ['dSlotW', 'slotW'], ['dSlotL', 'slotL'], ['dDepth', 'depth'], ['dHole', 'hole'], ['dW', 'width'], ['dG', 'groove']].forEach(([id, k]) => { const v = g(id); if (v !== undefined) d[k] = v; });
   if ($('#dRa')) d.ra = parseFloat($('#dRa').value) || null;
 }
