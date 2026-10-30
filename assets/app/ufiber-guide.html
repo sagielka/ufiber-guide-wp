@@ -1747,7 +1747,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.12';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.13';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2338,11 +2338,13 @@ function result() {
   const gritsAvail = R.family === 'diamond' ? STONE_GRITS : (R.family === 'disc' ? GRITS.filter(g => g.grit <= 1000) : (R.family === 'crosshole' && R.dia === 11 ? GRITS.filter(g => [600, 800, 1000].includes(g.grit)) : GRITS));
   const diasAvail = R.family === 'surface' || R.family === 'shank' ? [6, 15, 25, 40, 60, 100] : R.family === 'crosshole' ? [1.5, 3, 5, 7, 11] : R.family === 'point' ? [1, 1.5, 2, 2.5, 3] : R.family === 'disc' ? [13, 19, 22, 25, 30] : [];
   return `<div class="res-top">
-    <div><p class="tiny" style="margin:0"><a href="#/find" data-nav="edit">← Edit answers</a></p><h1 class="h2" style="font-size:34px;margin-top:4px">Your starting setup</h1><p class="muted" style="margin:4px 0 0">${esc(summary)}</p></div>
-    <div class="row"><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing competitor ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
+    <div><p class="tiny" style="margin:0"><a href="#/" data-nav="home">← Back${APP.doc?.files?.length ? ' to the email' : ''}</a><span class="muted"> · </span><a href="#/find" data-nav="edit">Edit answers</a></p><h1 class="h2" style="font-size:34px;margin-top:4px">Your starting setup</h1><p class="muted" style="margin:4px 0 0">${esc(summary)}</p></div>
+    <div class="row"><button class="btn small" id="newApp" title="Forget this job and start a new one. Your machine and units are kept.">+ New application</button><button class="btn small primary" id="shareTop">${I.link} Share link</button><span class="badge ${R.conf.level}" title="${esc(R.conf.reasons.join(' '))}">${R.conf.level === 'high' ? I.check.replace('<svg', '<svg width="14" height="14"') : I.info.replace('<svg', '<svg width="14" height="14"')} ${R.conf.level === 'high' ? 'High' : R.conf.level === 'medium' ? 'Medium' : 'Low'} confidence</span>${st.fromX ? `<span class="badge adj">${I.swap.replace('<svg', '<svg width="14" height="14"')} Replacing competitor ${esc(st.fromX)}</span>` : (adj ? '<span class="badge adj">Adjusted by you</span>' : '')}</div>
   </div>
   ${R.warnings.map(w => `<div class="callout warn">${I.warn}<div><b>${esc(w.t)}</b>${esc(w.d)}</div></div>`).join('')}
   ${laterBlock(st, true)}
+  ${(() => { const D = APP.doc; if (!D?.jobs) return ''; const rest = D.jobs.jobs.filter(j => j.n !== D.job); if (!rest.length) return '';
+    return `<div class="small" style="margin-top:10px">${I.info.replace('<svg', '<svg style="color:var(--warn);vertical-align:-3px" width="16" height="16"')} This setup is for <b>Case ${D.job}</b> of the email. ${rest.map(j => `<button class="btn ghost small" data-job="${j.n}">Set up Case ${j.n}${j.label ? ' — ' + esc(j.label) : ''}</button>`).join(' ')}</div>`; })()}
   <div class="grid2" style="margin-top:14px">
     <div>
       <section class="panel" aria-labelledby="tTool">
@@ -2825,7 +2827,8 @@ document.addEventListener('click', e => {
   if (d.recent) { const r = store.get('ufg_recent', [])[+d.recent]; if (r) { APP.ws = r.st; go('result'); } return; }
   if (t.id === 'clrRecent') { store.set('ufg_recent', []); rerender(); return; }
   if (d.later !== undefined) { switchLater(+d.later); return; }
-  if (d.job !== undefined && APP.doc?.jobs) { setJob(+d.job); return; }
+  if (d.job !== undefined && APP.doc?.jobs) { if (APP.view !== '') go(''); setJob(+d.job); return; }
+  if (t.id === 'newApp') { clearAsk(); go(''); return; }
   if (d.edit) { APP.editKey = APP.editKey === d.edit ? null : d.edit; renderUnderstood(); return; }
   if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }
@@ -2850,6 +2853,7 @@ document.addEventListener('click', e => {
     e.preventDefault();
     if (d.save === 'dims') saveDims(); if (d.save === 'machine') saveMachine();
     if (d.nav === 'edit') { APP.wizI = 0; go('find'); return; }
+    if (d.nav === 'home') { go(''); return; }
     if (d.nav === 'back') { if ((APP.wizI || 0) === 0) { go(''); return; } if (APP.view === 'find') { APP.wizI--; route(); } return; }
     if (d.nav === 'next') {
       const st = APP.ws, step = wizSteps(st)[APP.wizI || 0];

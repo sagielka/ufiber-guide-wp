@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.13 – 2026-10-30
+- The setup page has a way out. "← Back to the email" returns to the reading
+  with the attachments and the case buttons still there; "+ New application"
+  forgets the job and starts clean (the machine and units are kept), the same
+  as Clear on the first page.
+- A setup made from a multi-case email says which case it is for, with a
+  button to set up the next one straight from the setup page.
+
 ## 1.6.12 – 2026-10-30
 - Claude is told where cross-hole sizes come from: the two holes that meet at
   the burr. Entry counterbores, port and fitting bores, threads, outside

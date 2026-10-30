@@ -368,7 +368,8 @@ document.addEventListener('click', e => {
   if (d.recent) { const r = store.get('ufg_recent', [])[+d.recent]; if (r) { APP.ws = r.st; go('result'); } return; }
   if (t.id === 'clrRecent') { store.set('ufg_recent', []); rerender(); return; }
   if (d.later !== undefined) { switchLater(+d.later); return; }
-  if (d.job !== undefined && APP.doc?.jobs) { setJob(+d.job); return; }
+  if (d.job !== undefined && APP.doc?.jobs) { if (APP.view !== '') go(''); setJob(+d.job); return; }
+  if (t.id === 'newApp') { clearAsk(); go(''); return; }
   if (d.edit) { APP.editKey = APP.editKey === d.edit ? null : d.edit; renderUnderstood(); return; }
   if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }
@@ -393,6 +394,7 @@ document.addEventListener('click', e => {
     e.preventDefault();
     if (d.save === 'dims') saveDims(); if (d.save === 'machine') saveMachine();
     if (d.nav === 'edit') { APP.wizI = 0; go('find'); return; }
+    if (d.nav === 'home') { go(''); return; }
     if (d.nav === 'back') { if ((APP.wizI || 0) === 0) { go(''); return; } if (APP.view === 'find') { APP.wizI--; route(); } return; }
     if (d.nav === 'next') {
       const st = APP.ws, step = wizSteps(st)[APP.wizI || 0];

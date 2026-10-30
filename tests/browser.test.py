@@ -253,6 +253,28 @@ async def main():
             ok('Claude is asked for job 2 only', jbj['only2'] and jbj['now'], {k: jbj[k] for k in ('only2', 'now')})
             ok('Case 2 is set up as plastic', jbj['mat'] == 'plastic', jbj['mat'])
 
+            # --- from a setup: back to the email keeps it, New application forgets it (1.6.13) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(300)
+            nav = await page.evaluate("""async () => {
+                const wait = (ms) => new Promise(r => setTimeout(r, ms));
+                const text = 'Case 1.\\nMaterial : NPP\\ncross hole main bore 3.96 mm cross hole 3.05 mm\\n\\nCase 2\\nPart Name : Membrane family\\nMaterial : PET-P\\n\\nNotes:\\nBT40';
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text, images: [], crops: [], cases: 2 };
+                APP.doc.jobs = splitJobs(text); APP.doc.job = 1;
+                doAsk(jobText(APP.doc.jobs, 1), { ai: false }); go('result'); await wait(400);
+                const res = document.querySelector('#view').innerText;
+                const out = { back: !!document.querySelector('[data-nav="home"]'), next: /Set up Case 2/.test(res), newBtn: !!document.querySelector('#newApp') };
+                document.querySelector('[data-nav="home"]').click(); await wait(400);
+                out.backKeeps = APP.view === '' && !!APP.doc && /Set up Case 2/.test(document.querySelector('#attach').innerText);
+                go('result'); await wait(400);
+                document.querySelector('#newApp').click(); await wait(400);
+                out.cleared = APP.view === '' && !APP.doc && !document.querySelector('#askT').value && APP.ws.machine.iface === 'BT40';
+                return JSON.stringify(out); }""")
+            navj = json.loads(nav)
+            ok('the setup has Back, New application and the next case', navj['back'] and navj['newBtn'] and navj['next'], nav)
+            ok('Back returns to the email with its cases', navj['backKeeps'], nav)
+            ok('New application forgets the job but keeps the machine', navj['cleared'], nav)
+
             # --- every tab renders ---
             for tab in ['sf', 'fix', 'competitor', 'learn', 'products']:
                 await page.evaluate(f"() => go('{tab}')")
