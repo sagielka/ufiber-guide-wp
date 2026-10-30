@@ -288,6 +288,15 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
 function applyAi(r) {
   const D = APP.doc; if (!r || typeof r !== 'object') { D.aiErr = 'No usable answer. Try again.'; return; }
   applyExtraction(r, null);
+  // A main bore many times the cross hole is usually an entry counterbore or a
+  // port read off the drawing (a Ø.685" flare port became a Ø17.4 bore over a
+  // Ø3.96 cross hole). Ask rather than set up the wrong brush.
+  const dm = APP.ws?.dims;
+  if (APP.ws?.task === 'crosshole' && dm?.main && dm?.cross && dm.main / dm.cross > 3) {
+    const q = `Is Ø${+dm.main.toFixed(2)} mm really the bore at the intersection, or an entry counterbore / port? The bore that meets the Ø${+dm.cross.toFixed(2)} hole decides the brush.`;
+    r.questions = [q, ...(Array.isArray(r.questions) ? r.questions : [])];
+    D.sizeDoubt = true;
+  } else D.sizeDoubt = false;
   const later = (APP.ws?.later || []).flatMap(x => x.grades || []).map(g => g.toLowerCase());
   const aboutLater = q => later.some(g => q.toLowerCase().includes(g) || q.toLowerCase().replace(/[\s-]/g, '').includes(g.replace(/[\s-]/g, '')));
   D.ai = { summary: String(r.summary || '').slice(0, 300), callouts: (Array.isArray(r.callouts) ? r.callouts : []).map(String).slice(0, 6), questions: (Array.isArray(r.questions) ? r.questions : []).map(q => typeof q === 'string' ? q : q && q.ask).filter(Boolean).filter(q => !aboutLater(q)).slice(0, 3) };

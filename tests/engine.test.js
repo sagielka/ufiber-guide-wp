@@ -371,5 +371,14 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('nothing usable gives null', J('{"a": 1, "b": ') === null);
 }
 
+
+/* ---- a port read as the main bore is questioned (1.6.12) ---- */
+{
+  const mk = (main, cross) => { const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'plastic', burr: 'heavy', dims: { main, cross } }); return E.recommend(st); };
+  const bad = mk(17.4, 3.96), good = mk(3.96, 3.05);
+  ok('a Ø17.4 "bore" over a Ø3.96 cross hole is flagged and not High confidence', bad.warnings.some(w => /main bore size/.test(w.t)) && bad.conf.level !== 'high', bad.conf);
+  ok('the real Ø3.96 / Ø3.05 pair is not flagged and picks the Ø1.5 brush', !good.warnings.some(w => /main bore size/.test(w.t)) && good.sku === 'UF2815', good.sku);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

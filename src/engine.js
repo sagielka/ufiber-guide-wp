@@ -735,6 +735,14 @@ function finalize(R, st) {
       (R.family === 'surface' || R.family === 'shank' ? (hi > lo ? `Their ${pol ? 'polishing' : 'deburring'} speeds overlap at Vc ${lo}–${hi} m/min, so one setup covers both. ` : '') : '') +
       `This setup follows the ${(used.details || '').toLowerCase()} row (${used.grade}), the slower of the two.`);
   }
+  // a "main bore" several times the cross hole is usually an entry counterbore or
+  // a port, not the bore that meets the cross hole
+  const dm = st.dims || {};
+  if (R.family === 'crosshole' && dm.main && dm.cross && dm.main / dm.cross > 3) {
+    R.warnings.push({ t: 'Check the main bore size', d: `Ø${+dm.main.toFixed(2)} is more than three times the Ø${+dm.cross.toFixed(2)} cross hole. On many parts that number is an entry counterbore, a port or a thread, not the bore that meets the cross hole. The brush is chosen from the bore at the intersection — if that is smaller, change the size and the brush changes with it.` });
+    if (R.conf.level === 'high') R.conf.level = 'medium';
+    R.conf.reasons.push('The main bore is much larger than the cross hole — check it is the bore at the intersection.');
+  }
   delete R.lower;
   if (R.conf.level === 'high' && !R.conf.reasons.length) R.conf.reasons.push('Selection follows the catalogue rules directly.');
   return R;

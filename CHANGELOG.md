@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.12 – 2026-10-30
+- Claude is told where cross-hole sizes come from: the two holes that meet at
+  the burr. Entry counterbores, port and fitting bores, threads, outside
+  diameters and flanges are not the main bore, and a size stated in words for
+  the burr area outranks a number picked off the drawing. On the MCAM adapter
+  it had taken the Ø.685" flare port (Ø17.4) as the main bore.
+- A main bore more than three times the cross hole gets a warning ("Check the
+  main bore size"), drops to Medium confidence, and the reading asks whether it
+  is really the bore at the intersection.
+
 ## 1.6.11 – 2026-10-30
 - A reading that came back as not-quite-JSON ("bad_json") is read anyway when
   it can be: the first complete object is taken, past a code fence, a
