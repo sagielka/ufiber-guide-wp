@@ -15,6 +15,31 @@
    absence, and adding them would let the model reach the engine directly —
    which is exactly what must not happen. The engine owns the numbers.
    ============================================================ */
+/* The reply should be one JSON object, but with a long email and drawings a
+   model sometimes adds a sentence, a code fence, a trailing comma, or one object
+   per case. Take the first object that parses, in order. */
+function AISERVER_JSON(text) {
+  const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
+  try { const v = JSON.parse(t); if (v && typeof v === 'object') return v; } catch (e) { }
+  const objs = [];
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] !== '{') continue;
+    let depth = 0, inStr = false, esc = false;
+    for (let k = i; k < t.length; k++) {
+      const c = t[k];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { objs.push(t.slice(i, k + 1)); i = k; break; } }
+    }
+  }
+  for (const o of objs) {
+    for (const cand of [o, o.replace(/,\s*([}\]])/g, '$1')]) {
+      try { const v = JSON.parse(cand); if (v && typeof v === 'object' && !Array.isArray(v)) return v; } catch (e) { }
+    }
+  }
+  return null;
+}
 const AISERVER = (() => {
   let api = null, on = false, key = '';
   try {
@@ -81,16 +106,14 @@ const AISERVER = (() => {
       max_tokens: opts.max_tokens || 1500,
     }, opts.signal);
     const t = String(d.text || '').trim();
-    try { return JSON.parse(t); } catch (e) { }
-    const a = t.indexOf('{'), b = t.lastIndexOf('}');
-    if (a >= 0 && b > a) {
-      try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { }
-    }
-    throw fail('bad_json', t.slice(0, 200));
+    const j = AISERVER_JSON(t);
+    if (j) return j;
+    // cut off by the token limit: say so, so the caller can ask for less
+    throw fail(d.truncated ? 'truncated' : 'bad_json', t.slice(0, 200));
   };
 
   sample.limits = async () => ({ images: { maxCount: 3 }, tools: null });
 
   return { get ready() { return !!(api && on); }, sample };
 })();
-if (typeof module !== 'undefined') module.exports = { AISERVER };
+if (typeof module !== 'undefined') module.exports = { AISERVER, AISERVER_JSON };

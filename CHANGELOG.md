@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.11 – 2026-10-30
+- A reading that came back as not-quite-JSON ("bad_json") is read anyway when
+  it can be: the first complete object is taken, past a code fence, a
+  sentence around it, a trailing comma, or one object per case.
+- If it still can't be read, or was cut off by the length limit, Claude is
+  asked once more, with the same pictures, for exactly one short object for
+  the job being set up. Readings may use up to 2,000 tokens.
+- Case names in a multi-case email are cut at a word, not mid-size.
+
 ## 1.6.10 – 2026-10-30
 - "Replace competitor" is now "Replace competitor": the menu, the mobile tab bar,
   the home tile ("Switching from a competitor?"), the page heading, the

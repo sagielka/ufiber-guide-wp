@@ -361,5 +361,15 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('ordinary decimals are left alone', q.dims && q.dims.main === 3.96 && q.dims.cross === 3.05, q.dims);
 }
 
+
+/* ---- an answer that is almost one JSON object still reads (1.6.11) ---- */
+{
+  const { AISERVER_JSON: J } = require(path.join(SRC, 'aiserver.js'));
+  ok('one object per case: the first is taken', J('{"task":"crosshole","summary":"Case 1"}\n{"task":"polish","summary":"Case 2"}')?.summary === 'Case 1');
+  ok('a code fence and a sentence around it', J('Here is the JSON:\n```json\n{"a":1,"b":"x } y"}\n```\nHope this helps.')?.b === 'x } y');
+  ok('a trailing comma', J('{"a":[1,2,],"b":2,}')?.b === 2);
+  ok('nothing usable gives null', J('{"a": 1, "b": ') === null);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

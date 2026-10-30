@@ -253,7 +253,13 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
   try {
     let r;
     const onWay = e => imgs.length && /^(unreachable|network|http_|upstream_|image_|empty|timeout|too_large)/.test(String(e && e.code));
-    try { r = await APP.sample.json(prompt, { images: imgs.length ? imgs : undefined, signal: aiCtl.signal }); }
+    // an answer that wasn't one clean JSON object: ask once more, shorter
+    const firm = `${prompt}\n\nIMPORTANT: answer with exactly ONE JSON object${sel != null ? ' for job ' + sel + ' only' : ''}. Keep "summary" under 40 words and every callout and question under 15 words. No text before or after it.`;
+    const ask = async (pr, im) => {
+      try { return await APP.sample.json(pr, { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
+      catch (e) { if (!/^(bad_json|truncated|invalid_json)$/.test(String(e && e.code))) throw e; return APP.sample.json(firm.replace(prompt, pr), { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
+    };
+    try { r = await ask(prompt, imgs); }
     catch (e) {
       if (!onWay(e)) throw e;
       // the request with pictures failed on the way: first try this job's main
@@ -261,17 +267,17 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
       try { console.warn('UFIBER Guide: reading with pictures failed, retrying lighter', e); } catch (_) { }
       try {
         const one = await fitAll(picked.slice(0, 1), 450000);
-        r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, ' plus 1 image of their drawing or part (the others could not be sent).'), { images: one, signal: aiCtl.signal });
+        r = await ask(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, ' plus 1 image of their drawing or part (the others could not be sent).'), one);
         D.imgFail = 'part'; D.imgWhy = String(e && e.code || 'failed');
       } catch (e2) {
         if (e2 && e2.code === 'cancelled') throw e2;
-        r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), { signal: aiCtl.signal });
+        r = await ask(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), null);
         D.imgFail = 'all'; D.imgWhy = String(e2 && e2.code || e && e.code || 'failed');
       }
     }
     applyAi(r);
   } catch (e) {
-    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
+    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
     // say why: a bare "something went wrong" can't be acted on or reported
     const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
     if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }

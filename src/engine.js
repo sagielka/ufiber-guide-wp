@@ -812,7 +812,8 @@ function splitJobs(text) {
     const sig = shared.search(/\n[ \t]*(?:rgds|regards|best regards|kind regards|thanks|thank you|br)\b/i);
     if (sig >= 0) shared = shared.slice(0, sig);
   }
-  const field = (s, re) => { const m = s.match(re); return m ? m[1].trim().slice(0, 40) : ''; };
+  // short, cut at a word: "15-430509-00 Adapter, APT, Chemical, 1/4" Port…"
+  const field = (s, re) => { const m = s.match(re); if (!m) return ''; const v = m[1].trim(); return v.length <= 44 ? v : v.slice(0, 44).replace(/[\s,;(]+\S*$/, '') + '…'; };
   return {
     shared: shared.trim(),
     jobs: jobs.map(j => {

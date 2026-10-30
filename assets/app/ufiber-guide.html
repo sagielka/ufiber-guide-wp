@@ -1301,7 +1301,8 @@ function splitJobs(text) {
     const sig = shared.search(/\n[ \t]*(?:rgds|regards|best regards|kind regards|thanks|thank you|br)\b/i);
     if (sig >= 0) shared = shared.slice(0, sig);
   }
-  const field = (s, re) => { const m = s.match(re); return m ? m[1].trim().slice(0, 40) : ''; };
+  // short, cut at a word: "15-430509-00 Adapter, APT, Chemical, 1/4" Port…"
+  const field = (s, re) => { const m = s.match(re); if (!m) return ''; const v = m[1].trim(); return v.length <= 44 ? v : v.slice(0, 44).replace(/[\s,;(]+\S*$/, '') + '…'; };
   return {
     shared: shared.trim(),
     jobs: jobs.map(j => {
@@ -1738,7 +1739,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.10';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.11';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3403,6 +3404,31 @@ if (typeof module !== 'undefined') module.exports = { msgRead };
    absence, and adding them would let the model reach the engine directly —
    which is exactly what must not happen. The engine owns the numbers.
    ============================================================ */
+/* The reply should be one JSON object, but with a long email and drawings a
+   model sometimes adds a sentence, a code fence, a trailing comma, or one object
+   per case. Take the first object that parses, in order. */
+function AISERVER_JSON(text) {
+  const t = String(text || '').replace(/```(?:json)?/gi, '').trim();
+  try { const v = JSON.parse(t); if (v && typeof v === 'object') return v; } catch (e) { }
+  const objs = [];
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] !== '{') continue;
+    let depth = 0, inStr = false, esc = false;
+    for (let k = i; k < t.length; k++) {
+      const c = t[k];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { objs.push(t.slice(i, k + 1)); i = k; break; } }
+    }
+  }
+  for (const o of objs) {
+    for (const cand of [o, o.replace(/,\s*([}\]])/g, '$1')]) {
+      try { const v = JSON.parse(cand); if (v && typeof v === 'object' && !Array.isArray(v)) return v; } catch (e) { }
+    }
+  }
+  return null;
+}
 const AISERVER = (() => {
   let api = null, on = false, key = '';
   try {
@@ -3469,19 +3495,17 @@ const AISERVER = (() => {
       max_tokens: opts.max_tokens || 1500,
     }, opts.signal);
     const t = String(d.text || '').trim();
-    try { return JSON.parse(t); } catch (e) { }
-    const a = t.indexOf('{'), b = t.lastIndexOf('}');
-    if (a >= 0 && b > a) {
-      try { return JSON.parse(t.slice(a, b + 1)); } catch (e) { }
-    }
-    throw fail('bad_json', t.slice(0, 200));
+    const j = AISERVER_JSON(t);
+    if (j) return j;
+    // cut off by the token limit: say so, so the caller can ask for less
+    throw fail(d.truncated ? 'truncated' : 'bad_json', t.slice(0, 200));
   };
 
   sample.limits = async () => ({ images: { maxCount: 3 }, tools: null });
 
   return { get ready() { return !!(api && on); }, sample };
 })();
-if (typeof module !== 'undefined') module.exports = { AISERVER };
+if (typeof module !== 'undefined') module.exports = { AISERVER, AISERVER_JSON };
 /* ============================================================
    UFIBER Guide — drop a customer email or drawing
    Local first: .eml/.msg/.txt/.html and PDF text are read in the
@@ -3737,7 +3761,13 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
   try {
     let r;
     const onWay = e => imgs.length && /^(unreachable|network|http_|upstream_|image_|empty|timeout|too_large)/.test(String(e && e.code));
-    try { r = await APP.sample.json(prompt, { images: imgs.length ? imgs : undefined, signal: aiCtl.signal }); }
+    // an answer that wasn't one clean JSON object: ask once more, shorter
+    const firm = `${prompt}\n\nIMPORTANT: answer with exactly ONE JSON object${sel != null ? ' for job ' + sel + ' only' : ''}. Keep "summary" under 40 words and every callout and question under 15 words. No text before or after it.`;
+    const ask = async (pr, im) => {
+      try { return await APP.sample.json(pr, { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
+      catch (e) { if (!/^(bad_json|truncated|invalid_json)$/.test(String(e && e.code))) throw e; return APP.sample.json(firm.replace(prompt, pr), { images: im && im.length ? im : undefined, signal: aiCtl.signal, max_tokens: 2000 }); }
+    };
+    try { r = await ask(prompt, imgs); }
     catch (e) {
       if (!onWay(e)) throw e;
       // the request with pictures failed on the way: first try this job's main
@@ -3745,17 +3775,17 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
       try { console.warn('UFIBER Guide: reading with pictures failed, retrying lighter', e); } catch (_) { }
       try {
         const one = await fitAll(picked.slice(0, 1), 450000);
-        r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, ' plus 1 image of their drawing or part (the others could not be sent).'), { images: one, signal: aiCtl.signal });
+        r = await ask(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, ' plus 1 image of their drawing or part (the others could not be sent).'), one);
         D.imgFail = 'part'; D.imgWhy = String(e && e.code || 'failed');
       } catch (e2) {
         if (e2 && e2.code === 'cancelled') throw e2;
-        r = await APP.sample.json(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), { signal: aiCtl.signal });
+        r = await ask(prompt.replace(/ plus \d+ image\(s\)[^.]*\./, '. (Its pictures could not be sent; read the text only.)'), null);
         D.imgFail = 'all'; D.imgWhy = String(e2 && e2.code || e && e.code || 'failed');
       }
     }
     applyAi(r);
   } catch (e) {
-    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
+    const msg = { cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
     // say why: a bare "something went wrong" can't be acted on or reported
     const why = e && (e.code || e.message) ? String(e.code || e.message).replace(/\s+/g, ' ').slice(0, 140) : '';
     if (msg === undefined) try { console.warn('UFIBER Guide: reading with Claude failed', e); } catch (_) { }

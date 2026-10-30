@@ -212,6 +212,20 @@ async def main():
             ok('three big pictures together stay under about 1.1 MB', budj['calls'] and sum(budj['calls'][0]) <= 1100000, budj['calls'][:1])
             ok('if the set is refused, the first picture alone is read', len(budj['calls']) == 2 and len(budj['calls'][1]) == 1 and budj['imgFail'] == 'part' and 'Read with one picture' in budj['note'], bud[:200])
 
+            # --- an answer that isn't clean JSON is asked for once more, shorter (1.6.11) ---
+            bj = await page.evaluate("""async () => {
+                const calls = []; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => { calls.push({ firm: /exactly ONE JSON object/.test(prompt), n: (opt.images || []).length, mt: opt.max_tokens });
+                    if (calls.length === 1) { const e = new Error('bad_json'); e.code = 'bad_json'; throw e; } return { summary: 'second try' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text: 'Material : PP, cross hole', images: [new Blob([new Uint8Array(500)], { type: 'image/png' })], crops: [], cases: 0 };
+                await aiRead();
+                const out = { calls, summary: APP.doc.ai && APP.doc.ai.summary, err: APP.doc.aiErr };
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify(out); }""")
+            bjj = json.loads(bj)
+            ok('a reply that is not clean JSON is asked again, firmer, with the same pictures', len(bjj['calls']) == 2 and bjj['calls'][1]['firm'] and bjj['calls'][1]['n'] == 1 and bjj['summary'] == 'second try' and not bjj['err'], bj[:200])
+
             # --- a two-job email: Case 2 gets its own setup and its own pictures (1.6.8) ---
             await page.evaluate("() => go('')")
             await page.wait_for_timeout(400)
