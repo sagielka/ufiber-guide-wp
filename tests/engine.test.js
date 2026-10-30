@@ -391,5 +391,18 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a stated width is not called an estimate', !E.recommend(st2).notes.some(n => /Estimated from the drawing/.test(n)));
 }
 
+/* ---- Ø15 surface brush on a shank from Ø19, from maker's spread test (1.6.16) ---- */
+{
+  const job = (main, ov) => { const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'aluminum', sub: 'wrought', dims: { main, cross: 8 }, override: ov || {} }); return E.recommend(st); };
+  const r19 = job(19);
+  ok('a Ø19 bore still gets a cross-hole brush first', r19.family !== 'shank', r19.family);
+  ok('and offers the Ø15 surface brush on a shank', r19.alts.some(a => /Surface brush on a shank/.test(a.label)), r19.alts.map(a => a.label));
+  ok('a Ø16 bore does not offer it (no data below Ø19)', !job(16).alts.some(a => /Surface brush on a shank/.test(a.label)));
+  const s19 = job(19, { family: 'shank', dia: 15, grit: 1000 });
+  ok('the Ø15 #1000 on a shank is UF1615', s19.sku === 'UF1615', s19.sku);
+  ok('it cites the measured spread', s19.why.some(w => /Ø28\.9 at the tips/.test(w.d) && /Ø19 cross hole/.test(w.d)), s19.why.map(w => w.t));
+  ok('a #1000 Ø15 surface brush now fits a Ø19 bore, a #600 one does not', vm.runInContext('sfShankFits(19, 1000).some(f => f.d === 15) && !sfShankFits(19, 600).length', ctx));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

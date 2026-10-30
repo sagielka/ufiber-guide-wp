@@ -172,8 +172,18 @@ function sfCrossFits(bore, grit) {
   for (const d of [1.5, 3, 5, 7, 11]) { const c = CROSS[d]; const r = grit >= 1200 && c.pilotFine ? c.pilotFine : c.pilot; if (c.grits && !c.grits.includes(grit)) continue; if (bore >= r[0] && bore <= r[1]) res.push({ d, r }); }
   return res;
 }
-// NOGA RPM Advisor surface-brush method: minimum bore per brush, compatible shanks
-const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : ({ 15: 20, 40: 40, 60: 60, 100: 100 }[d]);
+// NOGA RPM Advisor surface-brush method: minimum bore per brush, compatible shanks.
+// Ø15 from Ø19 at #1000 and finer: maker spread test (competitor CB31M-01550 = UF1615, 23-Dec-2024) —
+// free at 6,000 RPM it flares to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
+// Coarser grits are stiffer and spread less, so they keep the Advisor's Ø20.
+const SF_SPREAD15 = { grit: 1000, rpm: 6000, mid: 20, tip: 28.9, bore: 19 };
+const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : d === 15 ? (grit >= 1000 ? SF_SPREAD15.bore : 20) : ({ 40: 40, 60: 60, 100: 100 }[d]);
+function sfSpread15Note(rpm) {
+  const s = SF_SPREAD15;
+  let t = `Measured spread (maker test, UF1615 Ø15 #1000): spinning free at ${s.rpm.toLocaleString()} RPM without the sleeve, the fibers flare to Ø${s.mid} at mid-length and Ø${s.tip} at the tips, and the brush deburred a Ø${s.bore} cross hole.`;
+  if (rpm && rpm < s.rpm * 0.9) t += ` At ${rpm.toLocaleString()} RPM they spread less than that — check the tips reach the cross-hole edge, and raise the speed toward ${s.rpm.toLocaleString()} RPM if they don't.`;
+  return t;
+}
 const SF_SHANKS = { 15: [['UF5001', 'UF-S-L045-DS06-C06', 'standard, Ø6 connection, L 45 mm']], 25: [['UF5003', 'UF-S-L050-DS09-C10', 'standard, Ø10 connection, L 50 mm'], ['UF5002', 'UF-S-L050-DS09-C06', 'standard, Ø6 connection, L 50 mm'], ['UF5007', 'UF-S-L120-DS09-C10', 'long reach, Ø10 connection, L 120 mm']], 40: [['UF5004', 'UF-S-L050-DS12-C12', 'standard, Ø12 connection, L 50 mm'], ['UF5008', 'UF-S-L120-DS12-C12', 'long reach, Ø12 connection, L 120 mm']], 60: [['UF5005', 'UF-S-L050-DS13-C12', 'standard, Ø12 connection, L 50 mm']], 100: [['UF5006', 'UF-S-L050-DS16-C16', 'standard, Ø16 connection, L 50 mm']] };
 function sfShankFits(bore, grit) { return [15, 25, 40, 60, 100].filter(d => bore >= SF_SHANK_MINBORE(d, grit)).map(d => ({ d, min: SF_SHANK_MINBORE(d, grit) })); }
 function sfShank({ row, bore, grit, mode = 'deburr', worn = false, maxRpm = null, size = null, deep = false }) {
@@ -188,6 +198,7 @@ function sfShank({ row, bore, grit, mode = 'deburr', worn = false, maxRpm = null
   Object.assign(out, { size: pick, fits, rpm: s.rpm, rpmRange: s.rpmRange, rpmMax: s.rpmMax, newRpm: s.rpm, feedRange: pol ? C.feedP : C.feedD, passes: pol ? C.passP : C.passD, shank, shanks, clearance: +clr.toFixed(1) });
   out.feed = out.feedRange[0];
   if (clr >= 1) out.notes.push(`The Ø${pick} brush leaves about ${out.clearance} mm radial clearance in a Ø${bore} bore. Use a circular-interpolated or offset toolpath so the fiber tips reach the cross-hole edge on the bore wall.`);
+  if (pick === 15) out.notes.push(sfSpread15Note(out.rpm));
   out.notes.push('Insert the brush and start rotation inside the bore; stop rotation before withdrawing. Pass completely across the intersection and don\'t dwell over the cross hole.');
   if (grit < 1000) out.notes.push('NOGA\'s catalogue suggests starting this method at #1200 (it expands more), then #1000 if burrs remain. Your table grit is coarser — fine for heavier burrs.');
   return out;

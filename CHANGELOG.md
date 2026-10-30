@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.16 – 2026-10-30
+- A Ø15 surface brush on a shank now fits from a Ø19 bore (#1000 and finer),
+  instead of Ø20. Source: maker's spread test of the brush that matches UF1615
+  (Ø15 #1000). Spinning free at 6,000 RPM without its sleeve, it flared to Ø20
+  at mid-length and Ø28.9 at the tips, and it deburred a Ø19 cross hole.
+  Coarser grits keep Ø20.
+- The setup for a Ø15 brush on a shank shows those measured figures. Between
+  Ø19 and Ø28.9 it is no longer marked as an estimate. If the speed is more
+  than 10% below 6,000 RPM, the setup says the fibers spread less.
+- "Surface brush on a shank" is offered as an alternative from Ø19 only. It
+  used to appear from Ø14, where there is no data.
+
 ## 1.6.15 – 2026-10-30
 - When a face, seal or polishing job states no width, Claude now works it out
   from the drawing's other dimensions instead of leaving it empty: for a round

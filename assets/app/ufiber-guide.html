@@ -1051,7 +1051,7 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
   const okG = g => !C.grits || C.grits.includes(g);
   if (okG(coarser)) R.alts.push({ label: `One grit coarser — #${coarser}`, note: 'If burrs remain after extra passes. Needs slightly higher RPM to expand.', ov: { grit: coarser, dia: size, family: 'crosshole' } });
   if (okG(finer) && finer <= 6000) R.alts.push({ label: `One grit finer — #${finer}`, note: 'Less edge rounding, better internal finish.', ov: { grit: finer, dia: size, family: 'crosshole' } });
-  if (main && main > 14) R.alts.push({ label: 'Surface brush on a shank', note: 'For larger bores, a surface brush without its sleeve expands by centrifugal force.', ov: { family: 'shank', dia: 15, grit: 1200 } });
+  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in maker's test.`, ov: { family: 'shank', dia: 15, grit: 1200 } });
   R.alts.push({ label: 'NOGA UBURR', note: 'If the burr is too heavy for a brush or the hole edges need a defined chamfer.', ext: true });
   R.diagram = 'crosshole';
   if (!main) R.lower('medium', 'RPM depends on the bore diameter — enter it for an exact value.');
@@ -1086,15 +1086,19 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
     'Stop rotation completely, then withdraw the brush.',
   ];
   R.why = [
-    { t: 'Why a surface brush on a shank', d: `Your Ø${main} bore is above the Ø20 cross-hole range. Without its sleeve, a surface brush fans out by centrifugal force and reaches the bore wall.` },
-    { t: `Why Ø${size}`, d: `NOGA's surface-brush method uses the largest brush that fits the bore (Ø15 needs Ø20+, Ø25 needs Ø27–28+, Ø40/60/100 need at least their own diameter). Smaller brushes also work with an adapted toolpath.` },
+    { t: 'Why a surface brush on a shank', d: main && main <= 20 ? `Your Ø${main} bore is at the top of the cross-hole range (up to Ø20), where a Ø15 surface brush without its sleeve also works: it fans out by centrifugal force and reaches the bore wall.` : `Your Ø${main} bore is above the Ø20 cross-hole range. Without its sleeve, a surface brush fans out by centrifugal force and reaches the bore wall.` },
+    { t: `Why Ø${size}`, d: `NOGA's surface-brush method uses the largest brush that fits the bore (Ø15 needs Ø19+ at #1000 and finer, Ø20+ when coarser; Ø25 needs Ø27–28+; Ø40/60/100 need at least their own diameter). Smaller brushes also work with an adapted toolpath.` },
+    ...(size === 15 ? [{ t: 'How far a Ø15 spreads', d: sfSpread15Note(rpm) }] : []),
     { t: `Why #${grit}`, d: grit === 1200 ? 'NOGA recommends starting this method with #1200 — it is more flexible and expands more. If burrs remain, switch to #1000.' : grit > 1200 ? `#${grit} is finer than NOGA's #1200 starting grit for this method — gentler, for finishing rather than burr removal.` : `#${grit} cuts harder than NOGA's #1200 starting grit for this method. It is stiffer, so it expands a little less; use it when #1200/#1000 leave burrs.` },
     { t: 'Why this RPM', d: 'NOGA\'s RPM Advisor surface-brush method: low end of the brush window, adjusted for grit. Speed also controls how far the fibers spread — raise it gradually if the brush doesn\'t reach the burr.' },
   ];
   R.watch = ['Insert before starting rotation and stop before removing — same rule as cross-hole brushes.', '#1200 is more prone to fiber breakage than coarser grits.', 'Check that the expanded brush doesn\'t hit the bore bottom or a shoulder.'];
   R.alts.push({ label: 'Switch to #1000', note: 'Stiffer, more cutting power if #1200 leaves burrs.', ov: { family: 'shank', dia: size, grit: 1000 } });
   R.diagram = 'crosshole';
-  R.lower('medium', 'Bore-size to brush-size matching for this method is an estimate — verify expansion at your RPM.');
+  // Ø15 #1000+ between Ø19 and the measured tip spread is backed by maker's test; elsewhere it is still an estimate
+  const measured = size === 15 && grit >= SF_SPREAD15.grit && main && main >= SF_SPREAD15.bore && main <= SF_SPREAD15.tip;
+  if (!measured) R.lower('medium', 'Bore-size to brush-size matching for this method is an estimate — verify expansion at your RPM.');
+  else if (rpm < SF_SPREAD15.rpm * 0.9) R.lower('medium', `The Ø15 spread was measured at ${SF_SPREAD15.rpm.toLocaleString()} RPM; this setup runs slower, so the fibers spread less.`);
   return finalize(R, st);
 }
 function ov(st) { return st.override || {}; }
@@ -1645,8 +1649,18 @@ function sfCrossFits(bore, grit) {
   for (const d of [1.5, 3, 5, 7, 11]) { const c = CROSS[d]; const r = grit >= 1200 && c.pilotFine ? c.pilotFine : c.pilot; if (c.grits && !c.grits.includes(grit)) continue; if (bore >= r[0] && bore <= r[1]) res.push({ d, r }); }
   return res;
 }
-// NOGA RPM Advisor surface-brush method: minimum bore per brush, compatible shanks
-const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : ({ 15: 20, 40: 40, 60: 60, 100: 100 }[d]);
+// NOGA RPM Advisor surface-brush method: minimum bore per brush, compatible shanks.
+// Ø15 from Ø19 at #1000 and finer: maker spread test (competitor CB31M-01550 = UF1615, 23-Dec-2024) —
+// free at 6,000 RPM it flares to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
+// Coarser grits are stiffer and spread less, so they keep the Advisor's Ø20.
+const SF_SPREAD15 = { grit: 1000, rpm: 6000, mid: 20, tip: 28.9, bore: 19 };
+const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : d === 15 ? (grit >= 1000 ? SF_SPREAD15.bore : 20) : ({ 40: 40, 60: 60, 100: 100 }[d]);
+function sfSpread15Note(rpm) {
+  const s = SF_SPREAD15;
+  let t = `Measured spread (maker test, UF1615 Ø15 #1000): spinning free at ${s.rpm.toLocaleString()} RPM without the sleeve, the fibers flare to Ø${s.mid} at mid-length and Ø${s.tip} at the tips, and the brush deburred a Ø${s.bore} cross hole.`;
+  if (rpm && rpm < s.rpm * 0.9) t += ` At ${rpm.toLocaleString()} RPM they spread less than that — check the tips reach the cross-hole edge, and raise the speed toward ${s.rpm.toLocaleString()} RPM if they don't.`;
+  return t;
+}
 const SF_SHANKS = { 15: [['UF5001', 'UF-S-L045-DS06-C06', 'standard, Ø6 connection, L 45 mm']], 25: [['UF5003', 'UF-S-L050-DS09-C10', 'standard, Ø10 connection, L 50 mm'], ['UF5002', 'UF-S-L050-DS09-C06', 'standard, Ø6 connection, L 50 mm'], ['UF5007', 'UF-S-L120-DS09-C10', 'long reach, Ø10 connection, L 120 mm']], 40: [['UF5004', 'UF-S-L050-DS12-C12', 'standard, Ø12 connection, L 50 mm'], ['UF5008', 'UF-S-L120-DS12-C12', 'long reach, Ø12 connection, L 120 mm']], 60: [['UF5005', 'UF-S-L050-DS13-C12', 'standard, Ø12 connection, L 50 mm']], 100: [['UF5006', 'UF-S-L050-DS16-C16', 'standard, Ø16 connection, L 50 mm']] };
 function sfShankFits(bore, grit) { return [15, 25, 40, 60, 100].filter(d => bore >= SF_SHANK_MINBORE(d, grit)).map(d => ({ d, min: SF_SHANK_MINBORE(d, grit) })); }
 function sfShank({ row, bore, grit, mode = 'deburr', worn = false, maxRpm = null, size = null, deep = false }) {
@@ -1661,6 +1675,7 @@ function sfShank({ row, bore, grit, mode = 'deburr', worn = false, maxRpm = null
   Object.assign(out, { size: pick, fits, rpm: s.rpm, rpmRange: s.rpmRange, rpmMax: s.rpmMax, newRpm: s.rpm, feedRange: pol ? C.feedP : C.feedD, passes: pol ? C.passP : C.passD, shank, shanks, clearance: +clr.toFixed(1) });
   out.feed = out.feedRange[0];
   if (clr >= 1) out.notes.push(`The Ø${pick} brush leaves about ${out.clearance} mm radial clearance in a Ø${bore} bore. Use a circular-interpolated or offset toolpath so the fiber tips reach the cross-hole edge on the bore wall.`);
+  if (pick === 15) out.notes.push(sfSpread15Note(out.rpm));
   out.notes.push('Insert the brush and start rotation inside the bore; stop rotation before withdrawing. Pass completely across the intersection and don\'t dwell over the cross hole.');
   if (grit < 1000) out.notes.push('NOGA\'s catalogue suggests starting this method at #1200 (it expands more), then #1000 if burrs remain. Your table grit is coarser — fine for heavier burrs.');
   return out;
@@ -1755,7 +1770,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.15';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.16';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3948,7 +3963,7 @@ function sfView() {
   const famPick = SF_FAMS.map(([k, l]) => `<button data-sffam="${k}" aria-pressed="${S.fam === k}">${l}</button>`).join('');
   let size = '';
   if (S.fam === 'surface') size = `<div class="field"><label>Brush diameter</label><div class="seg">${[6, 15, 25, 40, 60, 100].map(d => `<button data-sfdia="${d}" aria-pressed="${S.dia === d}">${diaOut(d)}</button>`).join('')}</div></div>`;
-  if (S.fam === 'crosshole') size = numField('sfBore', 'Bore (pilot hole) diameter — the hole the brush enters', lenVal(S.bore), 'Ø3.5–20 mm: cross-hole brush (Ø2.5–3.5: Ø1.5 brush, based on a NOGA case). Above Ø20: surface brush on a shank. Below Ø2.5: point brush.') + (r.fits && r.fits.length > 1 ? `<div class="field"><label>${r.method === 'shank' ? 'Surface brushes that fit this bore' : 'Brushes that fit this bore'}</label><div class="seg">${r.fits.map(f => `<button data-sfcs="${f.d}" aria-pressed="${r.size === f.d}">Ø${f.d} <span class="tiny">${f.r ? `(Ø${f.r[0]}–${f.r[1]})` : `(bore ≥ Ø${f.min})`}</span></button>`).join('')}</div><span class="hint">The largest fitting brush is recommended; smaller ones also work${r.method === 'shank' ? ' with a circular toolpath' : ''}.</span></div>` : '');
+  if (S.fam === 'crosshole') size = numField('sfBore', 'Bore (pilot hole) diameter — the hole the brush enters', lenVal(S.bore), 'Ø3.5–20 mm: cross-hole brush (Ø2.5–3.5: Ø1.5 brush, based on a NOGA case). Above Ø20: surface brush on a shank (a Ø15 #1000+ one also works from Ø19). Below Ø2.5: point brush.') + (r.fits && r.fits.length > 1 ? `<div class="field"><label>${r.method === 'shank' ? 'Surface brushes that fit this bore' : 'Brushes that fit this bore'}</label><div class="seg">${r.fits.map(f => `<button data-sfcs="${f.d}" aria-pressed="${r.size === f.d}">Ø${f.d} <span class="tiny">${f.r ? `(Ø${f.r[0]}–${f.r[1]})` : `(bore ≥ Ø${f.min})`}</span></button>`).join('')}</div><span class="hint">The largest fitting brush is recommended; smaller ones also work${r.method === 'shank' ? ' with a circular toolpath' : ''}.</span></div>` : '');
   if (S.fam === 'point') size = `<div class="field"><label>Brush diameter</label><div class="seg">${[1, 1.5, 2, 2.5, 3].map(d => `<button data-sfpd="${d}" aria-pressed="${S.pdia === d}">${diaOut(d)}</button>`).join('')}</div></div>`;
   if (S.fam === 'end') size = `<div class="field"><label>Tip</label><div class="seg"><button data-sfang="0" aria-pressed="${!S.angled}">Flat (UF4…50)</button><button data-sfang="1" aria-pressed="${S.angled}">45° (UF6…50)</button></div></div>`;
   if (S.fam === 'disc') size = `<div class="field"><label>Disc diameter</label><div class="seg">${[13, 19, 22, 25, 30].map(d => `<button data-sfdd="${d}" aria-pressed="${S.ddia === d}">${diaOut(d)}</button>`).join('')}</div></div>`;
@@ -4280,7 +4295,7 @@ const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u
 
 const AI_RULES = `UFIBER rules you can rely on:
 - Surface brushes Ø6–100 cut with the fiber tips; depth of cut 0.2 polishing / 0.5 deburring / 1.2 mm absolute max; projection ≤10 mm from the sleeve; feed ≤2,000 mm/min; up-cut against side burrs; never side-load or rub walls.
-- Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush.
+- Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush. A Ø15 surface brush on a shank (#1000 or finer) also works from Ø19: in maker's test a UF1615 Ø15 #1000 spinning free at 6,000 RPM flared to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
 - Point (Ø1–3) and End (Ø5) brushes: max 12,000 RPM on CNC; hand-held 1,000–3,000 RPM; electric drives only, no air tools.
 - Ceramic fiber suits small burrs (≤~0.2 mm root, bendable with a fingernail); thicker burrs need a cutter first (e.g. NOGA UBURR for hole edges). Brushing always leaves a small edge radius; no mirror finish. Carbide/ceramic/glass/EDM need Ceramic Diamond Stones.
 - Ceramic Diamond Stones Ø1–3 (#200 black, #400 silver, #600 forest green, #800 green): 60,000 RPM max, ≤30,000 RPM typical, contact force about 1 N and always below 5 N, no fixed feed or depth, test-run for runout first, epoxy-resin bond, pneumatic tools allowed at controlled speed.\n- Floating dampers: BT30/BT40 max 6,000 RPM, 5 mm float, about 50 N, ER25UM (BT30) or ER32UM (BT40) collet; End-type max 12,000 RPM, 4 mm float, about 20 N. Approach vertically or with arc entry/exit, preload before feed, no through-spindle coolant, don't drop into pockets.\n- Portable E-Pack UF9999: 30,000 RPM, 3.0 Ncm torque; only for End/Point brushes, discs and diamond stones; follow each tool's own max RPM.\n- NOGA case: Ø1.5 cross-hole brush #1000 in a Ø2.6 mm hole (17-4 PH) at 7,000 RPM, 100 mm/min, dry, on a Star SR-20 sliding-head lathe.\n- Lathes and Swiss-type machines: cross-hole brushes run in an axial (end-working) live tool on the bore axis with the main spindle stopped; feed in mm/min (G98). Live tools are often limited to 6,000–8,000 RPM (Citizen L20 front tool 7,500 max, Star SR-20R IV 8,000, Tornos Swiss GT 13 6,000), so check the station's max RPM against the brush's RPM; well short of it, a speed increaser is needed.\n- Field trial that failed: Ø3.1 bore in L605 cobalt alloy on a sliding-head lathe, Ø1.5 cross-hole #600 at 6,000 RPM and about 120 mm/min left the burr; a Ø3 cross-hole brush broke on entry.\n- More cutting: raise RPM toward the top of the window, lower feed 10%, add a pass, coarser grit. Less aggressive / longer life: lower RPM 10%, raise feed 10%, fewer passes, finer grit, lighter engagement. Wet machining improves finish and life.
