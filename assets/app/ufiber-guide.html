@@ -1051,7 +1051,7 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
   const okG = g => !C.grits || C.grits.includes(g);
   if (okG(coarser)) R.alts.push({ label: `One grit coarser — #${coarser}`, note: 'If burrs remain after extra passes. Needs slightly higher RPM to expand.', ov: { grit: coarser, dia: size, family: 'crosshole' } });
   if (okG(finer) && finer <= 6000) R.alts.push({ label: `One grit finer — #${finer}`, note: 'Less edge rounding, better internal finish.', ov: { grit: finer, dia: size, family: 'crosshole' } });
-  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in a spread test.`, ov: { family: 'shank', dia: 15, grit: 1200 } });
+  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in a spread test (#2000).`, ov: { family: 'shank', dia: 15, grit: main < 20 ? SF_SPREAD15.grit : 1200 } });
   R.alts.push({ label: 'NOGA UBURR', note: 'If the burr is too heavy for a brush or the hole edges need a defined chamfer.', ext: true });
   R.diagram = 'crosshole';
   if (!main) R.lower('medium', 'RPM depends on the bore diameter — enter it for an exact value.');
@@ -1087,7 +1087,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   ];
   R.why = [
     { t: 'Why a surface brush on a shank', d: main && main <= 20 ? `Your Ø${main} bore is at the top of the cross-hole range (up to Ø20), where a Ø15 surface brush without its sleeve also works: it fans out by centrifugal force and reaches the bore wall.` : `Your Ø${main} bore is above the Ø20 cross-hole range. Without its sleeve, a surface brush fans out by centrifugal force and reaches the bore wall.` },
-    { t: `Why Ø${size}`, d: `NOGA's surface-brush method uses the largest brush that fits the bore (Ø15 needs Ø19+ at #1000 and finer, Ø20+ when coarser; Ø25 needs Ø27–28+; Ø40/60/100 need at least their own diameter). Smaller brushes also work with an adapted toolpath.` },
+    { t: `Why Ø${size}`, d: `NOGA's surface-brush method uses the largest brush that fits the bore (Ø15 needs Ø19+ at #2000 and finer, Ø20+ when coarser; Ø25 needs Ø27–28+; Ø40/60/100 need at least their own diameter). Smaller brushes also work with an adapted toolpath.` },
     ...(size === 15 ? [{ t: 'How far a Ø15 spreads', d: sfSpread15Note(rpm) }] : []),
     { t: `Why #${grit}`, d: grit === 1200 ? 'NOGA recommends starting this method with #1200 — it is more flexible and expands more. If burrs remain, switch to #1000.' : grit > 1200 ? `#${grit} is finer than NOGA's #1200 starting grit for this method — gentler, for finishing rather than burr removal.` : `#${grit} cuts harder than NOGA's #1200 starting grit for this method. It is stiffer, so it expands a little less; use it when #1200/#1000 leave burrs.` },
     { t: 'Why this RPM', d: 'NOGA\'s RPM Advisor surface-brush method: low end of the brush window, adjusted for grit. Speed also controls how far the fibers spread — raise it gradually if the brush doesn\'t reach the burr.' },
@@ -1095,7 +1095,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   R.watch = ['Insert before starting rotation and stop before removing — same rule as cross-hole brushes.', '#1200 is more prone to fiber breakage than coarser grits.', 'Check that the expanded brush doesn\'t hit the bore bottom or a shoulder.'];
   R.alts.push({ label: 'Switch to #1000', note: 'Stiffer, more cutting power if #1200 leaves burrs.', ov: { family: 'shank', dia: size, grit: 1000 } });
   R.diagram = 'crosshole';
-  // Ø15 #1000+ between Ø19 and the measured tip spread is backed by a spread test; elsewhere it is still an estimate
+  // Ø15 #2000+ between Ø19 and the measured tip spread is backed by a spread test; elsewhere it is still an estimate
   const measured = size === 15 && grit >= SF_SPREAD15.grit && main && main >= SF_SPREAD15.bore && main <= SF_SPREAD15.tip;
   if (!measured) R.lower('medium', 'Bore-size to brush-size matching for this method is an estimate — verify expansion at your RPM.');
   else if (rpm < SF_SPREAD15.rpm * 0.9) R.lower('medium', `The Ø15 spread was measured at ${SF_SPREAD15.rpm.toLocaleString()} RPM; this setup runs slower, so the fibers spread less.`);
@@ -1650,14 +1650,14 @@ function sfCrossFits(bore, grit) {
   return res;
 }
 // NOGA RPM Advisor surface-brush method: minimum bore per brush, compatible shanks.
-// Ø15 from Ø19 at #1000 and finer: spread test of the UF1615 #1000 brush (23-Dec-2024) —
+// Ø15 from Ø19 at #2000 and finer: spread test of the Ø15 #2000 brush = UF1815 (23-Dec-2024; grit confirmed by NOGA 31-Oct-2026) —
 // free at 6,000 RPM it flares to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
 // Coarser grits are stiffer and spread less, so they keep the Advisor's Ø20.
-const SF_SPREAD15 = { grit: 1000, rpm: 6000, mid: 20, tip: 28.9, bore: 19 };
-const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : d === 15 ? (grit >= 1000 ? SF_SPREAD15.bore : 20) : ({ 40: 40, 60: 60, 100: 100 }[d]);
+const SF_SPREAD15 = { grit: 2000, rpm: 6000, mid: 20, tip: 28.9, bore: 19 };
+const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : d === 15 ? (grit >= SF_SPREAD15.grit ? SF_SPREAD15.bore : 20) : ({ 40: 40, 60: 60, 100: 100 }[d]);
 function sfSpread15Note(rpm) {
   const s = SF_SPREAD15;
-  let t = `Measured spread (UF1615 Ø15 #1000): spinning free at ${s.rpm.toLocaleString()} RPM without the sleeve, the fibers flare to Ø${s.mid} at mid-length and Ø${s.tip} at the tips, and the brush deburred a Ø${s.bore} cross hole.`;
+  let t = `Measured spread (UF1815 Ø15 #2000): spinning free at ${s.rpm.toLocaleString()} RPM without the sleeve, the fibers flare to Ø${s.mid} at mid-length and Ø${s.tip} at the tips, and the brush deburred a Ø${s.bore} cross hole.`;
   if (rpm && rpm < s.rpm * 0.9) t += ` At ${rpm.toLocaleString()} RPM they spread less than that — check the tips reach the cross-hole edge, and raise the speed toward ${s.rpm.toLocaleString()} RPM if they don't.`;
   return t;
 }
@@ -1770,7 +1770,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.24';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.25';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3067,7 +3067,6 @@ function xParse(raw) {
   const s = raw.toUpperCase().replace(/^\s*[A-Z]{3,}\s+(?=\S*\d)/, '').replace(/[\s_]+/g, '').replace(/—|–/g, '-').replace(/^[:\-]+/, '').trim();
   if (!s) return null;
   let m;
-  if (s === 'CB31M-01550' || s === 'CB31M01550') return { raw, code: s, brand: 'cb', kind: 'cb15' };
   // CB-codes: same colour letters as UFIBER (G P V O B W R M Z A)
   if ((m = s.match(/^CB31([GPVOBWRMZA])-?M-?(\d{3})(\d{2})$/))) return { raw, code: s, brand: 'cb', kind: 'cross', gl: m[1], dia: +m[2] / 10, bl: +m[3] };
   if ((m = s.match(/^CB31([GPVOBWRMZA])-?S-?(\d{3})(\d{3})$/))) return { raw, code: s, brand: 'cb', kind: 'point', gl: m[1], dia: +m[2] / 10, bl: +m[3] };
@@ -3113,15 +3112,8 @@ function xFind(text) {
 function xConvert(p) {
   if (!p) return null;
   if (p.brand === 'cn') return vConvert(p);
-  if (p.brand === 'cb' && p.kind !== 'cb15') return cbConvert(p);
+  if (p.brand === 'cb') return cbConvert(p);
   const out = { p, status: 'direct', uf: null, holders: [], notes: [], alts: [], xdesc: '' };
-  if (p.kind === 'cb15') {
-    out.xdesc = 'Ceramic fiber surface brush Ø15, #1000 (white)';
-    const k = skuSurface(15, 1000); out.uf = { family: 'surface', fam: 'Surface Brush', dia: 15, grit: 1000, ...k };
-    out.holders.push({ role: 'Sleeve', sku: SURFACE[15].sleeve[0], desc: `${SURFACE[15].sleeve[1]}, Ø6 shank` });
-    out.notes.push('Same brush as UF1615 (Ø15, #1000 white), confirmed by NOGA.');
-    return out;
-  }
   const col = XCOLOR[p.color];
   const colTxt = col ? `${col.c} (${p.color})` : (p.color ? p.color : '');
   if (p.color && !col) out.notes.push(`Color code ${p.color} isn't in the cross-reference — pick the color manually below.`);
@@ -4276,7 +4268,7 @@ function sfView() {
   const famPick = SF_FAMS.map(([k, l]) => `<button data-sffam="${k}" aria-pressed="${S.fam === k}">${l}</button>`).join('');
   let size = '';
   if (S.fam === 'surface') size = `<div class="field"><label>Brush diameter</label><div class="seg">${[6, 15, 25, 40, 60, 100].map(d => `<button data-sfdia="${d}" aria-pressed="${S.dia === d}">${diaOut(d)}</button>`).join('')}</div></div>`;
-  if (S.fam === 'crosshole') size = numField('sfBore', 'Bore (pilot hole) diameter — the hole the brush enters', lenVal(S.bore), 'Ø3.5–20 mm: cross-hole brush (Ø2.5–3.5: Ø1.5 brush, based on a NOGA case). Above Ø20: surface brush on a shank (a Ø15 #1000+ one also works from Ø19). Below Ø2.5: point brush.') + (r.fits && r.fits.length > 1 ? `<div class="field"><label>${r.method === 'shank' ? 'Surface brushes that fit this bore' : 'Brushes that fit this bore'}</label><div class="seg">${r.fits.map(f => `<button data-sfcs="${f.d}" aria-pressed="${r.size === f.d}">Ø${f.d} <span class="tiny">${f.r ? `(Ø${f.r[0]}–${f.r[1]})` : `(bore ≥ Ø${f.min})`}</span></button>`).join('')}</div><span class="hint">The largest fitting brush is recommended; smaller ones also work${r.method === 'shank' ? ' with a circular toolpath' : ''}.</span></div>` : '');
+  if (S.fam === 'crosshole') size = numField('sfBore', 'Bore (pilot hole) diameter — the hole the brush enters', lenVal(S.bore), 'Ø3.5–20 mm: cross-hole brush (Ø2.5–3.5: Ø1.5 brush, based on a NOGA case). Above Ø20: surface brush on a shank (a Ø15 #2000+ one also works from Ø19). Below Ø2.5: point brush.') + (r.fits && r.fits.length > 1 ? `<div class="field"><label>${r.method === 'shank' ? 'Surface brushes that fit this bore' : 'Brushes that fit this bore'}</label><div class="seg">${r.fits.map(f => `<button data-sfcs="${f.d}" aria-pressed="${r.size === f.d}">Ø${f.d} <span class="tiny">${f.r ? `(Ø${f.r[0]}–${f.r[1]})` : `(bore ≥ Ø${f.min})`}</span></button>`).join('')}</div><span class="hint">The largest fitting brush is recommended; smaller ones also work${r.method === 'shank' ? ' with a circular toolpath' : ''}.</span></div>` : '');
   if (S.fam === 'point') size = `<div class="field"><label>Brush diameter</label><div class="seg">${[1, 1.5, 2, 2.5, 3].map(d => `<button data-sfpd="${d}" aria-pressed="${S.pdia === d}">${diaOut(d)}</button>`).join('')}</div></div>`;
   if (S.fam === 'end') size = `<div class="field"><label>Tip</label><div class="seg"><button data-sfang="0" aria-pressed="${!S.angled}">Flat (UF4…50)</button><button data-sfang="1" aria-pressed="${S.angled}">45° (UF6…50)</button></div></div>`;
   if (S.fam === 'disc') size = `<div class="field"><label>Disc diameter</label><div class="seg">${[13, 19, 22, 25, 30].map(d => `<button data-sfdd="${d}" aria-pressed="${S.ddia === d}">${diaOut(d)}</button>`).join('')}</div></div>`;
@@ -4608,7 +4600,7 @@ const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u
 
 const AI_RULES = `UFIBER rules you can rely on:
 - Surface brushes Ø6–100 cut with the fiber tips; depth of cut 0.2 polishing / 0.5 deburring / 1.2 mm absolute max; projection ≤10 mm from the sleeve; feed ≤2,000 mm/min; up-cut against side burrs; never side-load or rub walls.
-- Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush. A Ø15 surface brush on a shank (#1000 or finer) also works from Ø19: in a spread test a UF1615 Ø15 #1000 spinning free at 6,000 RPM flared to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
+- Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush. A Ø15 surface brush on a shank (#2000 or finer) also works from Ø19: in a spread test a UF1815 Ø15 #2000 spinning free at 6,000 RPM flared to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
 - Competitor item codes (A11/A13/A21/A31/A32-CB…, CH-A12/A33/A34-…, A11/A13/A21-EB…, W-A11-50/75, S…M sleeves, CN-CB…MS/HS, CN-A12/A33-…, CB31R/B-S…, CN-PB/PO/PM-…B, SD-…M, CB31#-…, CB31#-M-…, CB31#-S-…, CBR#-…): never work out the UFIBER equivalent yourself. Use job.competitor_items_in_text (already converted by the app) or call convert_competitor_codes when it is offered, and give the SKU, holder and notes as returned. A code that is in neither: say it is not in the cross-reference and ask for the brush size and colour. Never name a competitor brand or maker in a reply, even if the customer does: say "your current brush" or give the item code.
 - Point (Ø1–3) and End (Ø5) brushes: max 12,000 RPM on CNC; hand-held 1,000–3,000 RPM; electric drives only, no air tools.
 - Ceramic fiber suits small burrs (≤~0.2 mm root, bendable with a fingernail); thicker burrs need a cutter first (e.g. NOGA UBURR for hole edges). Brushing always leaves a small edge radius; no mirror finish. Carbide/ceramic/glass/EDM need Ceramic Diamond Stones.

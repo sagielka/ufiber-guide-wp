@@ -173,14 +173,14 @@ function sfCrossFits(bore, grit) {
   return res;
 }
 // NOGA RPM Advisor surface-brush method: minimum bore per brush, compatible shanks.
-// Ø15 from Ø19 at #1000 and finer: spread test of the UF1615 #1000 brush (23-Dec-2024) —
+// Ø15 from Ø19 at #2000 and finer: spread test of the Ø15 #2000 brush = UF1815 (23-Dec-2024; grit confirmed by NOGA 31-Oct-2026) —
 // free at 6,000 RPM it flares to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
 // Coarser grits are stiffer and spread less, so they keep the Advisor's Ø20.
-const SF_SPREAD15 = { grit: 1000, rpm: 6000, mid: 20, tip: 28.9, bore: 19 };
-const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : d === 15 ? (grit >= 1000 ? SF_SPREAD15.bore : 20) : ({ 40: 40, 60: 60, 100: 100 }[d]);
+const SF_SPREAD15 = { grit: 2000, rpm: 6000, mid: 20, tip: 28.9, bore: 19 };
+const SF_SHANK_MINBORE = (d, grit) => d === 25 ? (grit <= 1000 ? 27 : 28) : d === 15 ? (grit >= SF_SPREAD15.grit ? SF_SPREAD15.bore : 20) : ({ 40: 40, 60: 60, 100: 100 }[d]);
 function sfSpread15Note(rpm) {
   const s = SF_SPREAD15;
-  let t = `Measured spread (UF1615 Ø15 #1000): spinning free at ${s.rpm.toLocaleString()} RPM without the sleeve, the fibers flare to Ø${s.mid} at mid-length and Ø${s.tip} at the tips, and the brush deburred a Ø${s.bore} cross hole.`;
+  let t = `Measured spread (UF1815 Ø15 #2000): spinning free at ${s.rpm.toLocaleString()} RPM without the sleeve, the fibers flare to Ø${s.mid} at mid-length and Ø${s.tip} at the tips, and the brush deburred a Ø${s.bore} cross hole.`;
   if (rpm && rpm < s.rpm * 0.9) t += ` At ${rpm.toLocaleString()} RPM they spread less than that — check the tips reach the cross-hole edge, and raise the speed toward ${s.rpm.toLocaleString()} RPM if they don't.`;
   return t;
 }

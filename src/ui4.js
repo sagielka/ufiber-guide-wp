@@ -47,7 +47,6 @@ function xParse(raw) {
   const s = raw.toUpperCase().replace(/^\s*[A-Z]{3,}\s+(?=\S*\d)/, '').replace(/[\s_]+/g, '').replace(/—|–/g, '-').replace(/^[:\-]+/, '').trim();
   if (!s) return null;
   let m;
-  if (s === 'CB31M-01550' || s === 'CB31M01550') return { raw, code: s, brand: 'cb', kind: 'cb15' };
   // CB-codes: same colour letters as UFIBER (G P V O B W R M Z A)
   if ((m = s.match(/^CB31([GPVOBWRMZA])-?M-?(\d{3})(\d{2})$/))) return { raw, code: s, brand: 'cb', kind: 'cross', gl: m[1], dia: +m[2] / 10, bl: +m[3] };
   if ((m = s.match(/^CB31([GPVOBWRMZA])-?S-?(\d{3})(\d{3})$/))) return { raw, code: s, brand: 'cb', kind: 'point', gl: m[1], dia: +m[2] / 10, bl: +m[3] };
@@ -93,15 +92,8 @@ function xFind(text) {
 function xConvert(p) {
   if (!p) return null;
   if (p.brand === 'cn') return vConvert(p);
-  if (p.brand === 'cb' && p.kind !== 'cb15') return cbConvert(p);
+  if (p.brand === 'cb') return cbConvert(p);
   const out = { p, status: 'direct', uf: null, holders: [], notes: [], alts: [], xdesc: '' };
-  if (p.kind === 'cb15') {
-    out.xdesc = 'Ceramic fiber surface brush Ø15, #1000 (white)';
-    const k = skuSurface(15, 1000); out.uf = { family: 'surface', fam: 'Surface Brush', dia: 15, grit: 1000, ...k };
-    out.holders.push({ role: 'Sleeve', sku: SURFACE[15].sleeve[0], desc: `${SURFACE[15].sleeve[1]}, Ø6 shank` });
-    out.notes.push('Same brush as UF1615 (Ø15, #1000 white), confirmed by NOGA.');
-    return out;
-  }
   const col = XCOLOR[p.color];
   const colTxt = col ? `${col.c} (${p.color})` : (p.color ? p.color : '');
   if (p.color && !col) out.notes.push(`Color code ${p.color} isn't in the cross-reference — pick the color manually below.`);

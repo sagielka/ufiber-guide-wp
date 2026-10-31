@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.25 – 2026-10-31
+- Corrected (NOGA): the Ø15 brush in the spread test was #2000 (UF1815),
+  not #1000. The maker's colour letter M is #2000, the same as UFIBER's.
+  CB31M-01550 now converts to UF1815.
+- The Ø15 surface brush on a shank fits from a Ø19 bore only in #2000 and
+  finer. #1000 and #1200 go back to Ø20 until they are tested. For Ø19
+  bores the "Surface brush on a shank" alternative is offered in #2000; from
+  Ø20 it stays #1200. The measured-spread note names UF1815 #2000.
+
 ## 1.6.24 – 2026-10-31
 - Replace page: CB-codes added. They use the same colour letters as UFIBER
   (G #150 … W #1000 … A #6000), so size and grit carry over directly:

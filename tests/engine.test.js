@@ -398,10 +398,10 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a Ø19 bore still gets a cross-hole brush first', r19.family !== 'shank', r19.family);
   ok('and offers the Ø15 surface brush on a shank', r19.alts.some(a => /Surface brush on a shank/.test(a.label)), r19.alts.map(a => a.label));
   ok('a Ø16 bore does not offer it (no data below Ø19)', !job(16).alts.some(a => /Surface brush on a shank/.test(a.label)));
-  const s19 = job(19, { family: 'shank', dia: 15, grit: 1000 });
-  ok('the Ø15 #1000 on a shank is UF1615', s19.sku === 'UF1615', s19.sku);
+  const s19 = job(19, { family: 'shank', dia: 15, grit: 2000 });
+  ok('the Ø15 #2000 on a shank is UF1815', s19.sku === 'UF1815', s19.sku);
   ok('it cites the measured spread', s19.why.some(w => /Ø28\.9 at the tips/.test(w.d) && /Ø19 cross hole/.test(w.d)), s19.why.map(w => w.t));
-  ok('a #1000 Ø15 surface brush now fits a Ø19 bore, a #600 one does not', vm.runInContext('sfShankFits(19, 1000).some(f => f.d === 15) && !sfShankFits(19, 600).length', ctx));
+  ok('a #2000 Ø15 surface brush fits a Ø19 bore; #1000 and #1200 need Ø20 (not tested)', vm.runInContext('sfShankFits(19, 2000).some(f => f.d === 15) && !sfShankFits(19, 1000).length && !sfShankFits(19, 1200).length && sfShankFits(20, 1000).some(f => f.d === 15)', ctx));
 }
 
 
@@ -448,7 +448,7 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('CB31R-S1.5 → Ø1.5 point #1200, CB31B-S2.5 → Ø2.5 point #800', sku('CB31R-S1.5') === 'UF3715' && sku('CB31B-S2.5') === 'UF3525', [sku('CB31R-S1.5'), sku('CB31B-S2.5')]);
   ok('CN-code oil stones → UFIBER Ø3 diamond stone by grit (#800, #400, #220→#200)', sku('CN-PB-3B') === 'UF9430' && sku('CN-PO-3B') === 'UF9230' && sku('CN-PM-3B') === 'UF9130', [sku('CN-PB-3B'), sku('CN-PO-3B'), sku('CN-PM-3B')]);
   ok('CN-code ball hone has no UFIBER equivalent', X('BD-10M').status === 'none');
-  ok('CB31M-01550 → UF1615', sku('CB31M-01550') === 'UF1615' && X('CB31M-01550').status === 'direct');
+  ok('CB31M-01550 → UF1815 (M = #2000)', sku('CB31M-01550') === 'UF1815' && X('CB31M-01550').status === 'direct');
   ok('unknown code is reported, not guessed', X('ZZ-123').status === 'unknown' && !X('ZZ-123').uf);
   // finding codes in a customer's text
   const found = E.xFind('Hi, we use A21-CB25M and CH-A33-7M on 4140, also CN-A12-5M. A floating holder and a stone are on the bench. Ø25 brush, S25M sleeve.');

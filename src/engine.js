@@ -562,7 +562,7 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
   const okG = g => !C.grits || C.grits.includes(g);
   if (okG(coarser)) R.alts.push({ label: `One grit coarser — #${coarser}`, note: 'If burrs remain after extra passes. Needs slightly higher RPM to expand.', ov: { grit: coarser, dia: size, family: 'crosshole' } });
   if (okG(finer) && finer <= 6000) R.alts.push({ label: `One grit finer — #${finer}`, note: 'Less edge rounding, better internal finish.', ov: { grit: finer, dia: size, family: 'crosshole' } });
-  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in a spread test.`, ov: { family: 'shank', dia: 15, grit: 1200 } });
+  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in a spread test (#2000).`, ov: { family: 'shank', dia: 15, grit: main < 20 ? SF_SPREAD15.grit : 1200 } });
   R.alts.push({ label: 'NOGA UBURR', note: 'If the burr is too heavy for a brush or the hole edges need a defined chamfer.', ext: true });
   R.diagram = 'crosshole';
   if (!main) R.lower('medium', 'RPM depends on the bore diameter — enter it for an exact value.');
@@ -598,7 +598,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   ];
   R.why = [
     { t: 'Why a surface brush on a shank', d: main && main <= 20 ? `Your Ø${main} bore is at the top of the cross-hole range (up to Ø20), where a Ø15 surface brush without its sleeve also works: it fans out by centrifugal force and reaches the bore wall.` : `Your Ø${main} bore is above the Ø20 cross-hole range. Without its sleeve, a surface brush fans out by centrifugal force and reaches the bore wall.` },
-    { t: `Why Ø${size}`, d: `NOGA's surface-brush method uses the largest brush that fits the bore (Ø15 needs Ø19+ at #1000 and finer, Ø20+ when coarser; Ø25 needs Ø27–28+; Ø40/60/100 need at least their own diameter). Smaller brushes also work with an adapted toolpath.` },
+    { t: `Why Ø${size}`, d: `NOGA's surface-brush method uses the largest brush that fits the bore (Ø15 needs Ø19+ at #2000 and finer, Ø20+ when coarser; Ø25 needs Ø27–28+; Ø40/60/100 need at least their own diameter). Smaller brushes also work with an adapted toolpath.` },
     ...(size === 15 ? [{ t: 'How far a Ø15 spreads', d: sfSpread15Note(rpm) }] : []),
     { t: `Why #${grit}`, d: grit === 1200 ? 'NOGA recommends starting this method with #1200 — it is more flexible and expands more. If burrs remain, switch to #1000.' : grit > 1200 ? `#${grit} is finer than NOGA's #1200 starting grit for this method — gentler, for finishing rather than burr removal.` : `#${grit} cuts harder than NOGA's #1200 starting grit for this method. It is stiffer, so it expands a little less; use it when #1200/#1000 leave burrs.` },
     { t: 'Why this RPM', d: 'NOGA\'s RPM Advisor surface-brush method: low end of the brush window, adjusted for grit. Speed also controls how far the fibers spread — raise it gradually if the brush doesn\'t reach the burr.' },
@@ -606,7 +606,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   R.watch = ['Insert before starting rotation and stop before removing — same rule as cross-hole brushes.', '#1200 is more prone to fiber breakage than coarser grits.', 'Check that the expanded brush doesn\'t hit the bore bottom or a shoulder.'];
   R.alts.push({ label: 'Switch to #1000', note: 'Stiffer, more cutting power if #1200 leaves burrs.', ov: { family: 'shank', dia: size, grit: 1000 } });
   R.diagram = 'crosshole';
-  // Ø15 #1000+ between Ø19 and the measured tip spread is backed by a spread test; elsewhere it is still an estimate
+  // Ø15 #2000+ between Ø19 and the measured tip spread is backed by a spread test; elsewhere it is still an estimate
   const measured = size === 15 && grit >= SF_SPREAD15.grit && main && main >= SF_SPREAD15.bore && main <= SF_SPREAD15.tip;
   if (!measured) R.lower('medium', 'Bore-size to brush-size matching for this method is an estimate — verify expansion at your RPM.');
   else if (rpm < SF_SPREAD15.rpm * 0.9) R.lower('medium', `The Ø15 spread was measured at ${SF_SPREAD15.rpm.toLocaleString()} RPM; this setup runs slower, so the fibers spread less.`);
