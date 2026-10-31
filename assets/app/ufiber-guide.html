@@ -1770,7 +1770,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.19';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.20';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2986,7 +2986,8 @@ document.addEventListener('click', e => {
   if (d.xex) { const ta = $('#xIn'); ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + d.xex; return; }
   if (t.dataset.xopen || t.closest('[data-xopen]')) { const v = xFoundCodes().join('\n'); APP.xr = { text: v, items: xConvertAll(v) }; go('replace'); return; }
   if (t.id === 'xGo') { const v = $('#xIn').value; APP.xr = { text: v, items: xConvertAll(v) }; route(true); if (APP.xr.items.length) $('#xOut').scrollIntoView({ block: 'start' }); return; }
-  if (d.xpk) { APP.xpick.kind = d.xpk; APP.xpick.dia = d.xpk === 'surface' ? 25 : d.xpk === 'cross' ? 5 : 5; APP.xpick.color = d.xpk === 'cross' ? 'A12' : 'A21'; APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
+  if (d.xpb) { xPickSet(APP.xpick, d.xpb, APP.xpick.kind); APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
+  if (d.xpk) { xPickSet(APP.xpick, APP.xpick.brand || 'competitor', d.xpk); APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
   if (d.xpd) { APP.xpick.dia = +d.xpd; APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
   if (d.xpc) { APP.xpick.color = d.xpc; APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
   if (t.id === 'xPickAdd') { const ta = $('#xIn'); const code = xCodeFromPick(APP.xpick); ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + code; APP.xr = { text: ta.value, items: xConvertAll(ta.value), pickOpen: true }; route(true); return; }
@@ -3361,17 +3362,43 @@ function replaceView() {
     'UFIBER surface brushes: projection max 10 mm, feed max 2,000 mm/min, depth max 1.2 mm. Programs running faster than that need adjusting.',
     'Validate on the first part, then lock in the program.'].map(t => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${t}</span></li>`).join('')}</ul></section>`}`;
 }
+/* "Don't know the code? Pick it": brand → type → size → colour, built into the real item code */
+const XPICK = {
+  competitor: { kinds: [['surface', 'Surface (cup) brush'], ['cross', 'Crosshole brush'], ['end', 'End type brush']],
+    dias: { surface: [6, 15, 25, 40, 60, 100], cross: [1.5, 3, 5, 7, 11], end: [3, 5] },
+    cols: { surface: ['A13', 'A11', 'A21', 'A32'], cross: ['A12', 'A33'], end: ['A13', 'A11', 'A21'] },
+    def: { surface: [25, 'A21'], cross: [5, 'A12'], end: [5, 'A21'] } },
+  competitor: { kinds: [['surface', 'Surface brush + sleeve'], ['cross', 'Cross-hole brush'], ['micro', 'Micro-hole brush'], ['side', 'Side (flower) brush']],
+    dias: { surface: [6, 15, 25, 40, 60, 100], cross: [1.5, 3, 5, 7, 9, 11], micro: [1, 1.5, 2, 2.5, 3], side: [20, 25, 30, 40, 50, 60] },
+    cols: { surface: ['pink', 'blue'], cross: ['pink', 'blue'], micro: ['pink', 'blue'], side: [] },
+    def: { surface: [25, 'pink'], cross: [5, 'pink'], micro: [1.5, 'pink'], side: [25, null] } },
+};
+function xPickSet(P, brand, kind) {
+  const B = XPICK[brand] || XPICK.competitor; if (!B.dias[kind]) kind = 'surface';
+  const [dia, color] = B.def[kind];
+  Object.assign(P, { brand, kind, dia, color });
+}
 function xPicker() {
-  const P = APP.xpick || (APP.xpick = { kind: 'surface', dia: 25, color: 'A21' });
-  const dias = P.kind === 'surface' ? [6, 15, 25, 40, 60, 100] : P.kind === 'cross' ? [1.5, 3, 5, 7, 11] : [1, 2.5, 3, 5];
-  const cols = P.kind === 'cross' ? ['A12', 'A33'] : P.kind === 'surface' ? ['A13', 'A11', 'A21', 'A32'] : ['A13', 'A11', 'A21', 'A31'];
-  return `<div class="field" style="margin-top:4px"><label>Type</label><div class="seg">${[['surface', 'Surface (cup) brush'], ['cross', 'Crosshole brush'], ['end', 'End type brush']].map(([k, l]) => `<button data-xpk="${k}" aria-pressed="${P.kind === k}">${l}</button>`).join('')}</div></div>
+  const P = APP.xpick || (APP.xpick = { brand: 'competitor', kind: 'surface', dia: 25, color: 'A21' });
+  if (!P.brand) P.brand = 'competitor';
+  const B = XPICK[P.brand]; const dias = B.dias[P.kind] || []; const cols = B.cols[P.kind] || [];
+  const colOf = c => P.brand === 'competitor' ? VCOLOR[c] : XCOLOR[c];
+  return `<div class="field" style="margin-top:4px"><label>Brand</label><div class="seg">${Object.keys(XPICK).map(b => `<button data-xpb="${b}" aria-pressed="${P.brand === b}">${b}</button>`).join('')}</div></div>
+    <div class="field"><label>Type</label><div class="seg">${B.kinds.map(([k, l]) => `<button data-xpk="${k}" aria-pressed="${P.kind === k}">${l}</button>`).join('')}</div></div>
     <div class="field"><label>Brush diameter</label><div class="seg">${dias.map(d => `<button data-xpd="${d}" aria-pressed="${P.dia === d}">Ø${d}</button>`).join('')}</div></div>
-    <div class="field"><label>Bristle color</label><div class="gritrow">${cols.map(c => `<button data-xpc="${c}" aria-pressed="${P.color === c}"><span class="gdot" style="background:${XCOLOR[c].hex}"></span>${XCOLOR[c].c}</button>`).join('')}</div></div>
+    ${cols.length ? `<div class="field"><label>Bristle color</label><div class="gritrow">${cols.map(c => `<button data-xpc="${c}" aria-pressed="${P.color === c}"><span class="gdot" style="background:${colOf(c).hex}"></span>${colOf(c).c}</button>`).join('')}</div></div>` : ''}
     <div class="row" style="margin-top:14px"><button class="btn" id="xPickAdd">Add to list</button><span class="small muted">→ ${esc(xCodeFromPick(P))}</span></div>`;
 }
 function xCodeFromPick(P) {
-  if (P.kind === 'surface') return `${P.color}-CB${String(P.dia).padStart(2, '0')}M`;
+  const dd = (d) => String(d).padStart(2, '0');
+  if (P.brand === 'competitor') {
+    const blue = P.color === 'blue';
+    if (P.kind === 'surface') return `CN-CB${dd(P.dia)}${blue ? 'H' : 'M'}S`;
+    if (P.kind === 'cross') return `CN-A${blue ? '33' : '12'}-${P.dia}M`;
+    if (P.kind === 'micro') return `CB31${blue ? 'B' : 'R'}-S${Number.isInteger(P.dia) ? P.dia.toFixed(1) : P.dia}`;
+    return `SD-${P.dia}M`;
+  }
+  if (P.kind === 'surface') return `${P.color}-CB${dd(P.dia)}M`;
   if (P.kind === 'cross') return `CH-${P.color}-${P.dia}M`;
   return `${P.color}-EB${{ 5: '06', 3: '03', 2.5: '025', 1: '01' }[P.dia] || '06'}${P.dia >= 3 ? 'M' : 'S'}`;
 }

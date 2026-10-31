@@ -495,7 +495,8 @@ document.addEventListener('click', e => {
   if (d.xex) { const ta = $('#xIn'); ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + d.xex; return; }
   if (t.dataset.xopen || t.closest('[data-xopen]')) { const v = xFoundCodes().join('\n'); APP.xr = { text: v, items: xConvertAll(v) }; go('replace'); return; }
   if (t.id === 'xGo') { const v = $('#xIn').value; APP.xr = { text: v, items: xConvertAll(v) }; route(true); if (APP.xr.items.length) $('#xOut').scrollIntoView({ block: 'start' }); return; }
-  if (d.xpk) { APP.xpick.kind = d.xpk; APP.xpick.dia = d.xpk === 'surface' ? 25 : d.xpk === 'cross' ? 5 : 5; APP.xpick.color = d.xpk === 'cross' ? 'A12' : 'A21'; APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
+  if (d.xpb) { xPickSet(APP.xpick, d.xpb, APP.xpick.kind); APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
+  if (d.xpk) { xPickSet(APP.xpick, APP.xpick.brand || 'competitor', d.xpk); APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
   if (d.xpd) { APP.xpick.dia = +d.xpd; APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
   if (d.xpc) { APP.xpick.color = d.xpc; APP.xr.pickOpen = true; APP.xr.text = $('#xIn').value; route(true); return; }
   if (t.id === 'xPickAdd') { const ta = $('#xIn'); const code = xCodeFromPick(APP.xpick); ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + code; APP.xr = { text: ta.value, items: xConvertAll(ta.value), pickOpen: true }; route(true); return; }

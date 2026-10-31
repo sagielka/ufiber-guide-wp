@@ -472,5 +472,20 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('the full setup keeps the converted disc size', E.recommend(st).sku === 'UF7325', E.recommend(st).sku);
 }
 
+
+/* ---- the "Pick it" panel: every combination it offers builds a real code that converts (1.6.20) ---- */
+{
+  const res = vm.runInContext(`(() => { const out = [];
+    for (const [brand, B] of Object.entries(XPICK)) for (const [kind] of B.kinds) for (const dia of B.dias[kind]) for (const color of (B.cols[kind].length ? B.cols[kind] : [null])) {
+      const code = xCodeFromPick({ brand, kind, dia, color }); const o = xConvert(xParse(code));
+      out.push({ code, brand: o.p.brand, kind: o.p.kind, sku: o.uf && o.uf.sku, status: o.status }); }
+    return out; })()`, ctx);
+  const bad = res.filter(r => !r.sku || r.status === 'unknown' || r.kind === 'unknown');
+  ok(`all ${res.length} picker combinations convert to a UFIBER item`, !bad.length, bad);
+  const by = Object.fromEntries(res.map(r => [r.code, r]));
+  ok('competitor picks build competitor codes', by['CN-CB25MS']?.sku === 'UF1725' && by['CN-A33-5M']?.sku === 'UF2550' && by['CB31R-S1.5']?.sku === 'UF3715' && by['SD-25M']?.sku === 'UF7325', ['CN-CB25MS', 'CN-A33-5M', 'CB31R-S1.5', 'SD-25M'].map(c => by[c]));
+  ok('micro-hole Ø1 is written as S1.0, as on the competitor label', !!by['CB31B-S1.0']);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

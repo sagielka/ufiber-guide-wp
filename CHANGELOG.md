@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.20 – 2026-10-31
+- "Don't know the code? Pick it" on the Replace page now has a brand choice:
+  competitor or competitor. competitor offers surface brush + sleeve, cross-hole (Ø1.5–11,
+  including Ø9), micro-hole (Ø1–3) and side brushes, in pink or blue. Each
+  pick builds the real competitor code (CN-CB25MS, CN-A33-9M, CB31R-S1.5,
+  SD-25M). The competitor end-brush choices now list only what competitor sells:
+  Ø3 and Ø5, in pink, red and white.
+- A test runs every picker combination (80) and checks that each one
+  converts to a UFIBER item.
+
 ## 1.6.19 – 2026-10-31
 - Wheel and side brushes now map to the UFIBER radial ceramic fiber disc
   (Ø13–30 × 0.8 mm, UF7…), per NOGA. competitor W-A11-50/75 → Ø30 disc #1000.
