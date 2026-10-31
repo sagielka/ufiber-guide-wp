@@ -260,6 +260,24 @@ async def main():
             ok('an estimated width is shown as one', 'est. from drawing' in esj['before'] and '≈15' in esj['before'], esj['before'][:200])
             ok('typing the width replaces the estimate', esj['w'] == 16 and not esj['est'] and 'est. from drawing' not in esj['after'], es[:300])
 
+            # --- a cross-hole reading without its sizes asks once more, about the sizes only (1.6.16) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(300)
+            sp = await page.evaluate("""async () => {
+                const calls = []; const keep = APP.sample, keepI = APP.sampleImages;
+                APP.sample = { json: async (prompt, opt) => { calls.push({ size: /read the diameters of the TWO holes/.test(prompt), n: (opt.images || []).length, retry: !!opt.retry });
+                    return calls.length === 1 ? { task: 'crosshole', material: 'plastic', dims: {}, summary: 'burr at cross hole', callouts: [], questions: ['What is the main bore diameter?'] }
+                                              : { main: 3.96, cross: 3.05, estimated: [], how: 'section A-A, Ø.156 and Ø.120' }; } };
+                APP.sampleImages = { maxCount: 3 };
+                APP.doc = { files: [{ name: 'job.msg', kind: 'msg', status: 'Email read' }], text: 'Material : NPP, burr inside at cross hole', images: [new Blob([new Uint8Array(500)], { type: 'image/png' })], crops: [], cases: 0 };
+                await aiRead();
+                const out = { calls, dims: APP.ws.dims, qs: APP.doc.ai.questions, co: APP.doc.ai.callouts };
+                APP.sample = keep; APP.sampleImages = keepI; APP.doc = null; renderAttach();
+                return JSON.stringify(out); }""")
+            spj = json.loads(sp)
+            ok('missing cross-hole sizes get one focused pass with the drawing, counted as a retry', len(spj['calls']) == 2 and spj['calls'][1]['size'] and spj['calls'][1]['n'] == 1 and spj['calls'][1]['retry'], sp[:200])
+            ok('the sizes it reads fill the job and the size question goes', spj['dims'].get('main') == 3.96 and spj['dims'].get('cross') == 3.05 and not spj['qs'] and 'Hole sizes: section A-A' in spj['co'][0], sp[:300])
+
             # --- a two-job email: Case 2 gets its own setup and its own pictures (1.6.8) ---
             await page.evaluate("() => go('')")
             await page.wait_for_timeout(400)

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.22 – 2026-10-31
+- A cross-hole job that comes back without its two diameters, though drawings
+  were sent, gets one more look: Claude is asked only for the two hole sizes at
+  the burr, with that job's pictures at the full size budget. What it finds
+  fills the job (marked as estimated where it was not read directly) and the
+  size question goes away. It counts as a retry, not a new reading.
+- A size range written for the burr area ("hole diameter approximately
+  Ø3–4 mm") is used — main ≈ the upper value, cross ≈ the lower, both marked
+  as estimates — instead of leaving the sizes empty.
+
 ## 1.6.21 – 2026-10-31
 - No competitor brand or maker name appears anywhere in the app any more:
   not on screen, in notes, in the copied list, in the quote email, in the

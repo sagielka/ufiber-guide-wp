@@ -279,6 +279,36 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
       }
     }
     applyAi(r);
+    // A cross-hole job read without its two diameters, though pictures were sent:
+    // ask once more about the sizes only, with this job's pictures at full budget.
+    const dd = APP.ws?.dims || {};
+    if (APP.ws?.task === 'crosshole' && !(dd.main && dd.cross) && picked.length && D.imgFail !== 'all') {
+      try {
+        const own = picked.filter(b => D.images.includes(b) && (sel == null || b.job == null || b.job === sel)).slice(0, 2);
+        const big = await fitAll(own.length ? own : picked.slice(0, 1), AI_TOTAL);
+        const q = `You are reading a customer's drawing for a cross-hole deburring job${sel != null ? ' (job ' + sel + ' of the email)' : ''}. Find where the burr is (a marked circle, arrow or note) and read the diameters of the TWO holes that meet there. American drawings give inches with a leading dot (Ø.156 = 3.96 mm). Ignore entry counterbores, ports, threads and outside diameters. A note like "hole diameter approximately Ø3–4 mm" counts: main ≈ upper, cross ≈ lower.
+Reply with ONE JSON object: {"main": mm|null, "cross": mm|null, "estimated": ["main"|"cross" for any value you did not read directly], "how": "under 20 words: where you read them"}.
+
+EMAIL TEXT (for context):
+"""
+${excerpt(D).slice(0, 3000)}
+"""`;
+        const s2 = await call(q, big);
+        const v = k => { const n = Number(s2 && s2[k]); return isFinite(n) && n > 0.3 && n < 200 ? Math.round(n * 100) / 100 : null; };
+        let m1 = v('main'), c1 = v('cross');
+        if (m1 && c1 && c1 > m1) [m1, c1] = [c1, m1];
+        if (m1 || c1) {
+          APP.ws.dims = APP.ws.dims || {};
+          if (m1 && !dd.main) APP.ws.dims.main = m1;
+          if (c1 && !dd.cross) APP.ws.dims.cross = c1;
+          const est = (Array.isArray(s2.estimated) ? s2.estimated : []).filter(k => k === 'main' || k === 'cross');
+          APP.ws.est = [...new Set([...(APP.ws.est || []), ...est])]; if (!APP.ws.est.length) APP.ws.est = null;
+          if (s2.how && D.ai) D.ai.callouts = [`Hole sizes: ${String(s2.how).slice(0, 120)}`, ...D.ai.callouts].slice(0, 6);
+          if (D.ai) D.ai.questions = D.ai.questions.filter(x => !/diameter|bore|cross hole|hole size/i.test(x));
+          renderUnderstood();
+        }
+      } catch (e2) { try { console.warn('UFIBER Guide: size pass failed', e2); } catch (_) { } }
+    }
   } catch (e) {
     if (e && e.code === 'visitor_limit') { D.aiErr = `This site allows ${e.limit || 'a set number of'} readings an hour per visitor. Try again in about ${e.wait || 60} minute${e.wait === 1 ? '' : 's'} — or type the sizes in the box; the quick reading needs no allowance.`; return; }
     const msg = { overloaded: 'Claude is overloaded right now — try again in a minute.', cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];

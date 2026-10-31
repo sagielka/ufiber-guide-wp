@@ -1770,7 +1770,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.21';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.22';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -4071,6 +4071,36 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
       }
     }
     applyAi(r);
+    // A cross-hole job read without its two diameters, though pictures were sent:
+    // ask once more about the sizes only, with this job's pictures at full budget.
+    const dd = APP.ws?.dims || {};
+    if (APP.ws?.task === 'crosshole' && !(dd.main && dd.cross) && picked.length && D.imgFail !== 'all') {
+      try {
+        const own = picked.filter(b => D.images.includes(b) && (sel == null || b.job == null || b.job === sel)).slice(0, 2);
+        const big = await fitAll(own.length ? own : picked.slice(0, 1), AI_TOTAL);
+        const q = `You are reading a customer's drawing for a cross-hole deburring job${sel != null ? ' (job ' + sel + ' of the email)' : ''}. Find where the burr is (a marked circle, arrow or note) and read the diameters of the TWO holes that meet there. American drawings give inches with a leading dot (Ø.156 = 3.96 mm). Ignore entry counterbores, ports, threads and outside diameters. A note like "hole diameter approximately Ø3–4 mm" counts: main ≈ upper, cross ≈ lower.
+Reply with ONE JSON object: {"main": mm|null, "cross": mm|null, "estimated": ["main"|"cross" for any value you did not read directly], "how": "under 20 words: where you read them"}.
+
+EMAIL TEXT (for context):
+"""
+${excerpt(D).slice(0, 3000)}
+"""`;
+        const s2 = await call(q, big);
+        const v = k => { const n = Number(s2 && s2[k]); return isFinite(n) && n > 0.3 && n < 200 ? Math.round(n * 100) / 100 : null; };
+        let m1 = v('main'), c1 = v('cross');
+        if (m1 && c1 && c1 > m1) [m1, c1] = [c1, m1];
+        if (m1 || c1) {
+          APP.ws.dims = APP.ws.dims || {};
+          if (m1 && !dd.main) APP.ws.dims.main = m1;
+          if (c1 && !dd.cross) APP.ws.dims.cross = c1;
+          const est = (Array.isArray(s2.estimated) ? s2.estimated : []).filter(k => k === 'main' || k === 'cross');
+          APP.ws.est = [...new Set([...(APP.ws.est || []), ...est])]; if (!APP.ws.est.length) APP.ws.est = null;
+          if (s2.how && D.ai) D.ai.callouts = [`Hole sizes: ${String(s2.how).slice(0, 120)}`, ...D.ai.callouts].slice(0, 6);
+          if (D.ai) D.ai.questions = D.ai.questions.filter(x => !/diameter|bore|cross hole|hole size/i.test(x));
+          renderUnderstood();
+        }
+      } catch (e2) { try { console.warn('UFIBER Guide: size pass failed', e2); } catch (_) { } }
+    }
   } catch (e) {
     if (e && e.code === 'visitor_limit') { D.aiErr = `This site allows ${e.limit || 'a set number of'} readings an hour per visitor. Try again in about ${e.wait || 60} minute${e.wait === 1 ? '' : 's'} — or type the sizes in the box; the quick reading needs no allowance.`; return; }
     const msg = { overloaded: 'Claude is overloaded right now — try again in a minute.', cancelled: null, not_granted: 'Reading with Claude was not allowed in this view. The local reading above still works.', rate_limited: 'Too many requests right now — try again in a minute.', image_rejected: 'One of the images couldn\'t be used. Try a smaller screenshot.', images_unavailable: 'Images can\'t be sent from this view — only the email text was read.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', bad_json: 'Claude\'s answer couldn\'t be read, twice. Try again, or type the sizes in the box.', truncated: 'Claude\'s answer was cut off, twice. Try again, or type the sizes in the box.', refused: 'Claude couldn\'t process this content.', session_expired: 'Your session expired — sign in again.', timeout: 'Claude took too long to answer. Try again in a moment.', network: 'The site could not be reached. Check the connection and try again.', too_large: 'The site refused the request as too large. Try again with fewer pictures.' }[e && e.code];
@@ -4321,7 +4351,7 @@ function extractionSpec() {
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches; American drawings give inches with a leading dot and no unit, e.g. Ø.156 = 0.156 in = 3.96 mm, and a drawing note like "hole diameter approximately Ø3–4 mm" is a stated size). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole;
 WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
-CROSS-HOLE SIZES COME FROM THE INTERSECTION: "main" and "cross" are the two holes that actually MEET where the burr is. Entry counterbores, port or fitting bores (flare, thread, O-ring seat), outside diameters, flanges and the part's overall size are NOT the main bore, even when the brush passes through them on the way in. On a drawing, find the burr area (a circle, arrow or note) and follow each hole from there; the two smallest diameters that run into that spot are usually the pair. A size stated in words for the burr area ("hole diameter approximately Ø3–4 mm") outranks any number you pick off the drawing. If you can't tell which diameters meet, leave them null and ask.
+CROSS-HOLE SIZES COME FROM THE INTERSECTION: "main" and "cross" are the two holes that actually MEET where the burr is. Entry counterbores, port or fitting bores (flare, thread, O-ring seat), outside diameters, flanges and the part's overall size are NOT the main bore, even when the brush passes through them on the way in. On a drawing, find the burr area (a circle, arrow or note) and follow each hole from there; the two smallest diameters that run into that spot are usually the pair. A size stated in words for the burr area ("hole diameter approximately Ø3–4 mm") outranks any number you pick off the drawing. A range like that given for the holes at the intersection means main ≈ the upper value and cross ≈ the lower one (Ø3–4 → main 4, cross 3): fill them and list both in "estimated" rather than leaving them null. Leave them null only when nothing at all bounds them.
  "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
 Several workpiece materials (e.g. "AW5083, AW7075 and stainless 1.4301"): set up ONE now and put each other one in "later". Pick the one the customer says to start with, reading the whole thread including quoted earlier messages and short answers like "-> aluminium, please"; otherwise the first one listed. Grades of the same material (5083 and 7075 are both wrought aluminium) stay together in "grades". Never ask whether a "later" material uses the same setup: it needs its own.
 Never ask about anything the text already answers, quoted replies included.
