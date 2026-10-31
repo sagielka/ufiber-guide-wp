@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.23 – 2026-10-31
+- Same app as 1.6.22, released again from the cleaned repository history,
+  so the latest release no longer depends on the old history.
+
 ## 1.6.22 – 2026-10-31
 - A cross-hole job that comes back without its two diameters, though drawings
   were sent, gets one more look: Claude is asked only for the two hole sizes at
