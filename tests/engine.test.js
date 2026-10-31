@@ -457,5 +457,20 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('the compact form carries the SKU for the AI', E.xCompact(X('CN-CB25MS')).ufiber_sku === 'UF1725');
 }
 
+
+/* ---- wheel and side brushes → UFIBER radial ceramic fiber disc (Sagi, 31-Oct-2026) (1.6.19) ---- */
+{
+  const X = (c) => E.xConvert(E.xParse(c));
+  const w = X('W-A11-50');
+  ok('competitor wheel W-A11-50 → Ø30 radial disc, red → nearest disc grit #1000 (UF7630)', w.uf?.sku === 'UF7630' && w.uf.family === 'disc' && w.status === 'close', w.uf);
+  ok('and it comes with the UF7030 clamping shank and the 9,000 RPM limit', w.holders.some(h => h.sku === 'UF7030') && w.notes.some(n => /never above 9,000/.test(n)));
+  ok('competitor side brush SD-25M → Ø25 disc #400 (UF7325), #200 offered', X('SD-25M').uf?.sku === 'UF7325' && X('SD-25M').alts.some(a => a.sku === 'UF7225'), X('SD-25M'));
+  ok('SD-20M → Ø19 (nearest disc not larger)', X('SD-20M').uf?.sku === 'UF7319', X('SD-20M').uf?.sku);
+  ok('SD-60M → Ø30, flagged as smaller reach', X('SD-60M').uf?.dia === 30 && X('SD-60M').notes.some(n => /reaches less far/.test(n)));
+  ok('side-brush codes are found in an email, a competitor PI number is not', JSON.stringify(E.xFind('We run SD-30M on the threads. Ref PI SD025-04213A.')) === JSON.stringify(['SD-30M']), E.xFind('We run SD-30M on the threads. Ref PI SD025-04213A.'));
+  const st = E.newState(); Object.assign(st, { task: 'deburr_mill', feature: 'groove', material: 'steel', override: { family: 'disc', grit: 400, dia: 25 } });
+  ok('the full setup keeps the converted disc size', E.recommend(st).sku === 'UF7325', E.recommend(st).sku);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

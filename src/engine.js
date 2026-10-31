@@ -665,7 +665,7 @@ function finishEnd(R, st, grit, mat, mode, machine, maxRpm, angled, ctx = {}) {
 function finishDisc(R, st, grit, mat, mode, machine, maxRpm) {
   grit = Math.min(Math.max(grit, 150), 1000); if (!G(grit) || grit > 1000) grit = 1000;
   const depth = Number(st.dims?.depth) || 5;
-  const size = [13, 19, 22, 25, 30].find(D => D / 2 - 2.5 >= depth) || 30;
+  const size = (DISC[ov(st).dia] ? ov(st).dia : null) || [13, 19, 22, 25, 30].find(D => D / 2 - 2.5 >= depth) || 30;   // a chosen disc size (e.g. from a competitor conversion) wins
   grit = discGrit(grit);
   const q = G(grit); const k = skuDisc(size, grit);
   R.family = 'disc'; R.familyName = 'Ceramic Fiber Disc (0.8 mm, radial)'; R.dia = size; R.grit = q; R.sku = k.sku; R.desc = k.desc;

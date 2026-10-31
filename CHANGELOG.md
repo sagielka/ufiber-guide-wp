@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.19 – 2026-10-31
+- Wheel and side brushes now map to the UFIBER radial ceramic fiber disc
+  (Ø13–30 × 0.8 mm, UF7…), per NOGA. competitor W-A11-50/75 → Ø30 disc #1000.
+  Red is #1200 and discs stop at #1000. competitor SD-…M side brushes → the
+  nearest disc that is not larger (SD-20M → Ø19, SD-25M → Ø25), #400 with
+  #200 offered. The shank is UF7030. Speed 6,000–8,000 RPM, never above
+  9,000, no air tools.
+- "Open full UFIBER setup" keeps the converted disc size, and the program
+  check uses the disc speed range.
+
 ## 1.6.18 – 2026-10-31
 - competitor grades now map like competitor's (NOGA, 31-Oct-2026). Blue (cross-hole
   A33, surface "H", micro-hole CB31B) moves from #400 to #800, the same as

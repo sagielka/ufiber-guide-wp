@@ -1154,7 +1154,7 @@ function finishEnd(R, st, grit, mat, mode, machine, maxRpm, angled, ctx = {}) {
 function finishDisc(R, st, grit, mat, mode, machine, maxRpm) {
   grit = Math.min(Math.max(grit, 150), 1000); if (!G(grit) || grit > 1000) grit = 1000;
   const depth = Number(st.dims?.depth) || 5;
-  const size = [13, 19, 22, 25, 30].find(D => D / 2 - 2.5 >= depth) || 30;
+  const size = (DISC[ov(st).dia] ? ov(st).dia : null) || [13, 19, 22, 25, 30].find(D => D / 2 - 2.5 >= depth) || 30;   // a chosen disc size (e.g. from a competitor conversion) wins
   grit = discGrit(grit);
   const q = G(grit); const k = skuDisc(size, grit);
   R.family = 'disc'; R.familyName = 'Ceramic Fiber Disc (0.8 mm, radial)'; R.dia = size; R.grit = q; R.sku = k.sku; R.desc = k.desc;
@@ -1770,7 +1770,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.18';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.19';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3040,6 +3040,8 @@ document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll(
    (31-Oct-2026) competitor grades are similar to competitor's, so they map the same way:
    A12 / pink → #1200 (as competitor A12), A33 / blue → #800 (as competitor blue).
    maker CB31M-01550 = UF1615 (Ø15 #1000), confirmed by Sagi 30-Oct-2026.
+   Wheel / side brushes (competitor W-A11-50/75, competitor SD-…M) → UFIBER radial ceramic
+   fiber disc Ø13–30 × 0.8 mm (UF7…), per Sagi 31-Oct-2026.
    ============================================================ */
 const XCOLOR = {
   A13: { c: 'Pink',      hex: '#F4A6C6', p: 30,  uf: 2000 },
@@ -3092,6 +3094,7 @@ function xParse(raw) {
   if ((m = s.match(/^CPD-?(\d+)M?$/))) return { raw, code: s, brand: 'competitor', kind: 'vface', dia: +m[1] };
   if ((m = s.match(/^PD-?(\d+)M$/))) return { raw, code: s, brand: 'competitor', kind: 'vpd', dia: +m[1] };
   if ((m = s.match(/^BD-?(\d+)M$/))) return { raw, code: s, brand: 'competitor', kind: 'hone', dia: +m[1] };
+  if ((m = s.match(/^SD-?(\d+)M$/))) return { raw, code: s, brand: 'competitor', kind: 'vside', dia: +m[1] };
   if (/^CH-?HG/.test(s)) return { raw, code: s, brand: 'competitor', kind: 'vpolish' };
   // ---- competitor
   if ((m = s.match(/^(A\d{2})-?CB(\d{2,3})M?$/))) return { raw, code: s, brand: 'competitor', kind: 'surface', color: m[1], dia: parseInt(m[2], 10) };
@@ -3114,7 +3117,7 @@ function xParse(raw) {
 
 /* Competitor codes inside free text (an ask, an email, a drawing note). Strict
    item-code shapes only, so ordinary words ("stone", "floating") never match. */
-const X_SCAN = /\b(?:competitor\s*)?(?:A\d{2}-?CB\d{2,3}M?|A\d{2}-?EB\d{2,3}[MS]?|CH-A\d{2}-\d+(?:\.\d+)?[MLF]?(?:-TL)?|CH-SH-\d+|W-A\d{2}-\d+|S(?:06|15|25|40|60|100)M(?:-P|-SD10)?|CN-A(?:12|33)-\d+(?:\.\d+)?[ML]?|CN-CB\d{2,3}[MH]S?|CN-\d{2,3}[MH]|CB31[RB]-S\d(?:\.\d)?|CB31M-01550|CN-P[BOM]-\d+B|CPD-\d+M)(?!\w|\.\d)/gi;
+const X_SCAN = /\b(?:competitor\s*)?(?:A\d{2}-?CB\d{2,3}M?|A\d{2}-?EB\d{2,3}[MS]?|CH-A\d{2}-\d+(?:\.\d+)?[MLF]?(?:-TL)?|CH-SH-\d+|W-A\d{2}-\d+|S(?:06|15|25|40|60|100)M(?:-P|-SD10)?|CN-A(?:12|33)-\d+(?:\.\d+)?[ML]?|CN-CB\d{2,3}[MH]S?|CN-\d{2,3}[MH]|CB31[RB]-S\d(?:\.\d)?|CB31M-01550|CN-P[BOM]-\d+B|CPD-\d+M|SD-\d+M)(?!\w|\.\d)/gi;
 function xFind(text) {
   const seen = new Set(), out = [];
   for (const m of String(text || '').matchAll(X_SCAN)) { const c = m[0].toUpperCase().replace(/^competitor\s*/, ''); if (!seen.has(c)) { seen.add(c); out.push(c); } }
@@ -3188,8 +3191,9 @@ function xConvert(p) {
     out.xdesc = p.kind === 'selfadj' ? 'competitor Self-Adjusting Sleeve' : 'competitor brush length setter'; out.status = 'none';
     out.notes.push('No direct UFIBER equivalent. A UFIBER Floating Damper compensates for brush wear automatically, which removes most of the need for projection re-setting.');
   } else if (p.kind === 'wheel') {
-    out.xdesc = `competitor Brush Wheel Type Ø${p.dia}`; out.status = 'none';
-    out.notes.push('UFIBER has no wheel-type brush. For thread and side-wall burrs, try a Ø15 or Ø25 surface brush on a contouring path, or the 0.8 mm ceramic fiber disc for narrow walls — then validate with NOGA.');
+    out.xdesc = `competitor Brush Wheel Type Ø${p.dia}, ${colTxt}`;
+    discOut(out, p.dia, grit, 'competitor wheel');
+    out.notes.push('competitor wheel brushes work threads, side walls and the inside of cylinders over Ø50; the UFIBER disc works the same way, radially, with a smaller reach.');
   } else if (p.kind === 'turning') {
     out.xdesc = 'competitor Brush Turning (lathe holder or brush)'; out.status = 'none';
     out.notes.push('No UFIBER lathe-holder equivalent. On a lathe with live tooling, use cross-hole or surface brushes in a driven tool.');
@@ -3231,6 +3235,22 @@ function endOut(out, dia, grit) {
   out.holders.push({ role: 'Drive', sku: 'UF9999', desc: 'Portable E-Pack for hand use (or any electric spindle; not air tools)' });
   out.notes.push('UFIBER end and point brushes are rated to 12,000 RPM.');
   gritAlts(out, grit, (g) => out.uf.family === 'end' ? skuEnd(g, false) : skuPoint(out.uf.dia, g));
+}
+
+function discOut(out, dia, grit, what) {
+  // NOGA: keep the customer's diameter where UFIBER has it; otherwise the nearest disc that is not larger (Ø13–30)
+  const sizes = [13, 19, 22, 25, 30];
+  const d = sizes.filter(x => x <= dia).pop() || 13;
+  const g = discGrit(Math.min(grit, 1000));
+  const k = skuDisc(d, g); out.uf = { family: 'disc', fam: 'Radial Ceramic Fiber Disc', dia: d, grit: g, ...k };
+  out.holders.push({ role: 'Clamping shank', sku: 'UF7030', desc: 'UF-DA-016-C030-L45, Ø3 shank, 45 mm (UF7023 for Ø2.35)' });
+  out.status = d === dia && g === grit ? 'direct' : 'close';
+  if (d !== dia) out.notes.push(`UFIBER radial discs are Ø13, 19, 22, 25 and 30 × 0.8 mm. The ${what} is Ø${dia}, so the nearest disc that is not larger is Ø${d}: it reaches less far into the feature — check access on the part.`);
+  if (g !== grit) out.notes.push(`Discs come in #150–#1000; #${g} is the nearest to #${grit}.`);
+  out.notes.push('Speed: 6,000–8,000 RPM recommended, never above 9,000. Electric spindle, CNC, robot or the UF9999 E-Pack — not air tools. Light radial contact, no side load.');
+  const c = DISC_GRITS[DISC_GRITS.indexOf(g) - 1], f = DISC_GRITS[DISC_GRITS.indexOf(g) + 1];
+  if (c) out.alts.push({ label: `More cutting power: #${c}`, sku: skuDisc(d, c).sku, note: '' });
+  if (f) out.alts.push({ label: `Finer finish: #${f}`, sku: skuDisc(d, f).sku, note: '' });
 }
 
 /* ---- competitor ---- */
@@ -3298,6 +3318,10 @@ function vConvert(p) {
     else if (p.dia < 6) endOut(out, 5, 1000);
     else { const d = [6, 15, 25, 40].filter(x => x <= p.dia).pop(); const k = skuSurface(d, 1000); out.uf = { family: 'surface', fam: 'Surface Brush', dia: d, grit: 1000, ...k }; out.holders.push({ role: 'Sleeve', sku: SURFACE[d].sleeve[0], desc: `${SURFACE[d].sleeve[1]}, Ø${SURFACE[d].ds} shank` }); }
     out.notes.push('Different bristle: competitor PD brushes are a white ceramic-bristle brush run at 3,000 RPM, not the fiber-tip type, and competitor gives no grit. #1000 is a neutral start — set the grit by material in the Find tool.');
+  } else if (p.kind === 'vside') {
+    out.xdesc = `competitor side ("flower head") brush, Ø${p.dia}, alumina filament, Ø6 shank, about 2,000 RPM`;
+    discOut(out, p.dia, 400, 'competitor side brush');
+    out.notes.push('competitor sells these in #240 and #320 and the code does not say which. #400 is the start; for heavier burrs use #200.');
   } else if (p.kind === 'hone') {
     out.xdesc = `competitor ball hone (silicon carbide), Ø${p.dia}, #320`; out.status = 'none';
     out.notes.push('No UFIBER ball hone. For burrs where a cross hole meets a Ø3.5–20 bore, a UFIBER cross-hole brush does the same job — the Find tool sizes it.');
@@ -3360,7 +3384,7 @@ function xResults(items) {
 }
 function xCard(o, i) {
   const st = XSTAT[o.status]; const col = o.p.brand === 'competitor' ? XCOLOR[o.p.color] : null; const vcol = VCOLOR[o.p.vcol]; const ufG = o.uf?.grit ? G(o.uf.grit) : null;
-  const canSetup = o.uf && ['surface', 'crosshole', 'end', 'point'].includes(o.uf.family);
+  const canSetup = o.uf && ['surface', 'crosshole', 'end', 'point', 'disc'].includes(o.uf.family);
   return `<article class="xcard">
     <div class="xside"><div class="tiny">${esc(xBrandOf(o))}</div><div class="xcode num">${esc(o.p.code)}</div><div class="small muted">${esc(o.xdesc)}</div>${col ? `<div class="small" style="margin-top:4px"><span class="gdot" style="background:${col.hex}"></span>${col.c}${col.p ? ` — grinding power ${col.p} on competitor's scale (red = 100)` : ''}</div>` : ''}${vcol ? `<div class="small" style="margin-top:4px"><span class="gdot" style="background:${vcol.hex}"></span>${vcol.c} — competitor: ${esc(vcol.says)}</div>` : ''}</div>
     <div class="xarrow" aria-hidden="true">${I.arrow}</div>
@@ -3397,6 +3421,9 @@ function xCheck(o) {
     const C = CROSS[o.uf.dia];
     if (pr.rpm) rows.push(['Speed', `${fmtN(pr.rpm)} RPM`, `${fmtN(Math.min(pr.rpm, C.max))} RPM`, pr.rpm > C.max ? `Above the UFIBER maximum of ${fmtN(C.max)} RPM.` : 'Below the UFIBER maximum. Keep it.']);
     if (pr.feed) rows.push(['Feed', `${feedOut(pr.feed)} ${feedU()}`, `${feedOut(pr.feed)} ${feedU()}`, 'Keep it. Same stroke rule: 5 mm past each side of the intersection.']);
+  } else if (o.uf.family === 'disc') {
+    if (pr.rpm) rows.push(['Speed', `${fmtN(pr.rpm)} RPM`, `${fmtN(Math.min(Math.max(pr.rpm, 6000), 8000))} RPM`, pr.rpm > 9000 ? 'Above the 9,000 RPM disc maximum.' : pr.rpm < 6000 ? 'Below the 6,000–8,000 RPM disc range — start at 6,000.' : 'Inside the disc range. Keep it.']);
+    if (pr.feed) rows.push(['Feed', `${feedOut(pr.feed)} ${feedU()}`, `${feedOut(pr.feed)} ${feedU()}`, 'Keep it; NOGA disc feeds are 100–800 mm/min depending on material.']);
   } else {
     if (pr.rpm) rows.push(['Speed', `${fmtN(pr.rpm)} RPM`, `${fmtN(Math.min(pr.rpm, 12000))} RPM`, pr.rpm > 12000 ? 'UFIBER end and point brushes are rated to 12,000 RPM.' : 'Within the 12,000 RPM rating. Keep it.']);
     if (pr.feed) rows.push(['Feed', `${feedOut(pr.feed)} ${feedU()}`, `${feedOut(pr.feed)} ${feedU()}`, 'Keep it.']);
@@ -3415,7 +3442,7 @@ function xSetupState(o) {
   const st = newState();
   const fam = o.uf.family;
   st.task = fam === 'crosshole' ? 'crosshole' : 'deburr_mill';
-  st.feature = fam === 'crosshole' ? 'cross' : fam === 'point' ? 'small' : 'edge';
+  st.feature = fam === 'crosshole' ? 'cross' : fam === 'point' ? 'small' : fam === 'disc' ? 'groove' : 'edge';
   st.material = o.prog?.mat || 'other';
   st.override = { family: fam === 'end' ? 'end' : fam, grit: o.uf.grit, dia: fam === 'end' ? undefined : o.uf.dia };
   if (fam === 'crosshole') { const C = CROSS[o.uf.dia]; const r = o.uf.grit >= 1200 && C.pilotFine ? C.pilotFine : C.pilot; st.dims = { main: +((r[0] + r[1]) / 2).toFixed(1) }; }
@@ -4494,7 +4521,7 @@ const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u
 const AI_RULES = `UFIBER rules you can rely on:
 - Surface brushes Ø6–100 cut with the fiber tips; depth of cut 0.2 polishing / 0.5 deburring / 1.2 mm absolute max; projection ≤10 mm from the sleeve; feed ≤2,000 mm/min; up-cut against side burrs; never side-load or rub walls.
 - Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush. A Ø15 surface brush on a shank (#1000 or finer) also works from Ø19: in maker's test a UF1615 Ø15 #1000 spinning free at 6,000 RPM flared to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
-- Competitor item codes (competitor: A11/A13/A21/A31/A32-CB…, CH-A12/A33/A34-…, A11/A13/A21-EB…, S…M sleeves; competitor: CN-CB…MS/HS, CN-A12/A33-…, CB31R/B-S…, CN-PB/PO/PM-…B; maker CB31M-01550): never work out the UFIBER equivalent yourself. Use job.competitor_items_in_text (already converted by the app) or call convert_competitor_codes when it is offered, and give the SKU, holder and notes as returned. A code that is in neither: say it is not in the cross-reference and ask for the brush size and colour. competitor grades are similar to competitor's and map the same way: competitor A12 (pink) → #1200 like competitor A12 (red); competitor A33 / blue → #800 like competitor blue.
+- Competitor item codes (competitor: A11/A13/A21/A31/A32-CB…, CH-A12/A33/A34-…, A11/A13/A21-EB…, W-A11-50/75 wheels, S…M sleeves; competitor: CN-CB…MS/HS, CN-A12/A33-…, CB31R/B-S…, CN-PB/PO/PM-…B, SD-…M side brushes; maker CB31M-01550): never work out the UFIBER equivalent yourself. Use job.competitor_items_in_text (already converted by the app) or call convert_competitor_codes when it is offered, and give the SKU, holder and notes as returned. A code that is in neither: say it is not in the cross-reference and ask for the brush size and colour. competitor grades are similar to competitor's and map the same way: competitor A12 (pink) → #1200 like competitor A12 (red); competitor A33 / blue → #800 like competitor blue.
 - Point (Ø1–3) and End (Ø5) brushes: max 12,000 RPM on CNC; hand-held 1,000–3,000 RPM; electric drives only, no air tools.
 - Ceramic fiber suits small burrs (≤~0.2 mm root, bendable with a fingernail); thicker burrs need a cutter first (e.g. NOGA UBURR for hole edges). Brushing always leaves a small edge radius; no mirror finish. Carbide/ceramic/glass/EDM need Ceramic Diamond Stones.
 - Ceramic Diamond Stones Ø1–3 (#200 black, #400 silver, #600 forest green, #800 green): 60,000 RPM max, ≤30,000 RPM typical, contact force about 1 N and always below 5 N, no fixed feed or depth, test-run for runout first, epoxy-resin bond, pneumatic tools allowed at controlled speed.\n- Floating dampers: BT30/BT40 max 6,000 RPM, 5 mm float, about 50 N, ER25UM (BT30) or ER32UM (BT40) collet; End-type max 12,000 RPM, 4 mm float, about 20 N. Approach vertically or with arc entry/exit, preload before feed, no through-spindle coolant, don't drop into pockets.\n- Portable E-Pack UF9999: 30,000 RPM, 3.0 Ncm torque; only for End/Point brushes, discs and diamond stones; follow each tool's own max RPM.\n- NOGA case: Ø1.5 cross-hole brush #1000 in a Ø2.6 mm hole (17-4 PH) at 7,000 RPM, 100 mm/min, dry, on a Star SR-20 sliding-head lathe.\n- Lathes and Swiss-type machines: cross-hole brushes run in an axial (end-working) live tool on the bore axis with the main spindle stopped; feed in mm/min (G98). Live tools are often limited to 6,000–8,000 RPM (Citizen L20 front tool 7,500 max, Star SR-20R IV 8,000, Tornos Swiss GT 13 6,000), so check the station's max RPM against the brush's RPM; well short of it, a speed increaser is needed.\n- Field trial that failed: Ø3.1 bore in L605 cobalt alloy on a sliding-head lathe, Ø1.5 cross-hole #600 at 6,000 RPM and about 120 mm/min left the burr; a Ø3 cross-hole brush broke on entry.\n- More cutting: raise RPM toward the top of the window, lower feed 10%, add a pass, coarser grit. Less aggressive / longer life: lower RPM 10%, raise feed 10%, fewer passes, finer grit, lighter engagement. Wet machining improves finish and life.
