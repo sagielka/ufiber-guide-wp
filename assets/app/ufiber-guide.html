@@ -1770,7 +1770,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.17';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.18';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -3036,7 +3036,9 @@ document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll(
      9,000 RPM, shanks CH-SH-6 (Ø6) and CH-SH-8 (Ø8).
    competitor (a competitor, competitor) from competitor's own catalogue
    pages and "brush info" sheet sent to NOGA, Jun-2024: pink filament "about
-   P1200" (aluminium, copper), blue "about P400" (steel, iron).
+   P1200" (aluminium, copper), blue "about P400" (steel, iron). Per Sagi
+   (31-Oct-2026) competitor grades are similar to competitor's, so they map the same way:
+   A12 / pink → #1200 (as competitor A12), A33 / blue → #800 (as competitor blue).
    maker CB31M-01550 = UF1615 (Ø15 #1000), confirmed by Sagi 30-Oct-2026.
    ============================================================ */
 const XCOLOR = {
@@ -3065,8 +3067,8 @@ const XCH_XL = { 15: { bore: [20, 25], shank: 'CH-SH-6' }, 20: { bore: [25, 30],
 
 // competitor — colours and catalogue data
 const VCOLOR = {
-  pink: { c: 'Pink', hex: '#F4A6C6', uf: 1200, says: 'about P1200, for aluminium and copper' },
-  blue: { c: 'Blue', hex: '#2A6FDB', uf: 400,  says: 'about P400, for steel and iron' },
+  pink: { c: 'Pink', hex: '#F4A6C6', uf: 1200, says: 'graded like competitor A12 (#1200), for aluminium and copper' },
+  blue: { c: 'Blue', hex: '#2A6FDB', uf: 800,  says: 'graded like competitor blue (#800), for steel and iron' },
 };
 const VSURF = { 6: { ds: 6, rpm: 8000 }, 15: { ds: 6, rpm: 5000 }, 25: { ds: 8, rpm: 4000 }, 40: { ds: 10, rpm: 2500 }, 60: { ds: 12, rpm: 1500 }, 100: { ds: 14, rpm: 1000 } };
 const VCH = { 1.5: { bore: [3, 5], ds: 4 }, 3: { bore: [5, 8], ds: 4 }, 5: { bore: [8, 10], ds: 6 }, 7: { bore: [10, 14], ds: 6 }, 9: { bore: [12, 18], ds: 10 }, 11: { bore: [14, 20], ds: 12 } };
@@ -3256,7 +3258,7 @@ function vConvert(p) {
       // UFIBER has no Ø9: competitor Ø9 covers bores Ø12–18
       out.status = 'close';
       if (g >= 1200) { d = 7; out.notes.push('UFIBER has no Ø9 cross-hole brush. competitor Ø9 covers bores Ø12–18; UFIBER Ø7 in #1200 covers Ø10–20, so it takes the whole range.'); }
-      else { d = 7; out.notes.push('UFIBER has no Ø9 cross-hole brush. competitor Ø9 covers bores Ø12–18. In #400 the UFIBER Ø7 covers Ø9–14; for bores Ø14–18 use the Ø11 (#600, #800 or #1000) instead.'); out.alts.push({ label: 'Bores Ø14–18: Ø11 #600', sku: skuCross(11, 600).sku, note: 'Ø11 comes in #600–#1000 only.' }); }
+      else { d = 7; out.notes.push(`UFIBER has no Ø9 cross-hole brush. competitor Ø9 covers bores Ø12–18. In #${g} the UFIBER Ø7 covers Ø9–14; for bores Ø14–18 use the Ø11 #${g} instead.`); out.alts.push({ label: `Bores Ø14–18: Ø11 #${g}`, sku: skuCross(11, g).sku, note: '' }); }
     }
     if (d === 11 && ![600, 800, 1000].includes(g)) { const ng = g > 1000 ? 1000 : 600; out.notes.push(`UFIBER Ø11 cross-hole brushes come in #600, #800 and #1000; #${ng} is the nearest to competitor ${colTxt.toLowerCase()} (${vc.says.split(',')[0]}).`); g = ng; out.status = 'close'; }
     crossOut(out, d, g, d === p.dia ? V?.bore : null, 'competitor');
@@ -3264,7 +3266,7 @@ function vConvert(p) {
     if (V && V.ds !== C.ds) out.notes.push(`Collet change: competitor Ø${p.dia} has a Ø${V.ds} shank; UFIBER Ø${d} has Ø${C.ds}.`);
     if (p.dia === 1.5) out.notes.push('competitor lists Ø3–5 bores for its Ø1.5; the UFIBER catalogue range starts at Ø3.5 (NOGA has used it down to Ø2.6).');
     if (p.len === 'L') { out.status = 'close'; out.notes.push('competitor "L" brushes are 170–180 mm long; UFIBER cross-hole brushes are about 120–130 mm overall (Ø11: 180 mm). Check reach, or ask NOGA for the 190 mm long version (Ø3 and Ø5 #1000).'); }
-    if (p.vcol === 'blue') { out.status = out.status === 'direct' ? 'close' : out.status; out.notes.push('competitor gives "about P400" for its blue filament on surface brushes; its cross-hole sheet gives no grit for blue. #400 is the starting point; if the edge break is too large, step to #600.'); }
+    if (p.vcol === 'blue') out.notes.push('competitor blue is graded like competitor blue (#800). If it was chosen for tough burrs or hard alloys, also test #600 or #400.');
     out.notes.push(`Speed: competitor recommends 6,000–12,000 RPM; UFIBER Ø${d} max ${fmtN(C.max)} RPM.`);
     gritAlts(out, g, (x) => (d === 11 && ![600, 800, 1000].includes(x)) ? null : skuCross(d, x));
   } else if (p.kind === 'micro') {
@@ -3330,7 +3332,7 @@ function replaceView() {
   <div id="xOut">${R.items.length ? xResults(R.items) : ''}</div>
   ${R.items.length ? '' : `<section class="panel" style="max-width:860px;margin-top:16px"><div class="panel-t"><h2>What changes when you switch</h2></div><ul class="watch">${[
     'Same sizes: surface brushes Ø6–100 and cross-hole brushes Ø1.5–11 exist in competitor, competitor and UFIBER, so toolpaths usually carry over. competitor Ø9 cross-hole has no UFIBER size — the Ø7 or Ø11 covers its bores.',
-    'Colors become grits: competitor has 4 color grades and competitor 2 (pink ≈ P1200, blue ≈ P400); UFIBER has 10 grits (#150–#6000), so you can fine-tune cutting power and edge break.',
+    'Colors become grits: competitor has 4 color grades and competitor 2, graded like competitor (pink A12 → #1200, blue A33 → #800); UFIBER has 10 grits (#150–#6000), so you can fine-tune cutting power and edge break.',
     'Sleeve shanks differ on Ø25 and Ø40 (and Ø100 for competitor) — check your collets.',
     'UFIBER surface brushes: projection max 10 mm, feed max 2,000 mm/min, depth max 1.2 mm. Programs running faster than that need adjusting.',
     'Validate on the first part, then lock in the program.'].map(t => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${t}</span></li>`).join('')}</ul></section>`}`;
@@ -4492,7 +4494,7 @@ const AI_FACTS = () => 'UFIBER product data, taken from the app\'s own tables \u
 const AI_RULES = `UFIBER rules you can rely on:
 - Surface brushes Ø6–100 cut with the fiber tips; depth of cut 0.2 polishing / 0.5 deburring / 1.2 mm absolute max; projection ≤10 mm from the sleeve; feed ≤2,000 mm/min; up-cut against side burrs; never side-load or rub walls.
 - Cross-hole brushes Ø1.5–11 for bores Ø3.5–20: insert and remove only while stopped, start rotation inside the bore, stroke 5 mm past both sides of the intersection, run CW then CCW, adjust passes not stroke. Above Ø20 mm use a surface brush on a shank; below Ø3.5 a point brush. A Ø15 surface brush on a shank (#1000 or finer) also works from Ø19: in maker's test a UF1615 Ø15 #1000 spinning free at 6,000 RPM flared to Ø20 mid-length and Ø28.9 at the tips, and deburred a Ø19 cross hole.
-- Competitor item codes (competitor: A11/A13/A21/A31/A32-CB…, CH-A12/A33/A34-…, A11/A13/A21-EB…, S…M sleeves; competitor: CN-CB…MS/HS, CN-A12/A33-…, CB31R/B-S…, CN-PB/PO/PM-…B; maker CB31M-01550): never work out the UFIBER equivalent yourself. Use job.competitor_items_in_text (already converted by the app) or call convert_competitor_codes when it is offered, and give the SKU, holder and notes as returned. A code that is in neither: say it is not in the cross-reference and ask for the brush size and colour. competitor and competitor both use "A12"/"A33" but the colours differ (competitor A12 is pink ≈ P1200, competitor A12 is red = UFIBER #1200).
+- Competitor item codes (competitor: A11/A13/A21/A31/A32-CB…, CH-A12/A33/A34-…, A11/A13/A21-EB…, S…M sleeves; competitor: CN-CB…MS/HS, CN-A12/A33-…, CB31R/B-S…, CN-PB/PO/PM-…B; maker CB31M-01550): never work out the UFIBER equivalent yourself. Use job.competitor_items_in_text (already converted by the app) or call convert_competitor_codes when it is offered, and give the SKU, holder and notes as returned. A code that is in neither: say it is not in the cross-reference and ask for the brush size and colour. competitor grades are similar to competitor's and map the same way: competitor A12 (pink) → #1200 like competitor A12 (red); competitor A33 / blue → #800 like competitor blue.
 - Point (Ø1–3) and End (Ø5) brushes: max 12,000 RPM on CNC; hand-held 1,000–3,000 RPM; electric drives only, no air tools.
 - Ceramic fiber suits small burrs (≤~0.2 mm root, bendable with a fingernail); thicker burrs need a cutter first (e.g. NOGA UBURR for hole edges). Brushing always leaves a small edge radius; no mirror finish. Carbide/ceramic/glass/EDM need Ceramic Diamond Stones.
 - Ceramic Diamond Stones Ø1–3 (#200 black, #400 silver, #600 forest green, #800 green): 60,000 RPM max, ≤30,000 RPM typical, contact force about 1 N and always below 5 N, no fixed feed or depth, test-run for runout first, epoxy-resin bond, pneumatic tools allowed at controlled speed.\n- Floating dampers: BT30/BT40 max 6,000 RPM, 5 mm float, about 50 N, ER25UM (BT30) or ER32UM (BT40) collet; End-type max 12,000 RPM, 4 mm float, about 20 N. Approach vertically or with arc entry/exit, preload before feed, no through-spindle coolant, don't drop into pockets.\n- Portable E-Pack UF9999: 30,000 RPM, 3.0 Ncm torque; only for End/Point brushes, discs and diamond stones; follow each tool's own max RPM.\n- NOGA case: Ø1.5 cross-hole brush #1000 in a Ø2.6 mm hole (17-4 PH) at 7,000 RPM, 100 mm/min, dry, on a Star SR-20 sliding-head lathe.\n- Lathes and Swiss-type machines: cross-hole brushes run in an axial (end-working) live tool on the bore axis with the main spindle stopped; feed in mm/min (G98). Live tools are often limited to 6,000–8,000 RPM (Citizen L20 front tool 7,500 max, Star SR-20R IV 8,000, Tornos Swiss GT 13 6,000), so check the station's max RPM against the brush's RPM; well short of it, a speed increaser is needed.\n- Field trial that failed: Ø3.1 bore in L605 cobalt alloy on a sliding-head lathe, Ø1.5 cross-hole #600 at 6,000 RPM and about 120 mm/min left the burr; a Ø3 cross-hole brush broke on entry.\n- More cutting: raise RPM toward the top of the window, lower feed 10%, add a pass, coarser grit. Less aggressive / longer life: lower RPM 10%, raise feed 10%, fewer passes, finer grit, lighter engagement. Wet machining improves finish and life.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.18 – 2026-10-31
+- competitor grades now map like competitor's (NOGA, 31-Oct-2026). Blue (cross-hole
+  A33, surface "H", micro-hole CB31B) moves from #400 to #800, the same as
+  competitor blue. Pink A12 stays #1200, the same as competitor A12. So CN-A33-5M and
+  CH-A33-5M both give UF2550, and blue competitor conversions are now direct
+  instead of close. A competitor blue Ø9 → Ø7 #800, or Ø11 #800 for Ø14–18 bores.
+
 ## 1.6.17 – 2026-10-30
 - Competitor cross-reference re-checked against the catalogues. competitor was
   checked against a distributor and a distributor, competitor against competitor's own

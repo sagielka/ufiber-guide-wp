@@ -17,7 +17,9 @@
      9,000 RPM, shanks CH-SH-6 (Ø6) and CH-SH-8 (Ø8).
    competitor (a competitor, competitor) from competitor's own catalogue
    pages and "brush info" sheet sent to NOGA, Jun-2024: pink filament "about
-   P1200" (aluminium, copper), blue "about P400" (steel, iron).
+   P1200" (aluminium, copper), blue "about P400" (steel, iron). Per Sagi
+   (31-Oct-2026) competitor grades are similar to competitor's, so they map the same way:
+   A12 / pink → #1200 (as competitor A12), A33 / blue → #800 (as competitor blue).
    maker CB31M-01550 = UF1615 (Ø15 #1000), confirmed by Sagi 30-Oct-2026.
    ============================================================ */
 const XCOLOR = {
@@ -46,8 +48,8 @@ const XCH_XL = { 15: { bore: [20, 25], shank: 'CH-SH-6' }, 20: { bore: [25, 30],
 
 // competitor — colours and catalogue data
 const VCOLOR = {
-  pink: { c: 'Pink', hex: '#F4A6C6', uf: 1200, says: 'about P1200, for aluminium and copper' },
-  blue: { c: 'Blue', hex: '#2A6FDB', uf: 400,  says: 'about P400, for steel and iron' },
+  pink: { c: 'Pink', hex: '#F4A6C6', uf: 1200, says: 'graded like competitor A12 (#1200), for aluminium and copper' },
+  blue: { c: 'Blue', hex: '#2A6FDB', uf: 800,  says: 'graded like competitor blue (#800), for steel and iron' },
 };
 const VSURF = { 6: { ds: 6, rpm: 8000 }, 15: { ds: 6, rpm: 5000 }, 25: { ds: 8, rpm: 4000 }, 40: { ds: 10, rpm: 2500 }, 60: { ds: 12, rpm: 1500 }, 100: { ds: 14, rpm: 1000 } };
 const VCH = { 1.5: { bore: [3, 5], ds: 4 }, 3: { bore: [5, 8], ds: 4 }, 5: { bore: [8, 10], ds: 6 }, 7: { bore: [10, 14], ds: 6 }, 9: { bore: [12, 18], ds: 10 }, 11: { bore: [14, 20], ds: 12 } };
@@ -237,7 +239,7 @@ function vConvert(p) {
       // UFIBER has no Ø9: competitor Ø9 covers bores Ø12–18
       out.status = 'close';
       if (g >= 1200) { d = 7; out.notes.push('UFIBER has no Ø9 cross-hole brush. competitor Ø9 covers bores Ø12–18; UFIBER Ø7 in #1200 covers Ø10–20, so it takes the whole range.'); }
-      else { d = 7; out.notes.push('UFIBER has no Ø9 cross-hole brush. competitor Ø9 covers bores Ø12–18. In #400 the UFIBER Ø7 covers Ø9–14; for bores Ø14–18 use the Ø11 (#600, #800 or #1000) instead.'); out.alts.push({ label: 'Bores Ø14–18: Ø11 #600', sku: skuCross(11, 600).sku, note: 'Ø11 comes in #600–#1000 only.' }); }
+      else { d = 7; out.notes.push(`UFIBER has no Ø9 cross-hole brush. competitor Ø9 covers bores Ø12–18. In #${g} the UFIBER Ø7 covers Ø9–14; for bores Ø14–18 use the Ø11 #${g} instead.`); out.alts.push({ label: `Bores Ø14–18: Ø11 #${g}`, sku: skuCross(11, g).sku, note: '' }); }
     }
     if (d === 11 && ![600, 800, 1000].includes(g)) { const ng = g > 1000 ? 1000 : 600; out.notes.push(`UFIBER Ø11 cross-hole brushes come in #600, #800 and #1000; #${ng} is the nearest to competitor ${colTxt.toLowerCase()} (${vc.says.split(',')[0]}).`); g = ng; out.status = 'close'; }
     crossOut(out, d, g, d === p.dia ? V?.bore : null, 'competitor');
@@ -245,7 +247,7 @@ function vConvert(p) {
     if (V && V.ds !== C.ds) out.notes.push(`Collet change: competitor Ø${p.dia} has a Ø${V.ds} shank; UFIBER Ø${d} has Ø${C.ds}.`);
     if (p.dia === 1.5) out.notes.push('competitor lists Ø3–5 bores for its Ø1.5; the UFIBER catalogue range starts at Ø3.5 (NOGA has used it down to Ø2.6).');
     if (p.len === 'L') { out.status = 'close'; out.notes.push('competitor "L" brushes are 170–180 mm long; UFIBER cross-hole brushes are about 120–130 mm overall (Ø11: 180 mm). Check reach, or ask NOGA for the 190 mm long version (Ø3 and Ø5 #1000).'); }
-    if (p.vcol === 'blue') { out.status = out.status === 'direct' ? 'close' : out.status; out.notes.push('competitor gives "about P400" for its blue filament on surface brushes; its cross-hole sheet gives no grit for blue. #400 is the starting point; if the edge break is too large, step to #600.'); }
+    if (p.vcol === 'blue') out.notes.push('competitor blue is graded like competitor blue (#800). If it was chosen for tough burrs or hard alloys, also test #600 or #400.');
     out.notes.push(`Speed: competitor recommends 6,000–12,000 RPM; UFIBER Ø${d} max ${fmtN(C.max)} RPM.`);
     gritAlts(out, g, (x) => (d === 11 && ![600, 800, 1000].includes(x)) ? null : skuCross(d, x));
   } else if (p.kind === 'micro') {
@@ -311,7 +313,7 @@ function replaceView() {
   <div id="xOut">${R.items.length ? xResults(R.items) : ''}</div>
   ${R.items.length ? '' : `<section class="panel" style="max-width:860px;margin-top:16px"><div class="panel-t"><h2>What changes when you switch</h2></div><ul class="watch">${[
     'Same sizes: surface brushes Ø6–100 and cross-hole brushes Ø1.5–11 exist in competitor, competitor and UFIBER, so toolpaths usually carry over. competitor Ø9 cross-hole has no UFIBER size — the Ø7 or Ø11 covers its bores.',
-    'Colors become grits: competitor has 4 color grades and competitor 2 (pink ≈ P1200, blue ≈ P400); UFIBER has 10 grits (#150–#6000), so you can fine-tune cutting power and edge break.',
+    'Colors become grits: competitor has 4 color grades and competitor 2, graded like competitor (pink A12 → #1200, blue A33 → #800); UFIBER has 10 grits (#150–#6000), so you can fine-tune cutting power and edge break.',
     'Sleeve shanks differ on Ø25 and Ø40 (and Ø100 for competitor) — check your collets.',
     'UFIBER surface brushes: projection max 10 mm, feed max 2,000 mm/min, depth max 1.2 mm. Programs running faster than that need adjusting.',
     'Validate on the first part, then lock in the program.'].map(t => `<li>${I.check.replace('<svg', '<svg style="color:var(--ok)"')}<span>${t}</span></li>`).join('')}</ul></section>`}`;
