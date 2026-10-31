@@ -491,12 +491,13 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
 /* ---- no competitor brand or maker name anywhere in the shipped app (NOGA, 31-Oct-2026) (1.6.21) ---- */
 {
   const html = fs.readFileSync(path.join(__dirname, '..', 'assets', 'app', 'ufiber-guide.html'), 'utf8');
-  const names = ['competitor', 'competitor', 'maker', 'a distributor', 'a distributor', 'competitor'];
+  // names kept encoded so that this repository does not spell them out either
+  const names = ['WEVCRUM=', 'VkVZRVI=', 'U09XQQ==', 'TUlTVU1J', 'S0VNRVQ=', 'VkVZRVJUT09M'].map(x => Buffer.from(x, 'base64').toString());
   const hits = names.filter(n => new RegExp(n, 'i').test(html));
   ok('the shipped app names no competitor or maker', !hits.length, hits);
-  const o = E.xConvert(E.xParse('competitor A21-CB25M'));
+  const o = E.xConvert(E.xParse(names[0] + ' A21-CB25M'));
   ok('a code typed with a brand in front still converts', o.uf?.sku === 'UF1625', o.uf);
-  ok('and nothing in the result names a brand', !/competitor|competitor|maker/i.test(JSON.stringify(E.xCompact(o))));
+  ok('and nothing in the result names a brand', !names.some(n => new RegExp(n, 'i').test(JSON.stringify(E.xCompact(o)))));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
