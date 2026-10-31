@@ -562,7 +562,7 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
   const okG = g => !C.grits || C.grits.includes(g);
   if (okG(coarser)) R.alts.push({ label: `One grit coarser — #${coarser}`, note: 'If burrs remain after extra passes. Needs slightly higher RPM to expand.', ov: { grit: coarser, dia: size, family: 'crosshole' } });
   if (okG(finer) && finer <= 6000) R.alts.push({ label: `One grit finer — #${finer}`, note: 'Less edge rounding, better internal finish.', ov: { grit: finer, dia: size, family: 'crosshole' } });
-  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in maker's test.`, ov: { family: 'shank', dia: 15, grit: 1200 } });
+  if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in a spread test.`, ov: { family: 'shank', dia: 15, grit: 1200 } });
   R.alts.push({ label: 'NOGA UBURR', note: 'If the burr is too heavy for a brush or the hole edges need a defined chamfer.', ext: true });
   R.diagram = 'crosshole';
   if (!main) R.lower('medium', 'RPM depends on the bore diameter — enter it for an exact value.');
@@ -606,7 +606,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   R.watch = ['Insert before starting rotation and stop before removing — same rule as cross-hole brushes.', '#1200 is more prone to fiber breakage than coarser grits.', 'Check that the expanded brush doesn\'t hit the bore bottom or a shoulder.'];
   R.alts.push({ label: 'Switch to #1000', note: 'Stiffer, more cutting power if #1200 leaves burrs.', ov: { family: 'shank', dia: size, grit: 1000 } });
   R.diagram = 'crosshole';
-  // Ø15 #1000+ between Ø19 and the measured tip spread is backed by maker's test; elsewhere it is still an estimate
+  // Ø15 #1000+ between Ø19 and the measured tip spread is backed by a spread test; elsewhere it is still an estimate
   const measured = size === 15 && grit >= SF_SPREAD15.grit && main && main >= SF_SPREAD15.bore && main <= SF_SPREAD15.tip;
   if (!measured) R.lower('medium', 'Bore-size to brush-size matching for this method is an estimate — verify expansion at your RPM.');
   else if (rpm < SF_SPREAD15.rpm * 0.9) R.lower('medium', `The Ø15 spread was measured at ${SF_SPREAD15.rpm.toLocaleString()} RPM; this setup runs slower, so the fibers spread less.`);

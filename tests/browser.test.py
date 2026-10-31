@@ -310,7 +310,7 @@ async def main():
             ok('New application forgets the job but keeps the machine', navj['cleared'], nav)
 
             # --- every tab renders ---
-            for tab in ['sf', 'fix', 'competitor', 'learn', 'products']:
+            for tab in ['speeds', 'fix', 'replace', 'learn', 'products']:
                 await page.evaluate(f"() => go('{tab}')")
                 await page.wait_for_timeout(350)
                 ok(f'the {tab} tab renders', len(await page.locator('#view').inner_html()) > 1500)

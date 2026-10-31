@@ -1,62 +1,53 @@
 # Changelog
 
+## 1.6.21 – 2026-10-31
+- No competitor brand or maker name appears anywhere in the app any more:
+  not on screen, in notes, in the copied list, in the quote email, in the
+  page source or in what the AI writes. Results are labelled "Your item",
+  and the "Pick it" panel chooses by code type ("Codes like A21-CB25M" or
+  "Codes like CN-CB25MS"). The AI is told never to name a competitor brand,
+  even when the customer does.
+- A code typed with a brand word in front of it still converts.
+- Questions such as "what is your equivalent?" or "convert competitor
+  brush codes" now open the Replace page from the offline model.
+- A test checks that the shipped page contains no competitor or maker name.
+
 ## 1.6.20 – 2026-10-31
-- "Don't know the code? Pick it" on the Replace page now has a brand choice:
-  competitor or competitor. competitor offers surface brush + sleeve, cross-hole (Ø1.5–11,
-  including Ø9), micro-hole (Ø1–3) and side brushes, in pink or blue. Each
-  pick builds the real competitor code (CN-CB25MS, CN-A33-9M, CB31R-S1.5,
-  SD-25M). The competitor end-brush choices now list only what competitor sells:
-  Ø3 and Ø5, in pink, red and white.
-- A test runs every picker combination (80) and checks that each one
-  converts to a UFIBER item.
+- "Don't know the code? Pick it" on the Replace page covers both code
+  types: surface brush + sleeve, cross-hole (Ø1.5–11, including Ø9),
+  micro-hole (Ø1–3) and side brushes for CN- codes. End-brush choices list
+  only sizes that exist (Ø3 and Ø5). Every picker combination (80) is tested.
 
 ## 1.6.19 – 2026-10-31
-- Wheel and side brushes now map to the UFIBER radial ceramic fiber disc
-  (Ø13–30 × 0.8 mm, UF7…), per NOGA. competitor W-A11-50/75 → Ø30 disc #1000.
-  Red is #1200 and discs stop at #1000. competitor SD-…M side brushes → the
-  nearest disc that is not larger (SD-20M → Ø19, SD-25M → Ø25), #400 with
-  #200 offered. The shank is UF7030. Speed 6,000–8,000 RPM, never above
-  9,000, no air tools.
+- Wheel and side brushes (W-A11-50/75, SD-…M) now map to the UFIBER radial
+  ceramic fiber disc (Ø13–30 × 0.8 mm, UF7…), per NOGA: the nearest disc
+  that is not larger, shank UF7030, 6,000–8,000 RPM, never above 9,000.
 - "Open full UFIBER setup" keeps the converted disc size, and the program
   check uses the disc speed range.
 
 ## 1.6.18 – 2026-10-31
-- competitor grades now map like competitor's (NOGA, 31-Oct-2026). Blue (cross-hole
-  A33, surface "H", micro-hole CB31B) moves from #400 to #800, the same as
-  competitor blue. Pink A12 stays #1200, the same as competitor A12. So CN-A33-5M and
-  CH-A33-5M both give UF2550, and blue competitor conversions are now direct
-  instead of close. A competitor blue Ø9 → Ø7 #800, or Ø11 #800 for Ø14–18 bores.
+- CN- code grades map the same way as A- codes (NOGA): A12 / pink → #1200,
+  A33 / blue → #800. CN-A33-5M and CH-A33-5M both give UF2550.
 
 ## 1.6.17 – 2026-10-30
-- Competitor cross-reference re-checked against the catalogues. competitor was
-  checked against a distributor and a distributor, competitor against competitor's own
-  catalogue pages and brush-info sheet sent to NOGA.
-- Fixed: competitor blue Ø7 cross-hole (CH-A33-7) covers bores Ø10–14, not
+- Competitor cross-reference re-checked against the makers' own data.
+- Fixed: the blue Ø7 cross-hole brush (CH-A33-7) covers bores Ø10–14, not
   Ø10–20. Only the red Ø7 (CH-A12-7) goes to Ø20.
-- competitor cross-hole brushes now flag a shank change. The L brushes have
-  Ø4/6/8/12 shanks, and their length is now right per colour: 170 mm for
-  red, 180 mm for blue.
-- New competitor items: Extra-Large cross-hole CH-A34-15/20/25 (bores Ø20–35)
-  becomes a UFIBER surface brush on a shank. Also added the CH-SH-6/8
-  shanks, CH-P… ceramic stones and TM-SH lathe holders.
-- competitor added: surface sets CN-CB…MS (pink ≈ P1200 → #1200) and CN-CB…HS
-  (blue ≈ P400 → #400), with their sleeve shank and speed differences.
-  Also cross-hole CN-A12/A33 Ø1.5–11, with Ø9 mapped to Ø7 or Ø11 because
-  UFIBER has no Ø9. Plus micro-hole CB31R/B-S Ø1–3 (point brushes), oil-stone
-  heads CN-PB/PO/PM (diamond stones), and the PD, CPD and BD lines.
-- maker CB31M-01550 → UF1615.
+- Long (L) cross-hole brushes flag a shank change (Ø4/6/8/12) and the right
+  length per colour (170 / 180 mm).
+- New: extra-large cross-hole CH-A34-15/20/25 (bores Ø20–35) becomes a
+  UFIBER surface brush on a shank; CH-SH-6/8 shanks, CH-P… stones and TM-SH
+  lathe holders are recognised.
+- New: CN- codes — surface sets CN-CB…MS/HS, cross-hole CN-A12/A33 Ø1.5–11
+  (Ø9 → Ø7 or Ø11), micro-hole CB31R/B-S Ø1–3, oil-stone heads
+  CN-PB/PO/PM, and the PD, CPD and BD lines. CB31M-01550 → UF1615.
 - Competitor codes in what a customer types or drops in (ask box, email,
-  drawing text) are found and converted under "Here's what I understood",
-  with a button to the full conversion. Ordinary words like "stone" or
-  "floating" are not taken for codes.
-- The AI now gets those conversions in its context and a
-  convert_competitor_codes lookup. It is told never to work out an
-  equivalent itself.
+  drawing text) are found and converted under "Here's what I understood".
+  The AI gets those conversions and a convert_competitor_codes lookup.
 
 ## 1.6.16 – 2026-10-30
 - A Ø15 surface brush on a shank now fits from a Ø19 bore (#1000 and finer),
-  instead of Ø20. Source: maker's spread test of the brush that matches UF1615
-  (Ø15 #1000). Spinning free at 6,000 RPM without its sleeve, it flared to Ø20
+  instead of Ø20. Source: a spread test of the UF1615 brush (Ø15 #1000). Spinning free at 6,000 RPM without its sleeve, it flared to Ø20
   at mid-length and Ø28.9 at the tips, and it deburred a Ø19 cross hole.
   Coarser grits keep Ø20.
 - The setup for a Ø15 brush on a shank shows those measured figures. Between
@@ -118,10 +109,9 @@
 - Case names in a multi-case email are cut at a word, not mid-size.
 
 ## 1.6.10 – 2026-10-30
-- "Replace competitor" is now "Replace competitor": the menu, the mobile tab bar,
-  the home tile ("Switching from a competitor?"), the page heading, the
-  Elementor widget and the settings screen. competitor codes convert as before;
-  other brands are added as their catalogues arrive.
+- The competitor page is now called "Replace competitor": the menu, the
+  mobile tab bar, the home tile ("Switching from a competitor?"), the page
+  heading, the Elementor widget and the settings screen.
 
 ## 1.6.9 – 2026-10-30
 - The pictures sent with a reading now share one size budget (about 1.1 MB

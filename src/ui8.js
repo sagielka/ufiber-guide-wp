@@ -231,7 +231,7 @@ const ANSWERS = {
       `It takes **End and Point brushes, ceramic fibre discs and diamond stones** — not surface or cross-hole brushes, which need controlled depth and speed in a machine. Hand-held brushing runs 1,000–3,000 RPM.`,
     props: [{ label: 'Switch to hand-held', changes: { machine_type: 'hand' } }],
   }),
-  competitor_q: () => ({ md: `The **Replace competitor** tab converts competitor codes (competitor, competitor and maker) to UFIBER items and checks your existing program against the UFIBER limits. Paste your codes there.`, props: [], go: 'replace' }),
+  competitor_q: () => ({ md: `The **Replace competitor** tab converts competitor item codes to UFIBER items and checks your existing program against the UFIBER limits. Paste your codes there.`, props: [], go: 'replace' }),
   material_change: (slots) => {
     if (!slots.material) return { md: `Which material should I try? I can re-run the same job on any material in NOGA's table.`, props: [] };
     const v = variantAnswer({ material: slots.material });
@@ -349,11 +349,13 @@ function offlineAnswer(question) {
     const g = p.nums.filter(n => GRITS.some(x => x.grit === n.value)).map(n => n.value);
     if (g.length >= 2) slots.grits = g;
   }
-  const intent = p.intent;
+  // competitor questions in plain words, or with a competitor item code in them
+  const compWords = /\b(competitor|equivalent|cross[- ]?ref(erence)?|replace(ment)? (for|of)|instead of|switch(ing)? from|other brand)\b/i.test(question) || (typeof xFind === 'function' && xFind(question).length > 0);
+  const intent = compWords && !/\b(rpm|feed|grit|speed)\b/i.test(question) ? 'competitor_q' : p.intent;
   const conf = p.conf.intent;
-  if (!intent || intent === 'describe' || !ANSWERS[intent] || conf < NLU.TH.intent) {
+  if (!intent || intent === 'describe' || !ANSWERS[intent] || (conf < NLU.TH.intent && intent !== 'competitor_q')) {
     return {
-      md: `I am not sure what you are asking. I can answer questions about **this setup**: speeds, feeds, grit, size, holders, coolant, passes, what to change when the burr stays or the brush wears, robots, dampers, the E-Pack, competitor replacement and safety.\n\nFor anything else, a NOGA engineer is the right next step.`,
+      md: `I am not sure what you are asking. I can answer questions about **this setup**: speeds, feeds, grit, size, holders, coolant, passes, what to change when the burr stays or the brush wears, robots, dampers, the E-Pack, replacing a competitor brush and safety.\n\nFor anything else, a NOGA engineer is the right next step.`,
       ask: true, props: [], unsure: true, conf,
     };
   }

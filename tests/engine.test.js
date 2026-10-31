@@ -254,7 +254,7 @@ Can you suggest any tools and conditions for this?`;
 {
   const mail = `Subject: PTSC-MCAM_ First NogaMT Trials_ Information support Ceramic Brush solution to Improve Deburring and Surface Finish_
 
-Customer is interested and request trials before purchase. Now customer is trying competitor.
+Customer is interested and request trials before purchase. Now customer is trying a competitor brush.
 
 Case 1.
 Part Name : 15-430509-00 Adapter, APT, Chemical, 1/4" Port (Fitting)
@@ -391,7 +391,7 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a stated width is not called an estimate', !E.recommend(st2).notes.some(n => /Estimated from the drawing/.test(n)));
 }
 
-/* ---- Ø15 surface brush on a shank from Ø19, from maker's spread test (1.6.16) ---- */
+/* ---- Ø15 surface brush on a shank from Ø19, from spread test (1.6.16) ---- */
 {
   const job = (main, ov) => { const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'aluminum', sub: 'wrought', dims: { main, cross: 8 }, override: ov || {} }); return E.recommend(st); };
   const r19 = job(19);
@@ -406,68 +406,68 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
 
 
 /* ---- competitor cross-reference, checked row by row against the catalogues (1.6.17) ----
-   competitor: a distributor listings + a distributor. competitor: competitor catalogue pages and brush-info sheet sent to NOGA, Jun-2024. */
+   Sources: NOGA's internal cross-reference document. */
 {
   const X = (c) => E.xConvert(E.xParse(c));
   const sku = (c) => X(c).uf?.sku;
-  // competitor surface: colour → grit (pink #2000, red #1200, white #1000, blue #800), every size
+  // A-code surface: colour → grit (pink #2000, red #1200, white #1000, blue #800), every size
   const surf = { A13: [6, 15], A11: [6, 15, 25, 40, 60, 100], A21: [6, 15, 25, 40, 60, 100], A31: [6, 15, 25, 40, 60, 100], A32: [6, 15, 25, 40, 60, 100] };
   const g = { A13: 2000, A11: 1200, A21: 1000, A31: 800, A32: 800 };
   let bad = [];
   for (const [c, ds] of Object.entries(surf)) for (const d of ds) { const code = `${c}-CB${String(d).padStart(2, '0')}M`; const want = E.skuSurface(d, g[c]).sku; if (sku(code) !== want) bad.push([code, sku(code), want]); }
-  ok('every competitor surface brush maps to the same size and its colour grit', !bad.length, bad);
+  ok('every A-code surface brush maps to the same size and its colour grit', !bad.length, bad);
   ok('A32-CB100M is UF1500 (confirmed by NOGA)', sku('A32-CB100M') === 'UF1500', sku('A32-CB100M'));
-  // competitor crosshole: bore ranges per colour; blue Ø7 is 10–14, red Ø7 is 10–20
+  // A-code crosshole: bore ranges per colour; blue Ø7 is 10–14, red Ø7 is 10–20
   ok('red Ø7 crosshole → UF2770 #1200, same Ø10–20 range', sku('CH-A12-7M') === 'UF2770' && X('CH-A12-7M').notes.some(n => /Same bore range.*10–20/.test(n)), X('CH-A12-7M').notes);
-  ok('blue Ø7 crosshole is competitor Ø10–14, not 10–20', sku('CH-A33-7M') === 'UF2570' && X('CH-A33-7M').notes.some(n => /competitor Ø7 brush covers Ø10–14/.test(n)), X('CH-A33-7M').notes);
+  ok('blue Ø7 crosshole is A-code Ø10–14, not 10–20', sku('CH-A33-7M') === 'UF2570' && X('CH-A33-7M').notes.some(n => /your Ø7 brush covers Ø10–14/.test(n)), X('CH-A33-7M').notes);
   ok('-TL suffix and Ø1.5 read', sku('CH-A12-5M-TL') === 'UF2750' && sku('CH-A12-1.5M') === 'UF2715');
-  ok('competitor L brush: length and shank change are flagged', X('CH-A33-7L').status === 'close' && X('CH-A33-7L').notes.some(n => /180 mm/.test(n)) && X('CH-A33-7L').notes.some(n => /Ø8 shank/.test(n)), X('CH-A33-7L').notes);
+  ok('A-code L brush: length and shank change are flagged', X('CH-A33-7L').status === 'close' && X('CH-A33-7L').notes.some(n => /180 mm/.test(n)) && X('CH-A33-7L').notes.some(n => /Ø8 shank/.test(n)), X('CH-A33-7L').notes);
   ok('red Ø11 crosshole → #1000 (Ø11 has no #1200)', sku('CH-A12-11M') === 'UF2611');
-  // competitor Extra-Large A34: surface brush on a shank
+  // A-code Extra-Large A34: surface brush on a shank
   ok('CH-A34-15 (bores 20–25) → Ø15 surface brush on shank UF5001', X('CH-A34-15').uf?.dia === 15 && X('CH-A34-15').holders.some(h => h.sku === 'UF5001'), X('CH-A34-15'));
   ok('CH-A34-25 (bores 30–35) → Ø25 on shank UF5003', X('CH-A34-25').uf?.dia === 25 && X('CH-A34-25').holders.some(h => h.sku === 'UF5003'));
   ok('CH-SH-6 shank is understood', X('CH-SH-6').uf?.sku === 'UF5001');
-  // competitor end, sleeves
+  // A-code end, sleeves
   ok('A21-EB06M → flat end brush #1000, A13-EB03M → Ø3 point #2000', sku('A21-EB06M') === 'UF4650' && sku('A13-EB03M') === 'UF3830', [sku('A21-EB06M'), sku('A13-EB03M')]);
   ok('S25M sleeve → UF5525 with a collet change (Ø8 → Ø10)', sku('S25M') === 'UF5525' && X('S25M').notes.some(n => /Ø8 to Ø10/.test(n)));
-  // competitor surface sets: graded like competitor (pink A12 → #1200, blue → #800); sleeve shanks Ø6/6/8/10/12/14
+  // CN-code surface sets: graded like A-code (pink A12 → #1200, blue → #800); sleeve shanks Ø6/6/8/10/12/14
   const vs = [[6, 6], [15, 6], [25, 8], [40, 10], [60, 12], [100, 14]];
   bad = [];
   for (const [d, ds] of vs) { const code = `CN-CB${String(d).padStart(2, '0')}MS`; if (sku(code) !== E.skuSurface(d, 1200).sku) bad.push([code, sku(code)]); const o = X(code); const S = E.SURFACE[d]; if (ds !== S.ds && !o.notes.some(n => new RegExp(`Ø${ds} shank`).test(n))) bad.push([code, 'shank note']); }
-  ok('every competitor pink surface set maps to the same size #1200, with shank changes noted', !bad.length, bad);
-  ok('competitor blue (H) surface brush → #800, like competitor blue', sku('CN-CB15HS') === 'UF1515' && sku('CN-06H') === 'UF1506', [sku('CN-CB15HS'), sku('CN-06H')]);
-  // competitor cross-hole: pink A12 ≈ P1200 (not competitor red A12 by name only), Ø9 has no UFIBER size
-  ok('competitor CN-A12-7M (pink) → UF2770 #1200', sku('CN-A12-7M') === 'UF2770');
-  ok('competitor CN-A12-1.5M → UF2715, Ø3–5 vs Ø3.5–5 flagged', sku('CN-A12-1.5M') === 'UF2715' && X('CN-A12-1.5M').notes.some(n => /Ø3–5/.test(n)));
-  ok('competitor Ø9 pink → UFIBER Ø7 #1200 (covers Ø10–20)', sku('CN-A12-9M') === 'UF2770' && X('CN-A12-9M').status === 'close');
-  ok('competitor Ø9 blue → Ø7 #800 plus Ø11 #800 for Ø14–18', sku('CN-A33-9M') === 'UF2570' && X('CN-A33-9M').alts.some(a => a.sku === 'UF2511'), X('CN-A33-9M').alts);
-  ok('competitor blue Ø11 → Ø11 #800, a direct match', sku('CN-A33-11M') === 'UF2511' && X('CN-A33-11M').status === 'direct', [sku('CN-A33-11M'), X('CN-A33-11M').status]);
-  ok('competitor blue cross-hole is the same as competitor blue: UF2550, direct', sku('CN-A33-5M') === 'UF2550' && sku('CN-A33-5M') === sku('CH-A33-5M') && X('CN-A33-5M').status === 'direct');
-  ok('competitor pink A12 is the same as competitor A12', sku('CN-A12-5M') === sku('CH-A12-5M'));
-  // competitor micro-hole, stones, others
+  ok('every CN-code pink surface set maps to the same size #1200, with shank changes noted', !bad.length, bad);
+  ok('CN-code blue (H) surface brush → #800, like A-code blue', sku('CN-CB15HS') === 'UF1515' && sku('CN-06H') === 'UF1506', [sku('CN-CB15HS'), sku('CN-06H')]);
+  // CN-code cross-hole: pink A12 ≈ P1200 (not A-code red A12 by name only), Ø9 has no UFIBER size
+  ok('CN-code CN-A12-7M (pink) → UF2770 #1200', sku('CN-A12-7M') === 'UF2770');
+  ok('CN-code CN-A12-1.5M → UF2715, Ø3–5 vs Ø3.5–5 flagged', sku('CN-A12-1.5M') === 'UF2715' && X('CN-A12-1.5M').notes.some(n => /Ø3–5/.test(n)));
+  ok('CN-code Ø9 pink → UFIBER Ø7 #1200 (covers Ø10–20)', sku('CN-A12-9M') === 'UF2770' && X('CN-A12-9M').status === 'close');
+  ok('CN-code Ø9 blue → Ø7 #800 plus Ø11 #800 for Ø14–18', sku('CN-A33-9M') === 'UF2570' && X('CN-A33-9M').alts.some(a => a.sku === 'UF2511'), X('CN-A33-9M').alts);
+  ok('CN-code blue Ø11 → Ø11 #800, a direct match', sku('CN-A33-11M') === 'UF2511' && X('CN-A33-11M').status === 'direct', [sku('CN-A33-11M'), X('CN-A33-11M').status]);
+  ok('CN-code blue cross-hole is the same as A-code blue: UF2550, direct', sku('CN-A33-5M') === 'UF2550' && sku('CN-A33-5M') === sku('CH-A33-5M') && X('CN-A33-5M').status === 'direct');
+  ok('CN-code pink A12 is the same as A-code A12', sku('CN-A12-5M') === sku('CH-A12-5M'));
+  // CN-code micro-hole, stones, others
   ok('CB31R-S1.5 → Ø1.5 point #1200, CB31B-S2.5 → Ø2.5 point #800', sku('CB31R-S1.5') === 'UF3715' && sku('CB31B-S2.5') === 'UF3525', [sku('CB31R-S1.5'), sku('CB31B-S2.5')]);
-  ok('competitor oil stones → UFIBER Ø3 diamond stone by grit (#800, #400, #220→#200)', sku('CN-PB-3B') === 'UF9430' && sku('CN-PO-3B') === 'UF9230' && sku('CN-PM-3B') === 'UF9130', [sku('CN-PB-3B'), sku('CN-PO-3B'), sku('CN-PM-3B')]);
-  ok('competitor ball hone has no UFIBER equivalent', X('BD-10M').status === 'none');
-  ok('maker CB31M-01550 → UF1615', sku('CB31M-01550') === 'UF1615' && X('CB31M-01550').status === 'direct');
+  ok('CN-code oil stones → UFIBER Ø3 diamond stone by grit (#800, #400, #220→#200)', sku('CN-PB-3B') === 'UF9430' && sku('CN-PO-3B') === 'UF9230' && sku('CN-PM-3B') === 'UF9130', [sku('CN-PB-3B'), sku('CN-PO-3B'), sku('CN-PM-3B')]);
+  ok('CN-code ball hone has no UFIBER equivalent', X('BD-10M').status === 'none');
+  ok('CB31M-01550 → UF1615', sku('CB31M-01550') === 'UF1615' && X('CB31M-01550').status === 'direct');
   ok('unknown code is reported, not guessed', X('ZZ-123').status === 'unknown' && !X('ZZ-123').uf);
   // finding codes in a customer's text
-  const found = E.xFind('Hi, we use competitor A21-CB25M and CH-A33-7M on 4140, also competitor CN-A12-5M. A floating holder and a stone are on the bench. Ø25 brush, S25M sleeve.');
+  const found = E.xFind('Hi, we use A21-CB25M and CH-A33-7M on 4140, also CN-A12-5M. A floating holder and a stone are on the bench. Ø25 brush, S25M sleeve.');
   ok('codes in an email are found, words are not', JSON.stringify(found) === JSON.stringify(['A21-CB25M', 'CH-A33-7M', 'CN-A12-5M', 'S25M']), found);
   ok('a plain size or grade is not taken for a code', E.xFind('Ø25 brush, 1.4301, #1000, 6000 rpm, M6x1').length === 0);
   ok('the compact form carries the SKU for the AI', E.xCompact(X('CN-CB25MS')).ufiber_sku === 'UF1725');
 }
 
 
-/* ---- wheel and side brushes → UFIBER radial ceramic fiber disc (Sagi, 31-Oct-2026) (1.6.19) ---- */
+/* ---- wheel and side brushes → UFIBER radial ceramic fiber disc (NOGA, 31-Oct-2026) (1.6.19) ---- */
 {
   const X = (c) => E.xConvert(E.xParse(c));
   const w = X('W-A11-50');
-  ok('competitor wheel W-A11-50 → Ø30 radial disc, red → nearest disc grit #1000 (UF7630)', w.uf?.sku === 'UF7630' && w.uf.family === 'disc' && w.status === 'close', w.uf);
+  ok('A-code wheel W-A11-50 → Ø30 radial disc, red → nearest disc grit #1000 (UF7630)', w.uf?.sku === 'UF7630' && w.uf.family === 'disc' && w.status === 'close', w.uf);
   ok('and it comes with the UF7030 clamping shank and the 9,000 RPM limit', w.holders.some(h => h.sku === 'UF7030') && w.notes.some(n => /never above 9,000/.test(n)));
-  ok('competitor side brush SD-25M → Ø25 disc #400 (UF7325), #200 offered', X('SD-25M').uf?.sku === 'UF7325' && X('SD-25M').alts.some(a => a.sku === 'UF7225'), X('SD-25M'));
+  ok('CN-code side brush SD-25M → Ø25 disc #400 (UF7325), #200 offered', X('SD-25M').uf?.sku === 'UF7325' && X('SD-25M').alts.some(a => a.sku === 'UF7225'), X('SD-25M'));
   ok('SD-20M → Ø19 (nearest disc not larger)', X('SD-20M').uf?.sku === 'UF7319', X('SD-20M').uf?.sku);
   ok('SD-60M → Ø30, flagged as smaller reach', X('SD-60M').uf?.dia === 30 && X('SD-60M').notes.some(n => /reaches less far/.test(n)));
-  ok('side-brush codes are found in an email, a competitor PI number is not', JSON.stringify(E.xFind('We run SD-30M on the threads. Ref PI SD025-04213A.')) === JSON.stringify(['SD-30M']), E.xFind('We run SD-30M on the threads. Ref PI SD025-04213A.'));
+  ok('side-brush codes are found in an email, a CN-code PI number is not', JSON.stringify(E.xFind('We run SD-30M on the threads. Ref PI SD025-04213A.')) === JSON.stringify(['SD-30M']), E.xFind('We run SD-30M on the threads. Ref PI SD025-04213A.'));
   const st = E.newState(); Object.assign(st, { task: 'deburr_mill', feature: 'groove', material: 'steel', override: { family: 'disc', grit: 400, dia: 25 } });
   ok('the full setup keeps the converted disc size', E.recommend(st).sku === 'UF7325', E.recommend(st).sku);
 }
@@ -483,8 +483,20 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   const bad = res.filter(r => !r.sku || r.status === 'unknown' || r.kind === 'unknown');
   ok(`all ${res.length} picker combinations convert to a UFIBER item`, !bad.length, bad);
   const by = Object.fromEntries(res.map(r => [r.code, r]));
-  ok('competitor picks build competitor codes', by['CN-CB25MS']?.sku === 'UF1725' && by['CN-A33-5M']?.sku === 'UF2550' && by['CB31R-S1.5']?.sku === 'UF3715' && by['SD-25M']?.sku === 'UF7325', ['CN-CB25MS', 'CN-A33-5M', 'CB31R-S1.5', 'SD-25M'].map(c => by[c]));
-  ok('micro-hole Ø1 is written as S1.0, as on the competitor label', !!by['CB31B-S1.0']);
+  ok('CN-code picks build CN-code codes', by['CN-CB25MS']?.sku === 'UF1725' && by['CN-A33-5M']?.sku === 'UF2550' && by['CB31R-S1.5']?.sku === 'UF3715' && by['SD-25M']?.sku === 'UF7325', ['CN-CB25MS', 'CN-A33-5M', 'CB31R-S1.5', 'SD-25M'].map(c => by[c]));
+  ok('micro-hole Ø1 is written as S1.0, as on the CN-code label', !!by['CB31B-S1.0']);
+}
+
+
+/* ---- no competitor brand or maker name anywhere in the shipped app (NOGA, 31-Oct-2026) (1.6.21) ---- */
+{
+  const html = fs.readFileSync(path.join(__dirname, '..', 'assets', 'app', 'ufiber-guide.html'), 'utf8');
+  const names = ['competitor', 'competitor', 'maker', 'a distributor', 'a distributor', 'competitor'];
+  const hits = names.filter(n => new RegExp(n, 'i').test(html));
+  ok('the shipped app names no competitor or maker', !hits.length, hits);
+  const o = E.xConvert(E.xParse('competitor A21-CB25M'));
+  ok('a code typed with a brand in front still converts', o.uf?.sku === 'UF1625', o.uf);
+  ok('and nothing in the result names a brand', !/competitor|competitor|maker/i.test(JSON.stringify(E.xCompact(o))));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
