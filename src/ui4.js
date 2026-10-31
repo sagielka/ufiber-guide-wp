@@ -48,6 +48,11 @@ function xParse(raw) {
   if (!s) return null;
   let m;
   if (s === 'CB31M-01550' || s === 'CB31M01550') return { raw, code: s, brand: 'cb', kind: 'cb15' };
+  // CB-codes: same colour letters as UFIBER (G P V O B W R M Z A)
+  if ((m = s.match(/^CB31([GPVOBWRMZA])-?M-?(\d{3})(\d{2})$/))) return { raw, code: s, brand: 'cb', kind: 'cross', gl: m[1], dia: +m[2] / 10, bl: +m[3] };
+  if ((m = s.match(/^CB31([GPVOBWRMZA])-?S-?(\d{3})(\d{3})$/))) return { raw, code: s, brand: 'cb', kind: 'point', gl: m[1], dia: +m[2] / 10, bl: +m[3] };
+  if ((m = s.match(/^CB31([GPVOBWRMZA])-?(\d{3})(\d{2})$/))) return { raw, code: s, brand: 'cb', kind: 'surface', gl: m[1], dia: +m[2], bl: +m[3] };
+  if ((m = s.match(/^CBR([GPVOBWRMZA])-?(\d{2})(\d{2})-?(\d)(-?A45)?$/))) return { raw, code: s, brand: 'cb', kind: 'end', gl: m[1], dia: +m[2], bl: +m[3], ds: +m[4], angled: !!m[5] };
   if ((m = s.match(/^CN-?A(12|33)-?(\d+(?:\.\d+)?)([ML])?$/))) return { raw, code: s, brand: 'cn', kind: 'cross', vcol: m[1] === '12' ? 'pink' : 'blue', dia: parseFloat(m[2]), len: m[3] || 'M' };
   if ((m = s.match(/^CN-?CB(\d{2,3})([MH])(S)?$/))) return { raw, code: s, brand: 'cn', kind: 'surface', vcol: m[2] === 'H' ? 'blue' : 'pink', dia: parseInt(m[1], 10), set: !!m[3] };
   if ((m = s.match(/^CN-?(\d{2,3})([MH])$/))) return { raw, code: s, brand: 'cn', kind: 'surface', vcol: m[2] === 'H' ? 'blue' : 'pink', dia: parseInt(m[1], 10), set: false };
@@ -78,7 +83,7 @@ function xParse(raw) {
 
 /* Competitor codes inside free text (an ask, an email, a drawing note). Strict
    item-code shapes only, so ordinary words ("stone", "floating") never match. */
-const X_SCAN = /\b(?:A\d{2}-?CB\d{2,3}M?|A\d{2}-?EB\d{2,3}[MS]?|CH-A\d{2}-\d+(?:\.\d+)?[MLF]?(?:-TL)?|CH-SH-\d+|W-A\d{2}-\d+|S(?:06|15|25|40|60|100)M(?:-P|-SD10)?|CN-A(?:12|33)-\d+(?:\.\d+)?[ML]?|CN-CB\d{2,3}[MH]S?|CN-\d{2,3}[MH]|CB31[RB]-S\d(?:\.\d)?|CB31M-01550|CN-P[BOM]-\d+B|CPD-\d+M|SD-\d+M)(?!\w|\.\d)/gi;
+const X_SCAN = /\b(?:A\d{2}-?CB\d{2,3}M?|A\d{2}-?EB\d{2,3}[MS]?|CH-A\d{2}-\d+(?:\.\d+)?[MLF]?(?:-TL)?|CH-SH-\d+|W-A\d{2}-\d+|S(?:06|15|25|40|60|100)M(?:-P|-SD10)?|CN-A(?:12|33)-\d+(?:\.\d+)?[ML]?|CN-CB\d{2,3}[MH]S?|CN-\d{2,3}[MH]|CB31[RB]-S\d(?:\.\d)?|CB31[GPVOBWRMZA]-(?:[MS]-)?\d{5,6}|CBR[GPVOBWRMZA]-\d{4}-\d(?:-A45)?|CN-P[BOM]-\d+B|CPD-\d+M|SD-\d+M)(?!\w|\.\d)/gi;
 function xFind(text) {
   const seen = new Set(), out = [];
   for (const m of String(text || '').matchAll(X_SCAN)) { const c = m[0].toUpperCase(); if (!seen.has(c)) { seen.add(c); out.push(c); } }
@@ -88,6 +93,7 @@ function xFind(text) {
 function xConvert(p) {
   if (!p) return null;
   if (p.brand === 'cn') return vConvert(p);
+  if (p.brand === 'cb' && p.kind !== 'cb15') return cbConvert(p);
   const out = { p, status: 'direct', uf: null, holders: [], notes: [], alts: [], xdesc: '' };
   if (p.kind === 'cb15') {
     out.xdesc = 'Ceramic fiber surface brush Ø15, #1000 (white)';
@@ -214,6 +220,41 @@ function discOut(out, dia, grit, what) {
   if (f) out.alts.push({ label: `Finer finish: #${f}`, sku: skuDisc(d, f).sku, note: '' });
 }
 
+/* ---- CB-codes: the same brushes as UFIBER, same colour letters, so size and grit carry over ---- */
+function cbConvert(p) {
+  const out = { p, status: 'direct', uf: null, holders: [], notes: [], alts: [], xdesc: '' };
+  const q = GRITS.find(x => x.code === p.gl); const grit = q.grit;
+  const col = `${q.color}, #${grit}`;
+  if (p.kind === 'surface') {
+    out.xdesc = `Ceramic fiber surface (cup) brush Ø${p.dia} × ${p.bl} mm, ${col}`;
+    let d = p.dia; if (!SURFACE[d]) { d = [6, 15, 25, 40, 60, 100].filter(x => x <= p.dia).pop() || 6; out.status = 'close'; out.notes.push(`UFIBER surface brushes are Ø6, 15, 25, 40, 60 and 100. Ø${d} is the nearest that is not larger; use a slightly wider path or one more pass.`); }
+    const k = skuSurface(d, grit); out.uf = { family: 'surface', fam: 'Surface Brush', dia: d, grit, ...k };
+    const S = SURFACE[d]; out.holders.push({ role: 'Sleeve', sku: S.sleeve[0], desc: `${S.sleeve[1]}, Ø${S.ds} shank` });
+    if (d === p.dia) out.notes.push('Same size and grit; your sleeve and program carry over.');
+    gritAlts(out, grit, (g) => skuSurface(d, g));
+  } else if (p.kind === 'cross') {
+    out.xdesc = `Ceramic fiber cross-hole brush Ø${p.dia}, ${p.bl} mm bristle, ${col}`;
+    if (!CROSS[p.dia]) { out.status = 'unknown'; out.notes.push(`No UFIBER Ø${p.dia} cross-hole brush. Sizes are Ø1.5, 3, 5, 7 and 11.`); return out; }
+    let g = grit;
+    if (p.dia === 11 && ![600, 800, 1000].includes(g)) { g = g > 1000 ? 1000 : 600; out.status = 'close'; out.notes.push(`UFIBER Ø11 cross-hole brushes come in #600, #800 and #1000; #${g} is the nearest.`); }
+    crossOut(out, p.dia, g, null);
+    const C = CROSS[p.dia]; const r = g >= 1200 && C.pilotFine ? C.pilotFine : C.pilot;
+    out.notes.push(`Bore range for this UFIBER brush: Ø${r[0]}–${r[1]}. Max ${fmtN(C.max)} RPM.`);
+    gritAlts(out, g, (x) => (p.dia === 11 && ![600, 800, 1000].includes(x)) ? null : skuCross(p.dia, x));
+  } else if (p.kind === 'point') {
+    out.xdesc = `Ceramic fiber point brush Ø${p.dia} × ${p.bl} mm, ${col}`;
+    endOut(out, p.dia, grit);
+  } else if (p.kind === 'end') {
+    out.xdesc = `Ceramic fiber end brush Ø${p.dia} × ${p.bl} mm${p.angled ? ', angled tip' : ''}, Ø${p.ds} shank, ${col}`;
+    const k = skuEnd(grit, p.angled); out.uf = { family: 'end', fam: p.angled ? 'End Brush, 90° angled' : 'End Brush, flat', dia: 5, grit, ...k };
+    if (p.dia !== 5) { out.status = 'close'; out.notes.push('UFIBER end brushes are Ø5.'); }
+    out.holders.push({ role: 'Drive', sku: 'UF9999', desc: 'Portable E-Pack for hand use (or any electric spindle; not air tools)' });
+    out.notes.push('UFIBER end and point brushes are rated to 12,000 RPM.');
+    gritAlts(out, grit, (g) => skuEnd(g, p.angled));
+  }
+  return out;
+}
+
 /* ---- CN-codes ---- */
 function vConvert(p) {
   const out = { p, status: 'direct', uf: null, holders: [], notes: [], alts: [], xdesc: '' };
@@ -327,6 +368,10 @@ const XPICK = {
     dias: { surface: [6, 15, 25, 40, 60, 100], cross: [1.5, 3, 5, 7, 11], end: [3, 5] },
     cols: { surface: ['A13', 'A11', 'A21', 'A32'], cross: ['A12', 'A33'], end: ['A13', 'A11', 'A21'] },
     def: { surface: [25, 'A21'], cross: [5, 'A12'], end: [5, 'A21'] } },
+  cb: { label: 'Codes like CB31W-02575, CB31W-M-05050', kinds: [['surface', 'Surface (cup) brush'], ['cross', 'Cross-hole brush'], ['point', 'Point brush'], ['end', 'End brush']],
+    dias: { surface: [6, 15, 25, 40, 60, 100], cross: [1.5, 3, 5, 7, 11], point: [1, 1.5, 2, 2.5, 3], end: [5] },
+    cols: { surface: 'GPVOBWRMZA'.split(''), cross: 'GPVOBWRMZA'.split(''), point: 'GPVOBWRMZA'.split(''), end: 'GPVOBWRMZA'.split('') },
+    def: { surface: [25, 'W'], cross: [5, 'W'], point: [2, 'W'], end: [5, 'W'] } },
   cn: { label: 'Codes like CN-CB25MS, CN-A12-5M', kinds: [['surface', 'Surface brush + sleeve'], ['cross', 'Cross-hole brush'], ['micro', 'Micro-hole brush'], ['side', 'Side (flower) brush']],
     dias: { surface: [6, 15, 25, 40, 60, 100], cross: [1.5, 3, 5, 7, 9, 11], micro: [1, 1.5, 2, 2.5, 3], side: [20, 25, 30, 40, 50, 60] },
     cols: { surface: ['pink', 'blue'], cross: ['pink', 'blue'], micro: ['pink', 'blue'], side: [] },
@@ -341,7 +386,7 @@ function xPicker() {
   const P = APP.xpick || (APP.xpick = { brand: 'a', kind: 'surface', dia: 25, color: 'A21' });
   if (!P.brand || !XPICK[P.brand]) P.brand = 'a';
   const B = XPICK[P.brand]; const dias = B.dias[P.kind] || []; const cols = B.cols[P.kind] || [];
-  const colOf = c => P.brand === 'cn' ? VCOLOR[c] : XCOLOR[c];
+  const colOf = c => P.brand === 'cn' ? VCOLOR[c] : P.brand === 'cb' ? (q => ({ c: `#${q.grit} ${q.color.toLowerCase()}`, hex: q.hex }))(GRITS.find(x => x.code === c)) : XCOLOR[c];
   return `<div class="field" style="margin-top:4px"><label>Code type</label><div class="seg">${Object.entries(XPICK).map(([b, B]) => `<button data-xpb="${b}" aria-pressed="${P.brand === b}">${B.label}</button>`).join('')}</div></div>
     <div class="field"><label>Type</label><div class="seg">${B.kinds.map(([k, l]) => `<button data-xpk="${k}" aria-pressed="${P.kind === k}">${l}</button>`).join('')}</div></div>
     <div class="field"><label>Brush diameter</label><div class="seg">${dias.map(d => `<button data-xpd="${d}" aria-pressed="${P.dia === d}">Ø${d}</button>`).join('')}</div></div>
@@ -350,6 +395,13 @@ function xPicker() {
 }
 function xCodeFromPick(P) {
   const dd = (d) => String(d).padStart(2, '0');
+  if (P.brand === 'cb') {
+    const d3 = (x) => String(Math.round(x * 10)).padStart(3, '0');
+    if (P.kind === 'surface') return `CB31${P.color}-${String(P.dia).padStart(3, '0')}${P.dia >= 25 ? 75 : P.dia >= 15 ? 50 : 30}`;
+    if (P.kind === 'cross') return `CB31${P.color}-M-${d3(P.dia)}50`;
+    if (P.kind === 'point') return `CB31${P.color}-S-${d3(P.dia)}020`;
+    return `CBR${P.color}-0520-3`;
+  }
   if (P.brand === 'cn') {
     const blue = P.color === 'blue';
     if (P.kind === 'surface') return `CN-CB${dd(P.dia)}${blue ? 'H' : 'M'}S`;

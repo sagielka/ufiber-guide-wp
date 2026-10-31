@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.24 – 2026-10-31
+- Replace page: CB-codes added. They use the same colour letters as UFIBER
+  (G #150 … W #1000 … A #6000), so size and grit carry over directly:
+  cup brushes CB31#-DDDLL (CB31W-02575 → UF1625), cross-hole
+  CB31#-M-DDDLL (CB31A-M-05050 → UF2050), point CB31#-S-DDDLLL
+  (CB31G-S-010020 → UF3110), and end brushes CBR#-0520-3 / -A45 (flat /
+  angled). Sizes UFIBER doesn't have (e.g. Ø8 cup) go to the nearest size
+  that is not larger, marked close.
+- These codes are also found in a customer's text or email, and the "Pick
+  it" panel has them as a third code type (all ten grits).
+
 ## 1.6.23 – 2026-10-31
 - Same app as 1.6.22, released again from the cleaned repository history,
   so the latest release no longer depends on the old history.

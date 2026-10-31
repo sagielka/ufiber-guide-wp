@@ -500,5 +500,22 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('and nothing in the result names a brand', !names.some(n => new RegExp(n, 'i').test(JSON.stringify(E.xCompact(o)))));
 }
 
+
+/* ---- CB-codes: same brushes as UFIBER, same colour letters (maker's price list, 18-May-2026) (1.6.24) ---- */
+{
+  const sku = (c) => E.xConvert(E.xParse(c))?.uf?.sku;
+  const X = (c) => E.xConvert(E.xParse(c));
+  const want = { 'CB31A-01550': 'UF1015', 'CB31A-00630': 'UF1006', 'CB31W-02575': 'UF1625', 'CB31B-04075': 'UF1540', 'CB31G-06075': 'UF1160', 'CB31R-10075': 'UF1700',
+    'CB31A-M-07050': 'UF2070', 'CB31A-M-05050': 'UF2050', 'CB31A-M-03050': 'UF2030', 'CB31A-M-01550': 'UF2015', 'CB31P-M-07050': 'UF2270',
+    'CBRA-0520-3': 'UF4050', 'CBRA-0520-3-A45': 'UF6050', 'CB31G-S-010020': 'UF3110' };
+  const bad = Object.entries(want).filter(([c, w]) => sku(c) !== w).map(([c, w]) => [c, sku(c), w]);
+  ok('every price-list code maps to the same UFIBER size and grit', !bad.length, bad);
+  ok('and they are direct replacements', Object.keys(want).every(c => X(c).status === 'direct'), Object.keys(want).map(c => [c, X(c).status]));
+  ok('an Ø8 cup brush has no UFIBER size: Ø6, marked close', sku('CB31W-00830') === 'UF1606' && X('CB31W-00830').status === 'close');
+  ok('a #6000 Ø11 cross-hole is flagged (Ø11 only #600–#1000)', sku('CB31A-M-11050') === 'UF2611' && X('CB31A-M-11050').status === 'close');
+  ok('price-list codes are found in an email', JSON.stringify(E.xFind('Please quote CB31W-02575 x10, CB31A-M-05050 x5 and CBRA-0520-3-A45.')) === JSON.stringify(['CB31W-02575', 'CB31A-M-05050', 'CBRA-0520-3-A45']), E.xFind('Please quote CB31W-02575 x10, CB31A-M-05050 x5 and CBRA-0520-3-A45.'));
+  ok('the micro-hole CN-style code is not mistaken for a CB point brush', E.xParse('CB31R-S1.5').brand === 'cn');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
