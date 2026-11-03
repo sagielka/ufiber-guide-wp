@@ -846,7 +846,15 @@ function recommend(st) {
   if (ov.grit) grit = ov.grit;
   const sizes = [6, 15, 25, 40, 60, 100];
   let dia;
-  const W = Number(d.width) || null;
+  let W = Number(d.width) || null;
+  // A "width" under 1.5 mm is not the area a surface brush covers: it is nearly
+  // always a burr height or a tolerance that landed in the wrong field (a 0.1–0.3 mm
+  // burr once turned a face job into a Ø6 brush). Leave it out and say so.
+  if (W && W < 1.5 && !['radius', 'small'].includes(feature) && !ov.dia) {
+    R.notes.push(`A width of ${+W.toFixed(2)} mm was ignored: that is the size of a burr or a tolerance, not of the area the brush covers. Enter the width of the face or the band of holes to size the brush.`);
+    lower('medium', 'The width given was too small to be the working area, so the brush size is assumed.');
+    W = null;
+  }
   if (ov.dia && SURFACE[ov.dia]) dia = ov.dia;
   else if (feature === 'hole') {
     const hole = Number(d.hole) || null;
@@ -1773,7 +1781,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.26';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.27';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -4397,7 +4405,7 @@ function extractionSpec() {
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches; American drawings give inches with a leading dot and no unit, e.g. Ø.156 = 0.156 in = 3.96 mm, and a drawing note like "hole diameter approximately Ø3–4 mm" is a stated size). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole;
-WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
+WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. For holes spread around a ring or bolt circle, the width is the radial band they occupy (outer radius − inner radius of the hole pattern + one hole Ø), because the brush follows the ring. A burr height, a tolerance or a chamfer size is never a width. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
 CROSS-HOLE SIZES COME FROM THE INTERSECTION: "main" and "cross" are the two holes that actually MEET where the burr is. Entry counterbores, port or fitting bores (flare, thread, O-ring seat), outside diameters, flanges and the part's overall size are NOT the main bore, even when the brush passes through them on the way in. On a drawing, find the burr area (a circle, arrow or note) and follow each hole from there; the two smallest diameters that run into that spot are usually the pair. A size stated in words for the burr area ("hole diameter approximately Ø3–4 mm") outranks any number you pick off the drawing. A range like that given for the holes at the intersection means main ≈ the upper value and cross ≈ the lower one (Ø3–4 → main 4, cross 3): fill them and list both in "estimated" rather than leaving them null. Leave them null only when nothing at all bounds them.
  "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
 Several workpiece materials (e.g. "AW5083, AW7075 and stainless 1.4301"): set up ONE now and put each other one in "later". Pick the one the customer says to start with, reading the whole thread including quoted earlier messages and short answers like "-> aluminium, please"; otherwise the first one listed. Grades of the same material (5083 and 7075 are both wrought aluminium) stay together in "grades". Never ask whether a "later" material uses the same setup: it needs its own.

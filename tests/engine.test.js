@@ -537,5 +537,15 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a burr range counts by its upper value', E.parseText('Case 1: approximate burr thickness at the root? Estimated to be approximately 0.1–0.3 mm.').burrMm === 0.3);
 }
 
+
+/* ---- a burr-sized "width" does not size a surface brush (1.6.27) ---- */
+{
+  const st = E.SHARE.decode('2_dm_ed_pl_l_W0p3_mc');
+  const R = E.recommend(st);
+  ok('a 0.3 mm width is ignored, not turned into a Ø6 brush', R.dia !== 6 && R.notes.some(n => /width of 0.3 mm was ignored/.test(n)) && R.conf.level !== 'high', [R.dia, R.conf]);
+  const R2 = E.recommend(E.SHARE.decode('2_dd_ho_pl_l_W28H6p76_mcR8000B4'));
+  ok('a 28 mm band of holes still gives Ø60', R2.dia === 60, R2.dia);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

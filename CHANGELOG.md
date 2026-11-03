@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.27 – 2026-11-03
+- A width under 1.5 mm no longer sizes a surface brush. It is nearly always a
+  burr height or a tolerance in the wrong field (a 0.3 mm burr made a face job
+  a Ø6 brush). It is left out with a note, the setup drops to Medium, and the
+  brush size is assumed until the real width is entered.
+- Claude is told how to size a ring of holes: the radial band the holes
+  occupy, because the brush follows the ring; and that a burr, tolerance or
+  chamfer size is never a width.
+
 ## 1.6.26 – 2026-11-03
 - Shorter share links. A typical setup is now written as a few readable codes
   instead of base64 JSON, about 40 characters instead of 200:

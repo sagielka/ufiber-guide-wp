@@ -357,7 +357,15 @@ function recommend(st) {
   if (ov.grit) grit = ov.grit;
   const sizes = [6, 15, 25, 40, 60, 100];
   let dia;
-  const W = Number(d.width) || null;
+  let W = Number(d.width) || null;
+  // A "width" under 1.5 mm is not the area a surface brush covers: it is nearly
+  // always a burr height or a tolerance that landed in the wrong field (a 0.1–0.3 mm
+  // burr once turned a face job into a Ø6 brush). Leave it out and say so.
+  if (W && W < 1.5 && !['radius', 'small'].includes(feature) && !ov.dia) {
+    R.notes.push(`A width of ${+W.toFixed(2)} mm was ignored: that is the size of a burr or a tolerance, not of the area the brush covers. Enter the width of the face or the band of holes to size the brush.`);
+    lower('medium', 'The width given was too small to be the working area, so the brush size is assumed.');
+    W = null;
+  }
   if (ov.dia && SURFACE[ov.dia]) dia = ov.dia;
   else if (feature === 'hole') {
     const hole = Number(d.hole) || null;
