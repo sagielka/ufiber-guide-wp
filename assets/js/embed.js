@@ -14,16 +14,21 @@
 	}
 
 	// If the page was opened with a shared setup, hand it to the guide.
-	window.addEventListener('DOMContentLoaded', function () {
+	// A second shared link opened in the same tab only changes the #hash, which
+	// does not reload the page, so the guide kept showing the first setup.
+	// Watch the hash too, and reload the guide when it names a new setup.
+	var shown = '';
+	function handOver() {
 		var m = location.hash.match(/[#&]ufiber=([A-Za-z0-9\-_]+)/);
-		if (!m) { return; }
+		if (!m || m[1] === shown) { return; }
+		shown = m[1];
 		document.querySelectorAll('.nufg__frame').forEach(function (f) {
-			var src = f.getAttribute('src') || '';
-			if (src.indexOf('setup=') === -1) {
-				f.setAttribute('src', src + (src.indexOf('?') === -1 ? '?' : '&') + 'setup=' + encodeURIComponent(m[1]));
-			}
+			var src = (f.getAttribute('src') || '').replace(/([?&])setup=[^&#]*(&|$)/, function (all, a, b) { return b ? a : ''; });
+			f.setAttribute('src', src + (src.indexOf('?') === -1 ? '?' : '&') + 'setup=' + encodeURIComponent(m[1]));
 		});
-	});
+	}
+	window.addEventListener('DOMContentLoaded', handOver);
+	window.addEventListener('hashchange', handOver);
 
 	window.addEventListener('message', function (e) {
 		var d = e.data;
@@ -36,6 +41,7 @@
 			return;
 		}
 		if (d.type === 'setup' && typeof d.token === 'string' && /^[A-Za-z0-9\-_]{1,4000}$/.test(d.token)) {
+			shown = d.token;
 			try { history.replaceState(null, '', location.pathname + location.search + '#ufiber=' + d.token); } catch (err) { }
 			return;
 		}

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.29 – 2026-11-03
+- A second shared link opened in the same browser tab now shows its own
+  setup. Links to the same page differ only after the #, and changing that part
+  does not reload the page, so the guide kept showing the first setup (Case 1
+  stayed on screen when the Case 2 link was clicked). The page now watches for
+  it and reloads the guide with the new setup.
+
 ## 1.6.28 – 2026-11-03
 - Replies on top of a multi-case email read right. "Case 1: approximate burr
   thickness at the root?" in the answers is a question about a case, not a new
