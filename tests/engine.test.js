@@ -517,5 +517,25 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('the micro-hole CN-style code is not mistaken for a CB point brush', E.xParse('CB31R-S1.5').brand === 'cn');
 }
 
+
+/* ---- short share links (1.6.26) ---- */
+{
+  const ch = Object.assign(E.newState(), { task: 'crosshole', feature: 'cross', material: 'plastic', burr: 'heavy', burrMm: 0.3, dims: { main: 3.96, cross: 3.05 } });
+  ch.machine = Object.assign(ch.machine, { type: 'mc', maxRpm: 10000, iface: 'BT40' });
+  const tok = E.SHARE.encode(ch);
+  ok('a cross-hole setup becomes a short readable token', tok === '2_ch_cr_pl_h0p3_M3p96C3p05_mcR10000B4', tok);
+  const back = E.SHARE.decode(tok);
+  ok('and opens the same setup', back.task === 'crosshole' && back.material === 'plastic' && back.burr === 'heavy' && back.burrMm === 0.3 && back.dims.main === 3.96 && back.dims.cross === 3.05 && back.machine.maxRpm === 10000 && back.machine.iface === 'BT40' && back.machine.coolant === true, back);
+  ok('the short token gives the same tool', E.recommend(back).sku === E.recommend(ch).sku);
+  const al = Object.assign(E.newState(), { task: 'marks', feature: 'groove', material: 'aluminum', sub: 'cast', dims: { groove: 2.9, ra: 0.29 } });
+  al.machine.uneven = true; al.machine.coolant = false;
+  const b2 = E.SHARE.decode(E.SHARE.encode(al));
+  ok('sub-type, groove, Ra and machine flags survive', b2.sub === 'cast' && b2.dims.groove === 2.9 && b2.dims.ra === 0.29 && b2.machine.uneven && b2.machine.coolant === false && b2.burr === 'light', [E.SHARE.encode(al), b2]);
+  ok('only link-safe characters', /^[A-Za-z0-9\-_]+$/.test(E.SHARE.encode(al)));
+  const old = 'eyJ0IjoiY3Jvc3Nob2xlIiwiZiI6ImNyb3NzIiwibSI6InBsYXN0aWMiLCJiIjoibWVkaXVtIiwiZCI6eyJ3aWR0aCI6MC4zLCJtYWluIjozLjk2LCJjcm9zcyI6My4wNX0sImMiOnsidHlwZSI6Im1jIiwibWF4UnBtIjoxMDAwMCwiaWZhY2UiOiJCVDQwIiwiY29vbGFudCI6dHJ1ZSwidW5ldmVuIjpmYWxzZX0sInciOmZhbHNlfQ';
+  ok('old long links still open', E.SHARE.decode(old)?.dims?.main === 3.96);
+  ok('a burr range counts by its upper value', E.parseText('Case 1: approximate burr thickness at the root? Estimated to be approximately 0.1–0.3 mm.').burrMm === 0.3);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

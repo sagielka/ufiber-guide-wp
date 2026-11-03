@@ -848,6 +848,9 @@ function jobText(split, n) {
 }
 const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
 function burrSize(t) {
+  // "burr thickness … approximately 0.1–0.3 mm": a range counts by its upper value
+  const rg = t.match(/burrs?[^\n]{0,60}?(?:thick|root|height|size)[^\n]{0,80}?(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(mm|µm|um)\b/i);
+  if (rg) { let v = Math.max(parseFloat(rg[1]), parseFloat(rg[2])); if (/µm|um/i.test(rg[3])) v /= 1000; if (isFinite(v) && v > 0 && v < 20) return Math.round(v * 1000) / 1000; }
   const m = t.match(/burrs?\s*(?:height|thickness|size|root|thick|high)?\s*[:=]?\s*(?:approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*(\d+(?:\.\d+)?)\s*(mm|µm|um|")/i)
     || t.match(/(\d+(?:\.\d+)?)\s*(mm|µm|um)\s*(?:high|thick|tall|large)?\s*burr/i);
   if (!m) return null;

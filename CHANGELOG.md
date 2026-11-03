@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.26 – 2026-11-03
+- Shorter share links. A typical setup is now written as a few readable codes
+  instead of base64 JSON, about 40 characters instead of 200:
+  `#ufiber=2_ch_cr_pl_h0p3_M3p96C3p05_mcR10000B4`. Setups with grades,
+  overrides or a replaced competitor code keep the long form; old links keep
+  working.
+- A burr given as a range ("approximately 0.1–0.3 mm") counts by its upper
+  value, so 0.3 mm reads as a heavy burr. It used to be missed, and the 0.3 was
+  taken as a width.
+
 ## 1.6.25 – 2026-10-31
 - Corrected (NOGA): the Ø15 brush in the spread test was #2000 (UF1815),
   not #1000. The maker's colour letter M is #2000, the same as UFIBER's.
