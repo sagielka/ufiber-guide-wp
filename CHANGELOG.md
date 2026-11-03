@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.28 – 2026-11-03
+- Replies on top of a multi-case email read right. "Case 1: approximate burr
+  thickness at the root?" in the answers is a question about a case, not a new
+  case; only a line of its own ("Case 1.", "Case 2 – Housing") starts one. Each
+  case now takes the reply's answers that are about it, plus the answers about
+  no case in particular, so Case 1 of the MCAM reply reads as PP, cross hole,
+  0.3 mm (heavy) burr instead of "edge, material not found, width 0.3 mm".
+- A burr range written on the line under its question still counts.
+- A groove job without the groove width gets a "Groove width needed" warning
+  and a "Groove width: not found" chip to tap, instead of quietly showing a Ø6
+  surface brush. A 0.3 mm "width" is no longer taken for the groove.
+- Claude is told to read or work out the groove width from the drawing.
+
 ## 1.6.27 – 2026-11-03
 - A width under 1.5 mm no longer sizes a surface brush. It is nearly always a
   burr height or a tolerance in the wrong field (a 0.3 mm burr made a face job

@@ -79,7 +79,8 @@ function renderUnderstood() {
   if (d.width) chips.push(`<button class="u-chip${est('width') ? ' miss' : ''}" data-edit="width" title="${est('width') ? 'Worked out from other dimensions on the drawing — tap to correct' : ''}">${est('width') ? 'Width (est. from drawing)' : 'Width'} <b>${est('width') ? '≈' : ''}${lenOut(d.width)} ${lenU()}</b></button>`);
   // a face job with no width gets a default brush size: offer the width instead of hiding that
   else if (st.task && st.task !== 'crosshole' && ['face', 'edge'].includes(st.feature)) chips.push(`<button class="u-chip miss" data-edit="width">Width: <b>not found</b></button>`);
-  if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
+  if (d.groove) chips.push(`<button class="u-chip${est('groove') ? ' miss' : ''}" data-edit="groove">${est('groove') ? 'Groove (est. from drawing)' : 'Groove'} <b>${est('groove') ? '≈' : ''}${lenOut(d.groove)} ${lenU()}</b></button>`);
+  else if (st.feature === 'groove') chips.push(`<button class="u-chip miss" data-edit="groove">Groove width: <b>not found</b></button>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
   if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
   if (APP.parsed.machine) chips.push(`<span class="u-chip">Machine <b>${esc(MACHINES[st.machine.type] || '')}${st.machine.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}</b></span>`);
@@ -88,8 +89,8 @@ function renderUnderstood() {
   const aiCovers = APP.smart.questions.some(q => q.field === missing) || (APP.smart.busy && missing);
   const picker = APP.editKey || (aiCovers ? null : missing);
   let pick = '';
-  if (['main', 'cross', 'width'].includes(picker)) {
-    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)' }[picker];
+  if (['main', 'cross', 'width', 'groove'].includes(picker)) {
+    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)', groove: 'Groove width' }[picker];
     pick = `<p class="small" style="margin:12px 0 0"><b>${lbl}</b></p><div class="row" style="gap:6px;margin-top:6px"><input id="chipNum" type="number" step="0.01" min="0" inputmode="decimal" style="width:110px" value="${d[picker] ? lenVal(d[picker]) : ''}"> <span class="small">${lenU()}</span><button class="btn small" data-setdim="${picker}">OK</button></div>`;
   }
   if (picker === 'task') pick = `<p class="small" style="margin:12px 0 0"><b>What do you need to do?</b></p><div class="mini-tiles">${Object.entries(TASKS).map(([k, t]) => `<button class="chip${st.task === k ? ' on' : ''}" data-set="task" data-v="${k}">${t.short}</button>`).join('')}</div>`;

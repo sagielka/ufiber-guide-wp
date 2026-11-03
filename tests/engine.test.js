@@ -547,5 +547,21 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a 28 mm band of holes still gives Ø60', R2.dia === 60, R2.dia);
 }
 
+
+/* ---- a reply on top of a multi-case email (1.6.28) ---- */
+{
+  const mail = `Subject: Re: PTSC-MCAM trials\n\nDear Sagi\n\nPls find below answers in Green from customer.\n\n1.\t\n\tIs "NPP" natural polypropylene?\n\n*\t\n\tYes, Natural Polypropylene\n\n2.\t\n\tMachine maximum spindle speed (rpm)?\n\n*\t\n\t10,000 RPM maximum.\n\n3.\t\n\tCase 1: approximate burr thickness at the root?\n\n*\t\n\tNo profile measurement has been performed. Estimated to be approximately 0.1–0.3 mm.\n\n4.\t\n\tCase 2: which surface needs the lay (groove bottom, groove walls or the face around it), and the current Ra?\n\n*\t\n\tBottom groove, current about Ra.29\n\nRgds\nNonGG\n________________________________\n\nFrom: Sagi Elkayam\nSubject: RE: PTSC-MCAM\n\n1.\tIs "NPP" natural polypropylene?\n\nFrom: NonGG\n\nCase 1.\n\nPart Name : 15-430509-00 Adapter, APT, Chemical, 1/4" Port (Fitting)\n\nMaterial : NPP\n\nProblem is : Burr inside at cross hole.\n\nCase 2\n\nPart Name : Membrane family\n\nMaterial : PET-P\n\nProblem is : Lay pattern direction and Roughness\n\nNotes:\nCustomer will be using our ceramic brushes on BT40 spindle machines\n\nRgds\nNonGG`;
+  const sp = E.splitJobs(mail);
+  ok('questions about a case in the reply are not new cases', sp && sp.jobs.length === 2 && /Adapter/.test(sp.jobs[0].label) && /Membrane/.test(sp.jobs[1].label), sp && sp.jobs.map(j => j.label));
+  const j1 = E.jobText(sp, 1), j2 = E.jobText(sp, 2);
+  ok('each case takes its own answers from the reply', /0\.1–0\.3 mm/.test(j1) && !/Bottom groove/.test(j1) && /Bottom groove/.test(j2) && !/0\.1–0\.3/.test(j2), [j1.length, j2.length]);
+  ok('answers about no case go to both', /10,000 RPM/.test(j1) && /10,000 RPM/.test(j2) && /BT40/.test(j1));
+  const p1 = E.parseText(j1);
+  ok('Case 1 from the reply: PP cross hole with a 0.3 mm (heavy) burr', p1.material === 'plastic' && p1.task === 'crosshole' && p1.burrMm === 0.3 && p1.burr === 'heavy', p1);
+  const g = E.newState(); Object.assign(g, { task: 'marks', feature: 'groove', material: 'plastic', dims: { width: 0.3 } });
+  const R = E.recommend(g);
+  ok('a groove without its width says so, and a 0.3 "width" is not taken for it', R.warnings.some(w => /Groove width needed/.test(w.t)) && R.family !== 'disc', [R.family, R.warnings.map(w => w.t)]);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

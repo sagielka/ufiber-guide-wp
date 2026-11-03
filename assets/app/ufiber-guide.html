@@ -814,11 +814,15 @@ function recommend(st) {
      GROOVE / SLOT
      ====================================================== */
   if (fam === 'groove' || fam === 'disc') {
-    const w = Number(d.groove) || Number(d.width) || null;
+    // a "width" under 1.5 mm that is not marked as the groove is a burr or tolerance, not the groove
+    const w = Number(d.groove) || (Number(d.width) >= 1.5 ? Number(d.width) : null) || null;
     let grit = mode === 'polish' ? gsel.polish[0] : gsel.deburr;
     if (ov.grit) grit = ov.grit;
     if (fam === 'disc' || (w && w < 1.2)) return finishDisc(R, st, grit, mat, mode, machine, maxRpm);
-    if (!w) { lower('medium', 'Groove width not given — assumed 6 mm or wider.'); }
+    if (!w) {
+      R.warnings.push({ t: 'Groove width needed', d: 'The brush is chosen from the groove width. Showing a Ø6 surface brush, which only suits grooves 6.5 mm or wider, until you enter it. Narrower grooves (an O-ring groove is often 2–4 mm) take a point brush or the 0.8 mm disc.' });
+      lower('medium', 'Groove width not given.');
+    }
     if (!w || w >= 6.5) return finishSurface(R, st, 6, grit, mat, mode, machine, maxRpm, { groove: w });
     if (w >= 5.5) return finishEnd(R, st, grit, mat, mode, machine, maxRpm, false, { groove: w });
     const size = [1, 1.5, 2, 2.5, 3].filter(x => x <= w - 0.3).pop() || 1;
@@ -1308,7 +1312,10 @@ function scrubToolWords(s) {
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
 }
 /* "Case 1 … Case 2 …": one email, several jobs. The guide sets up one at a time. */
-const JOB_HEAD = /(?:^|\n)[ \t]*(?:case|part|application|job)[ \t]*(?:no\.?|#)?[ \t]*(\d{1,2})\b[^\n]*/gi;
+/* A job heading is a line of its own: "Case 1.", "Case 2", "Case 3 – Housing".
+   "Case 1: approximate burr thickness at the root?" in a reply is a question
+   about a job, not a new one. */
+const JOB_HEAD = /(?:^|\n)[ \t]*(?:case|part|application|job)[ \t]*(?:no\.?|#)?[ \t]*(\d{1,2})[ \t]*[.:)\-–—]?[ \t]*[^\n?]{0,60}(?=\r?\n|$)/gi;
 function caseCount(text) {
   const n = new Set([...String(text || '').matchAll(JOB_HEAD)].map(m => +m[1]));
   return n.size;
@@ -1331,8 +1338,15 @@ function splitJobs(text) {
   }
   // short, cut at a word: "15-430509-00 Adapter, APT, Chemical, 1/4" Port…"
   const field = (s, re) => { const m = s.match(re); if (!m) return ''; const v = m[1].trim(); return v.length <= 44 ? v : v.slice(0, 44).replace(/[\s,;(]+\S*$/, '') + '…'; };
+  // A reply on top of the original ("pls find below answers…") answers questions
+  // about the jobs. Keep it, numbered item by item, so each job can take the
+  // answers that are about it.
+  const pre = t.slice(0, heads[0].at);
+  const q = pre.search(/\n[ \t]*(?:from:|-{3,}\s*original|_{8,}|on .{5,80} wrote:)/i);
+  const reply = (q > 0 ? pre.slice(0, q) : '').trim();
   return {
     shared: shared.trim(),
+    reply: reply.length > 40 ? reply.slice(0, 3000) : '',
     jobs: jobs.map(j => {
       const name = field(j.text, /part\s*name\s*[:=]\s*([^\n]+)/i), mat = field(j.text, /material\s*[:=]\s*([^\n]+)/i);
       return { n: j.n, text: j.text.trim(), label: [name, mat].filter(Boolean).join(', ') };
@@ -1341,12 +1355,18 @@ function splitJobs(text) {
 }
 function jobText(split, n) {
   const j = split && split.jobs.find(x => x.n === n); if (!j) return '';
-  return j.text + (split.shared ? '\n\n' + split.shared : '');
+  // from the reply: the numbered answers that are about this job or about no job in particular
+  let rep = '';
+  if (split.reply) {
+    const items = split.reply.split(/\n(?=[ \t]*\d{1,2}[.)][ \t]*(?:\r?\n|\S))/);
+    rep = items.filter(it => { const ks = [...it.matchAll(/\b(?:case|job)[ \t]*(\d{1,2})\b/gi)].map(m => +m[1]); return !ks.length || ks.includes(n); }).join('\n').trim();
+  }
+  return j.text + (rep ? '\n\nLATEST REPLY:\n' + rep : '') + (split.shared ? '\n\n' + split.shared : '');
 }
 const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
 function burrSize(t) {
   // "burr thickness … approximately 0.1–0.3 mm": a range counts by its upper value
-  const rg = t.match(/burrs?[^\n]{0,60}?(?:thick|root|height|size)[^\n]{0,80}?(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(mm|µm|um)\b/i);
+  const rg = t.match(/burrs?[^\n]{0,60}?(?:thick|root|height|size)[\s\S]{0,160}?(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(mm|µm|um)\b/i);
   if (rg) { let v = Math.max(parseFloat(rg[1]), parseFloat(rg[2])); if (/µm|um/i.test(rg[3])) v /= 1000; if (isFinite(v) && v > 0 && v < 20) return Math.round(v * 1000) / 1000; }
   const m = t.match(/burrs?\s*(?:height|thickness|size|root|thick|high)?\s*[:=]?\s*(?:approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*(\d+(?:\.\d+)?)\s*(mm|µm|um|")/i)
     || t.match(/(\d+(?:\.\d+)?)\s*(mm|µm|um)\s*(?:high|thick|tall|large)?\s*burr/i);
@@ -1781,7 +1801,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.27';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.28';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -2149,7 +2169,8 @@ function renderUnderstood() {
   if (d.width) chips.push(`<button class="u-chip${est('width') ? ' miss' : ''}" data-edit="width" title="${est('width') ? 'Worked out from other dimensions on the drawing — tap to correct' : ''}">${est('width') ? 'Width (est. from drawing)' : 'Width'} <b>${est('width') ? '≈' : ''}${lenOut(d.width)} ${lenU()}</b></button>`);
   // a face job with no width gets a default brush size: offer the width instead of hiding that
   else if (st.task && st.task !== 'crosshole' && ['face', 'edge'].includes(st.feature)) chips.push(`<button class="u-chip miss" data-edit="width">Width: <b>not found</b></button>`);
-  if (d.groove) chips.push(`<span class="u-chip">Groove <b>${lenOut(d.groove)} ${lenU()}</b></span>`);
+  if (d.groove) chips.push(`<button class="u-chip${est('groove') ? ' miss' : ''}" data-edit="groove">${est('groove') ? 'Groove (est. from drawing)' : 'Groove'} <b>${est('groove') ? '≈' : ''}${lenOut(d.groove)} ${lenU()}</b></button>`);
+  else if (st.feature === 'groove') chips.push(`<button class="u-chip miss" data-edit="groove">Groove width: <b>not found</b></button>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
   if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
   if (APP.parsed.machine) chips.push(`<span class="u-chip">Machine <b>${esc(MACHINES[st.machine.type] || '')}${st.machine.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}</b></span>`);
@@ -2158,8 +2179,8 @@ function renderUnderstood() {
   const aiCovers = APP.smart.questions.some(q => q.field === missing) || (APP.smart.busy && missing);
   const picker = APP.editKey || (aiCovers ? null : missing);
   let pick = '';
-  if (['main', 'cross', 'width'].includes(picker)) {
-    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)' }[picker];
+  if (['main', 'cross', 'width', 'groove'].includes(picker)) {
+    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)', groove: 'Groove width' }[picker];
     pick = `<p class="small" style="margin:12px 0 0"><b>${lbl}</b></p><div class="row" style="gap:6px;margin-top:6px"><input id="chipNum" type="number" step="0.01" min="0" inputmode="decimal" style="width:110px" value="${d[picker] ? lenVal(d[picker]) : ''}"> <span class="small">${lenU()}</span><button class="btn small" data-setdim="${picker}">OK</button></div>`;
   }
   if (picker === 'task') pick = `<p class="small" style="margin:12px 0 0"><b>What do you need to do?</b></p><div class="mini-tiles">${Object.entries(TASKS).map(([k, t]) => `<button class="chip${st.task === k ? ' on' : ''}" data-set="task" data-v="${k}">${t.short}</button>`).join('')}</div>`;
@@ -4405,7 +4426,7 @@ function extractionSpec() {
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches; American drawings give inches with a leading dot and no unit, e.g. Ø.156 = 0.156 in = 3.96 mm, and a drawing note like "hole diameter approximately Ø3–4 mm" is a stated size). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole;
-WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. For holes spread around a ring or bolt circle, the width is the radial band they occupy (outer radius − inner radius of the hole pattern + one hole Ø), because the brush follows the ring. A burr height, a tolerance or a chamfer size is never a width. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
+WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. For holes spread around a ring or bolt circle, the width is the radial band they occupy (outer radius − inner radius of the hole pattern + one hole Ø), because the brush follows the ring. A burr height, a tolerance or a chamfer size is never a width. For a groove job, "groove" = the groove's WIDTH (an O-ring groove dimensioned .115" wide → 2.9 mm), read or worked out from the drawing the same way, and listed in "estimated" when worked out. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
 CROSS-HOLE SIZES COME FROM THE INTERSECTION: "main" and "cross" are the two holes that actually MEET where the burr is. Entry counterbores, port or fitting bores (flare, thread, O-ring seat), outside diameters, flanges and the part's overall size are NOT the main bore, even when the brush passes through them on the way in. On a drawing, find the burr area (a circle, arrow or note) and follow each hole from there; the two smallest diameters that run into that spot are usually the pair. A size stated in words for the burr area ("hole diameter approximately Ø3–4 mm") outranks any number you pick off the drawing. A range like that given for the holes at the intersection means main ≈ the upper value and cross ≈ the lower one (Ø3–4 → main 4, cross 3): fill them and list both in "estimated" rather than leaving them null. Leave them null only when nothing at all bounds them.
  "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
 Several workpiece materials (e.g. "AW5083, AW7075 and stainless 1.4301"): set up ONE now and put each other one in "later". Pick the one the customer says to start with, reading the whole thread including quoted earlier messages and short answers like "-> aluminium, please"; otherwise the first one listed. Grades of the same material (5083 and 7075 are both wrought aluminium) stay together in "grades". Never ask whether a "later" material uses the same setup: it needs its own.

@@ -325,11 +325,15 @@ function recommend(st) {
      GROOVE / SLOT
      ====================================================== */
   if (fam === 'groove' || fam === 'disc') {
-    const w = Number(d.groove) || Number(d.width) || null;
+    // a "width" under 1.5 mm that is not marked as the groove is a burr or tolerance, not the groove
+    const w = Number(d.groove) || (Number(d.width) >= 1.5 ? Number(d.width) : null) || null;
     let grit = mode === 'polish' ? gsel.polish[0] : gsel.deburr;
     if (ov.grit) grit = ov.grit;
     if (fam === 'disc' || (w && w < 1.2)) return finishDisc(R, st, grit, mat, mode, machine, maxRpm);
-    if (!w) { lower('medium', 'Groove width not given — assumed 6 mm or wider.'); }
+    if (!w) {
+      R.warnings.push({ t: 'Groove width needed', d: 'The brush is chosen from the groove width. Showing a Ø6 surface brush, which only suits grooves 6.5 mm or wider, until you enter it. Narrower grooves (an O-ring groove is often 2–4 mm) take a point brush or the 0.8 mm disc.' });
+      lower('medium', 'Groove width not given.');
+    }
     if (!w || w >= 6.5) return finishSurface(R, st, 6, grit, mat, mode, machine, maxRpm, { groove: w });
     if (w >= 5.5) return finishEnd(R, st, grit, mat, mode, machine, maxRpm, false, { groove: w });
     const size = [1, 1.5, 2, 2.5, 3].filter(x => x <= w - 0.3).pop() || 1;
@@ -819,7 +823,10 @@ function scrubToolWords(s) {
     .replace(/\b(brush(?:es)?|hone|stone|burr|wheel|disc|disk|pad|bristle)\s+(?:of|made of|with)?\s*(ceramic|diamond|carbide|abrasive|nylon)/gi, ' ');
 }
 /* "Case 1 … Case 2 …": one email, several jobs. The guide sets up one at a time. */
-const JOB_HEAD = /(?:^|\n)[ \t]*(?:case|part|application|job)[ \t]*(?:no\.?|#)?[ \t]*(\d{1,2})\b[^\n]*/gi;
+/* A job heading is a line of its own: "Case 1.", "Case 2", "Case 3 – Housing".
+   "Case 1: approximate burr thickness at the root?" in a reply is a question
+   about a job, not a new one. */
+const JOB_HEAD = /(?:^|\n)[ \t]*(?:case|part|application|job)[ \t]*(?:no\.?|#)?[ \t]*(\d{1,2})[ \t]*[.:)\-–—]?[ \t]*[^\n?]{0,60}(?=\r?\n|$)/gi;
 function caseCount(text) {
   const n = new Set([...String(text || '').matchAll(JOB_HEAD)].map(m => +m[1]));
   return n.size;
@@ -842,8 +849,15 @@ function splitJobs(text) {
   }
   // short, cut at a word: "15-430509-00 Adapter, APT, Chemical, 1/4" Port…"
   const field = (s, re) => { const m = s.match(re); if (!m) return ''; const v = m[1].trim(); return v.length <= 44 ? v : v.slice(0, 44).replace(/[\s,;(]+\S*$/, '') + '…'; };
+  // A reply on top of the original ("pls find below answers…") answers questions
+  // about the jobs. Keep it, numbered item by item, so each job can take the
+  // answers that are about it.
+  const pre = t.slice(0, heads[0].at);
+  const q = pre.search(/\n[ \t]*(?:from:|-{3,}\s*original|_{8,}|on .{5,80} wrote:)/i);
+  const reply = (q > 0 ? pre.slice(0, q) : '').trim();
   return {
     shared: shared.trim(),
+    reply: reply.length > 40 ? reply.slice(0, 3000) : '',
     jobs: jobs.map(j => {
       const name = field(j.text, /part\s*name\s*[:=]\s*([^\n]+)/i), mat = field(j.text, /material\s*[:=]\s*([^\n]+)/i);
       return { n: j.n, text: j.text.trim(), label: [name, mat].filter(Boolean).join(', ') };
@@ -852,12 +866,18 @@ function splitJobs(text) {
 }
 function jobText(split, n) {
   const j = split && split.jobs.find(x => x.n === n); if (!j) return '';
-  return j.text + (split.shared ? '\n\n' + split.shared : '');
+  // from the reply: the numbered answers that are about this job or about no job in particular
+  let rep = '';
+  if (split.reply) {
+    const items = split.reply.split(/\n(?=[ \t]*\d{1,2}[.)][ \t]*(?:\r?\n|\S))/);
+    rep = items.filter(it => { const ks = [...it.matchAll(/\b(?:case|job)[ \t]*(\d{1,2})\b/gi)].map(m => +m[1]); return !ks.length || ks.includes(n); }).join('\n').trim();
+  }
+  return j.text + (rep ? '\n\nLATEST REPLY:\n' + rep : '') + (split.shared ? '\n\n' + split.shared : '');
 }
 const BURR_BEFORE = /burrs?\s*(height|thickness|size|root|thick|high)?\s*[:=]?\s*(approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*$/i;
 function burrSize(t) {
   // "burr thickness … approximately 0.1–0.3 mm": a range counts by its upper value
-  const rg = t.match(/burrs?[^\n]{0,60}?(?:thick|root|height|size)[^\n]{0,80}?(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(mm|µm|um)\b/i);
+  const rg = t.match(/burrs?[^\n]{0,60}?(?:thick|root|height|size)[\s\S]{0,160}?(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(mm|µm|um)\b/i);
   if (rg) { let v = Math.max(parseFloat(rg[1]), parseFloat(rg[2])); if (/µm|um/i.test(rg[3])) v /= 1000; if (isFinite(v) && v > 0 && v < 20) return Math.round(v * 1000) / 1000; }
   const m = t.match(/burrs?\s*(?:height|thickness|size|root|thick|high)?\s*[:=]?\s*(?:approx\.?|approximately|about|ca\.?|~|≈|around|up to|max\.?|of|is|are)?\s*(\d+(?:\.\d+)?)\s*(mm|µm|um|")/i)
     || t.match(/(\d+(?:\.\d+)?)\s*(mm|µm|um)\s*(?:high|thick|tall|large)?\s*burr/i);
