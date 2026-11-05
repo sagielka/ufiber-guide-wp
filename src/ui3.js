@@ -377,6 +377,15 @@ document.addEventListener('click', e => {
     if (APP.ws.dims.main && APP.ws.dims.cross && APP.ws.dims.cross > APP.ws.dims.main) [APP.ws.dims.main, APP.ws.dims.cross] = [APP.ws.dims.cross, APP.ws.dims.main];
     APP.editKey = null; renderUnderstood(); updateGo(); return;
   }
+  if (d.setburr) { APP.ws.burr = d.setburr; delete APP.ws.burrMm; APP.parsed = { ...(APP.parsed || {}), burr: d.setburr }; APP.ws.override = {}; APP.editKey = null; renderUnderstood(); updateGo(); return; }
+  if (d.setmach) { APP.ws.machine = { ...(APP.ws.machine || {}), type: d.setmach }; APP.parsed = { ...(APP.parsed || {}), machine: { ...(APP.parsed?.machine || {}), type: d.setmach } }; APP.ws.override = {}; APP.editKey = null; renderUnderstood(); updateGo(); return; }
+  if (d.setra) {
+    const v = Number(String($('#chipRa')?.value || '').replace(',', '.'));
+    APP.ws.dims = APP.ws.dims || {};
+    if (d.setra === '1' && v > 0 && v < 100) { APP.ws.dims.ra = v; APP.parsed = { ...(APP.parsed || {}), ra: v }; }
+    else if (d.setra === '0') { delete APP.ws.dims.ra; if (APP.parsed) delete APP.parsed.ra; }
+    APP.editKey = null; renderUnderstood(); updateGo(); return;
+  }
   if (d.set) { APP.ws[d.set] = d.v; if (d.set === 'material') { APP.ws.sub = null; APP.ws.grades = null; } if (d.set === 'task') { if (TASKS[d.v].feature) APP.ws.feature = TASKS[d.v].feature; else if (!APP.ws.feature || ['cross', 'bore', 'hole'].includes(APP.ws.feature)) APP.ws.feature = SUGGEST_FEATURE[d.v] || null; } APP.editKey = null; renderUnderstood(); return; }
   if (t.id === 'goRes') { go('result'); return; }
   if (t.id === 'goWiz') { APP.wizI = 0; go('find'); return; }

@@ -81,22 +81,28 @@ function renderUnderstood() {
   else if (st.task && st.task !== 'crosshole' && ['face', 'edge'].includes(st.feature)) chips.push(`<button class="u-chip miss" data-edit="width">Width: <b>not found</b></button>`);
   if (d.groove) chips.push(`<button class="u-chip${est('groove') ? ' miss' : ''}" data-edit="groove">${est('groove') ? 'Groove (est. from drawing)' : 'Groove'} <b>${est('groove') ? '≈' : ''}${lenOut(d.groove)} ${lenU()}</b></button>`);
   else if (st.feature === 'groove') chips.push(`<button class="u-chip miss" data-edit="groove">Groove width: <b>not found</b></button>`);
-  if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
-  if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
+  if (d.hole) chips.push(`<button class="u-chip" data-edit="hole">Hole <b>${diaOut(d.hole)}</b></button>`);
+  if (APP.parsed.burr) chips.push(`<button class="u-chip${st.burr === 'heavy' ? ' miss' : ''}" data-edit="burr">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></button>`);
   // the grit follows the burr: when nobody said how big it is, show the assumption
-  else if (TASKS[st.task]?.mode === 'deburr') chips.push(`<span class="u-chip miss" title="The burr size sets the grit. Ask the customer, or change it in the step-by-step view.">Burr: <b>not given, ${esc(st.burr || 'light')} assumed</b></span>`);
-  if (APP.parsed.machine) chips.push(`<span class="u-chip">Machine <b>${esc(MACHINES[st.machine.type] || '')}${st.machine.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}</b></span>`);
-  if (APP.parsed.ra) chips.push(`<span class="u-chip">Ra <b>${APP.parsed.ra} µm</b></span>`);
+  else if (TASKS[st.task]?.mode === 'deburr') chips.push(`<button class="u-chip miss" data-edit="burr" title="The burr size sets the grit. Tap to set it.">Burr: <b>not given, ${esc(st.burr || 'light')} assumed</b></button>`);
+  const mtxt = `${esc(MACHINES[st.machine?.type] || '')}${st.machine?.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine?.iface ? ', ' + st.machine.iface : ''}`;
+  if (APP.parsed.machine) chips.push(`<button class="u-chip" data-edit="machine">Machine <b>${mtxt}</b></button>`);
+  // the machine changes the brush and the speeds: show the default instead of hiding it
+  else if (st.task) chips.push(`<button class="u-chip miss" data-edit="machine" title="Tap to set the machine.">Machine: <b>not given, ${mtxt || 'machining centre'} assumed</b></button>`);
+  if (APP.parsed.ra || d.ra) chips.push(`<button class="u-chip" data-edit="ra">Ra <b>${d.ra || APP.parsed.ra} µm</b></button>`);
   const missing = !st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null));
   const aiCovers = APP.smart.questions.some(q => q.field === missing) || (APP.smart.busy && missing);
   const picker = APP.editKey || (aiCovers ? null : missing);
   let pick = '';
-  if (['main', 'cross', 'width', 'groove'].includes(picker)) {
-    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)', groove: 'Groove width' }[picker];
+  if (['main', 'cross', 'width', 'groove', 'hole'].includes(picker)) {
+    const lbl = { main: 'Main bore diameter (the bore the brush enters, at the intersection)', cross: 'Cross hole diameter', width: 'Width of the area to treat (outer Ø for a round seal or face)', groove: 'Groove width', hole: 'Hole diameter' }[picker];
     pick = `<p class="small" style="margin:12px 0 0"><b>${lbl}</b></p><div class="row" style="gap:6px;margin-top:6px"><input id="chipNum" type="number" step="0.01" min="0" inputmode="decimal" style="width:110px" value="${d[picker] ? lenVal(d[picker]) : ''}"> <span class="small">${lenU()}</span><button class="btn small" data-setdim="${picker}">OK</button></div>`;
   }
   if (picker === 'task') pick = `<p class="small" style="margin:12px 0 0"><b>What do you need to do?</b></p><div class="mini-tiles">${Object.entries(TASKS).map(([k, t]) => `<button class="chip${st.task === k ? ' on' : ''}" data-set="task" data-v="${k}">${t.short}</button>`).join('')}</div>`;
   if (picker === 'material') pick = `<p class="small" style="margin:12px 0 0"><b>Which material?</b></p><div class="mini-tiles">${Object.entries(MATERIALS).map(([k, m]) => `<button class="chip${st.material === k ? ' on' : ''}" data-set="material" data-v="${k}">${m.name}</button>`).join('')}</div>`;
+  if (picker === 'burr') pick = `<p class="small" style="margin:12px 0 0"><b>How big is the burr?</b> <span class="muted">It sets the grit.</span></p><div class="mini-tiles">${[['light', 'Light — bends with a fingernail'], ['medium', 'Medium — visible, a bit stiff'], ['heavy', 'Heavy — over 0.2 mm at the root']].map(([k, t]) => `<button class="chip${APP.parsed.burr && st.burr === k ? ' on' : ''}" data-setburr="${k}">${t}</button>`).join('')}</div>`;
+  if (picker === 'machine') pick = `<p class="small" style="margin:12px 0 0"><b>Where will it run?</b></p><div class="mini-tiles">${Object.entries(MACHINES).map(([k, m]) => `<button class="chip${APP.parsed.machine && st.machine?.type === k ? ' on' : ''}" data-setmach="${k}">${m}</button>`).join('')}</div>`;
+  if (picker === 'ra') pick = `<p class="small" style="margin:12px 0 0"><b>Required Ra</b></p><div class="row" style="gap:6px;margin-top:6px"><input id="chipRa" type="number" step="0.01" min="0" inputmode="decimal" style="width:110px" value="${d.ra || APP.parsed.ra || ''}"> <span class="small">µm</span><button class="btn small" data-setra="1">OK</button><button class="btn ghost small" data-setra="0">No Ra requirement</button></div>`;
   if (picker === 'feature') pick = `<p class="small" style="margin:12px 0 0"><b>Where is the feature?</b></p><div class="mini-tiles">${Object.entries(FEATURES).filter(([k]) => k !== 'cross' && k !== 'bore').map(([k, f]) => `<button class="chip${st.feature === k ? ' on' : ''}" data-set="feature" data-v="${k}">${f}</button>`).join('')}</div>`;
   el.innerHTML = `<div class="understood fade-in"><b>Here's what I understood</b> <span class="tiny">— tap anything to change it</span>
     <div class="u-list">${chips.join('')}</div>${laterBlock(st)}${typeof xFoundBlock === 'function' ? xFoundBlock() : ''}${smartBlock()}${pick}

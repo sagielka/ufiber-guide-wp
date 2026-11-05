@@ -260,6 +260,31 @@ async def main():
             ok('an estimated width is shown as one', 'est. from drawing' in esj['before'] and '≈15' in esj['before'], esj['before'][:200])
             ok('typing the width replaces the estimate', esj['w'] == 16 and not esj['est'] and 'est. from drawing' not in esj['after'], es[:300])
 
+            # --- every chip can be changed: burr, machine and Ra were plain labels (1.6.32) ---
+            await page.evaluate("() => go('')")
+            await page.wait_for_timeout(300)
+            ch = await page.evaluate("""async () => {
+                const wait = (ms) => new Promise(r => setTimeout(r, ms));
+                doAsk('Cross-hole deburring, Ti6Al4V medical pin', { ai: false });
+                applyExtraction({ task: 'crosshole', material: 'titanium', burr: 'medium', dims: { main: 4.6, ra: 0.4 }, machine: { type: 'hand' }, summary: 'x', questions: [] }, null);
+                renderUnderstood(); await wait(100);
+                const out = {};
+                out.edits = [...document.querySelectorAll('#understood .u-chip')].map(c => c.dataset.edit || null);
+                document.querySelector('[data-edit="burr"]').click(); await wait(100);
+                document.querySelector('[data-setburr="light"]').click(); await wait(100);
+                document.querySelector('[data-edit="machine"]').click(); await wait(100);
+                document.querySelector('[data-setmach="mc"]').click(); await wait(100);
+                document.querySelector('[data-edit="ra"]').click(); await wait(100);
+                document.querySelector('#chipRa').value = '0.8'; document.querySelector('[data-setra="1"]').click(); await wait(100);
+                out.burr = APP.ws.burr; out.mach = APP.ws.machine.type; out.ra = APP.ws.dims.ra;
+                out.text = document.querySelector('#understood').innerText;
+                clearAsk(); await wait(100);
+                return JSON.stringify(out); }""")
+            chj = json.loads(ch)
+            ok('every chip in "what I understood" can be tapped', all(chj['edits']), chj['edits'])
+            ok('burr, machine and Ra are changed from their chips', chj['burr'] == 'light' and chj['mach'] == 'mc' and chj['ra'] == 0.8, ch[:300])
+            ok('the chips show the new values', 'light' in chj['text'] and 'CNC machining center' in chj['text'] and '0.8' in chj['text'], chj['text'][:300])
+
             # --- a cross-hole reading without its sizes asks once more, about the sizes only (1.6.16) ---
             await page.evaluate("() => go('')")
             await page.wait_for_timeout(300)

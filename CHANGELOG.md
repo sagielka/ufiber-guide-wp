@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.32 – 2026-11-05
+- Every chip under "Here's what I understood" can now be tapped and changed,
+  as the heading promises. Burr, Machine, Ra and Hole were plain labels, so a
+  wrong reading (a cross-hole job read as "Hand tool / E-Pack", burr
+  "medium") could only be fixed in the step-by-step view.
+- When the machine is not given, a chip says which one is assumed
+  ("Machine: not given, CNC machining center assumed"), like the burr chip.
+
 ## 1.6.31 – 2026-11-05
 - Claude no longer guesses the burr size. It sets it only when the email, a
   photo or the drawing describes or sizes the burr, and otherwise asks. A
