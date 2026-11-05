@@ -219,7 +219,7 @@ Can you suggest any tools and conditions for this?`;
   const st = Object.assign(E.newState(), { task: 'polish', feature: 'face', material: 'aluminum', sub: 'wrought', grades: ['AW-5083', 'AW-7075'], burr: 'light' });
   const back = E.SHARE.decode(E.SHARE.encode(st));
   eq('grades travel in a shared link', back.grades, ['AW-5083', 'AW-7075']);
-  ok('a polishing link carries no burr level', !JSON.parse(Buffer.from(E.SHARE.encode(st).replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()).b);
+  ok('a polishing link carries no burr level', E.SHARE.encode(st).split('_')[4] === '', E.SHARE.encode(st));
 }
 
 /* ---- the facts handed to the AI are read from the tables, not written out ---- */
@@ -534,6 +534,19 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('only link-safe characters', /^[A-Za-z0-9\-_]+$/.test(E.SHARE.encode(al)));
   const old = 'eyJ0IjoiY3Jvc3Nob2xlIiwiZiI6ImNyb3NzIiwibSI6InBsYXN0aWMiLCJiIjoibWVkaXVtIiwiZCI6eyJ3aWR0aCI6MC4zLCJtYWluIjozLjk2LCJjcm9zcyI6My4wNX0sImMiOnsidHlwZSI6Im1jIiwibWF4UnBtIjoxMDAwMCwiaWZhY2UiOiJCVDQwIiwiY29vbGFudCI6dHJ1ZSwidW5ldmVuIjpmYWxzZX0sInciOmZhbHNlfQ';
   ok('old long links still open', E.SHARE.decode(old)?.dims?.main === 3.96);
+  // grades, a competitor code and overrides used to force the 200-character base64 form (1.6.35)
+  const ti = Object.assign(E.newState(), { task: 'crosshole', feature: 'cross', material: 'titanium', burr: 'medium', grades: ['Ti6Al4V'], dims: { main: 4.6, ra: 0.4 } });
+  const tt = E.SHARE.encode(ti);
+  ok('a setup with a grade stays a short link', tt === '2_ch_cr_ti_m_M4p6A0p4_mc_gTi6Al4V', tt);
+  eq('and the grade comes back', E.SHARE.decode(tt).grades, ['Ti6Al4V']);
+  const ov = Object.assign(E.newState(), { task: 'crosshole', feature: 'cross', material: 'aluminum', sub: 'wrought', grades: ['AW-5083', 'EN AW-7075'], fromX: 'A11-CB_05M', sfRow: 22, override: { grit: 200, dia: 1.5, family: 'crosshole' }, dims: { main: 4.6 } });
+  const ot = E.SHARE.encode(ov), ob = E.SHARE.decode(ot);
+  ok('grades with dashes and spaces, a competitor code, a NOGA row and overrides stay short and link-safe', /^2_/.test(ot) && ot.length < 110 && /^[A-Za-z0-9\-_]+$/.test(ot), ot);
+  ok('they all come back unchanged', JSON.stringify(ob.grades) === JSON.stringify(E.cleanGrades(['AW-5083', 'EN AW-7075'])) && ob.fromX === 'A11-CB_05M' && ob.sfRow === 22 && ob.override.grit === 200 && ob.override.dia === 1.5 && ob.override.family === 'crosshole', ob);
+  ok('the short link gives the same tool as the setup', E.recommend(ob).sku === E.recommend(ov).sku);
+  const userLink = 'eyJ0IjoiY3Jvc3Nob2xlIiwiZiI6ImNyb3NzIiwibSI6InRpdGFuaXVtIiwiYiI6Im1lZGl1bSIsImQiOnsicmEiOjAuNCwibWFpbiI6NC42fSwiYyI6eyJ0eXBlIjoiaGFuZCIsIm1heFJwbSI6bnVsbCwiaWZhY2UiOm51bGwsImNvb2xhbnQiOnRydWUsInVuZXZlbiI6ZmFsc2V9LCJnIjpbIlRpNkFsNFYiXX0';
+  const ul = E.SHARE.decode(userLink), ut = E.SHARE.encode(ul);
+  ok('the long Ti6Al4V link from 5-Nov still opens and is re-shared short', ul.dims.main === 4.6 && /^2_ch_cr_ti_m_/.test(ut) && ut.length < 40 && E.SHARE.decode(ut).grades[0] === 'Ti6Al4V', ut);
   ok('a burr range counts by its upper value', E.parseText('Case 1: approximate burr thickness at the root? Estimated to be approximately 0.1–0.3 mm.').burrMm === 0.3);
 }
 

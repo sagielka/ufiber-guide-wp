@@ -27,8 +27,17 @@ const SHARE = (() => {
   const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
   const num = v => String(+Number(v).toFixed(3)).replace('.', 'p');
   const unnum = s => parseFloat(String(s).replace('p', '.'));
+  /* Free text (grades, a competitor code, an override family) in a short link
+     (1.6.35): letters and digits stay as they are, every other byte becomes
+     "-" + two hex digits, so "Ti6Al4V" stays "Ti6Al4V" and "AW-5083" is
+     "AW-2d5083". Extra parts follow the machine part, each tagged by its first
+     letter: g grades · x competitor code · r NOGA row · G grit · D size · F family. */
+  const esc = s => unescape(encodeURIComponent(String(s))).replace(/[^A-Za-z0-9]/g, c => '-' + c.charCodeAt(0).toString(16).padStart(2, '0'));
+  const unesc = s => decodeURIComponent(escape(String(s).replace(/-([0-9a-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))));
+  const OV_KEYS = ['grit', 'dia', 'family'];
   function encode2(st) {
-    if (st.grades?.length || st.fromX || st.sfRow || (st.override && Object.keys(st.override).length)) return '';
+    const ov = st.override || {};
+    if (Object.keys(ov).some(k => !OV_KEYS.includes(k))) return '';
     if (!T2[st.task] || (st.feature && !F2[st.feature]) || (st.material && !M2[st.material])) return '';
     const dims = Object.entries(st.dims || {}).filter(([k, v]) => D2[k] && v != null && isFinite(Number(v)) && Number(v) > 0).map(([k, v]) => D2[k] + num(v)).join('');
     const deburr = TASKS[st.task]?.mode === 'deburr';
@@ -36,7 +45,14 @@ const SHARE = (() => {
     const m = st.machine || {};
     const mach = (C2[m.type] || 'mc') + (m.maxRpm ? 'R' + Math.round(m.maxRpm) : '') + (m.iface === 'BT40' ? 'B4' : m.iface === 'BT30' ? 'B3' : '') + (m.uneven ? 'U' : '') + (m.coolant === false ? 'N' : '');
     const mat = st.material ? M2[st.material] + (st.sub && S2[st.sub] ? '-' + S2[st.sub] : '') : '';
-    return ['2', T2[st.task], st.feature ? F2[st.feature] : '', mat, burr, dims, mach + (st.through ? 'W' : '')].join('_');
+    const extra = [];
+    if (st.grades?.length) extra.push('g' + esc(st.grades.join(',')));
+    if (st.fromX) extra.push('x' + esc(st.fromX));
+    if (st.sfRow) extra.push('r' + num(st.sfRow));
+    if (ov.grit) extra.push('G' + num(ov.grit));
+    if (ov.dia) extra.push('D' + num(ov.dia));
+    if (ov.family) extra.push('F' + esc(ov.family));
+    return ['2', T2[st.task], st.feature ? F2[st.feature] : '', mat, burr, dims, mach + (st.through ? 'W' : ''), ...extra].join('_');
   }
   function decode2(token) {
     const p = token.split('_'); if (p[0] !== '2' || p.length < 7) return null;
@@ -46,6 +62,17 @@ const SHARE = (() => {
     for (const [, k, v] of p[5].matchAll(/([A-Z])([0-9p]+)/g)) if (inv(D2)[k]) raw.d[inv(D2)[k]] = unnum(v);
     const mm = p[6].match(/^([a-z0-9]{2})(?:R(\d+))?(B4|B3)?(U)?(N)?(W)?$/);
     if (mm) { raw.c = { type: inv(C2)[mm[1]] || 'mc', maxRpm: mm[2] ? +mm[2] : null, iface: mm[3] === 'B4' ? 'BT40' : mm[3] === 'B3' ? 'BT30' : null, uneven: !!mm[4], coolant: !mm[5] }; if (mm[6]) raw.w = true; }
+    for (const seg of p.slice(7)) {
+      const tag = seg[0], v = seg.slice(1); if (!v) continue;
+      try {
+        if (tag === 'g') raw.g = unesc(v).split(',').filter(Boolean);
+        else if (tag === 'x') raw.x = unesc(v);
+        else if (tag === 'r') raw.r = unnum(v);
+        else if (tag === 'G') (raw.o = raw.o || {}).grit = unnum(v);
+        else if (tag === 'D') (raw.o = raw.o || {}).dia = unnum(v);
+        else if (tag === 'F') (raw.o = raw.o || {}).family = unesc(v);
+      } catch (e) { }
+    }
     return raw;
   }
   function encode(st) {

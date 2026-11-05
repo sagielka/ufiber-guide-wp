@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.35 – 2026-11-05
+- Share links stay short when the setup has a material grade, a replaced
+  competitor code, a chosen NOGA row or a changed grit, size or family. These
+  used to fall back to the ~200-character base64 form; they are now written as
+  extra short parts (`2_ch_cr_ti_m_M4p6A0p4_mc_gTi6Al4V`). Old long links still
+  open, and are re-shared in the short form.
+
 ## 1.6.34 – 2026-11-05
 - Titanium, refined (NOGA, Sagi): the "#400 first, #200 as the second
   option" rule is for medium and heavy burrs. Heavy burrs in titanium now start
