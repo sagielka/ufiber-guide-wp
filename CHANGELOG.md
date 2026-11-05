@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.30 – 2026-11-05
+- A cross-hole job marked "by hand" no longer turns into an End brush. The
+  burr sits inside the bore, where no hand-held brush reaches it, and the
+  E-Pack takes only End and Point brushes, discs and stones. The guide now
+  keeps the cross-hole brush that fits the bore, sets it up for a machining
+  centre, and says why. A Point brush on the E-Pack stays one tap away for a
+  burr that can be seen at the bore entrance. (A Ti6Al4V pin with a Ø4.6 bore
+  was given a Ø5 End brush by hand, which cannot even enter the bore; it now
+  gets UF2215 Ø1.5 #200.)
+- Claude no longer guesses the machine. It fills it in only when the job says
+  where the work will run, and is told that signatures, banners ("less manual
+  work"), logos and pictures of tools say nothing about the customer's
+  machine. A distributor's e-mail that never mentioned hand work was read
+  as hand work.
+- The cross-hole diagram no longer shows a made-up cross-hole size when none
+  was given ("Cross hole Ø2.3" for a Ø4.6 bore); it says "Cross hole".
+
 ## 1.6.29 – 2026-11-03
 - A second shared link opened in the same browser tab now shows its own
   setup. Links to the same page differ only after the #, and changing that part

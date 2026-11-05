@@ -239,7 +239,18 @@ function recommend(st) {
   else fam = 'surface';
   if (machine === 'hand') {
     if (fam === 'surface') { fam = 'end'; R.notes.push('Surface and cross-hole brushes need controlled RPM and depth on a machine. By hand, use End or Point brushes on the UFIBER E-Pack.'); }
-    if (fam === 'crossOrShank') { fam = 'small'; lower('low', 'Hand-held cross-hole work is operator-dependent.'); }
+  }
+  // A cross-hole burr sits inside the bore. No hand-held brush reaches it, and the
+  // E-Pack takes only End/Point brushes, discs and stones. Keep the brush that fits
+  // the bore, set it up for a machine and say so, instead of handing back a
+  // hand-held End brush that is wider than the bore (Ti6Al4V pin, Ø4.6 bore, 1.6.30).
+  let crossMachine = machine;
+  if (machine === 'hand' && fam === 'crossOrShank' && (!ov.family || ['crosshole', 'shank'].includes(ov.family))) {
+    crossMachine = 'mc';
+    const mb = Number(d.main) || null;
+    R.warnings.push({ t: 'Cross-hole brushes run on a machine, not by hand', d: `The burr is inside the ${mb ? 'Ø' + fmtMm(mb) + ' mm ' : ''}bore, where a hand-held brush cannot reach it, and the E-Pack takes only End and Point brushes, discs and diamond stones. Run this cross-hole brush in a machining centre, an axial live tool on a lathe, a dedicated machine or a robot. The setup below is for a machining centre.` });
+    lower('medium', 'Cross-hole brushes are not for hand use; set up for a machine instead.');
+    R.alts.push({ label: 'Point brush by hand (E-Pack)', note: 'Only for a burr you can see and reach near the bore entrance.', ov: { family: 'point' } });
   }
   if (ov.family) fam = ov.family;
   if (airTool && fam !== 'diamond') R.warnings.push({ t: 'Air-powered tool', d: 'NOGA does not recommend pneumatic-powered hand tools for UFIBER End brushes, Point brushes or discs because the speed is not controlled. Use an electric handpiece such as the E-Pack. Ceramic Diamond Stones are the exception: they suit pneumatic tools at controlled high speed.' });
@@ -289,8 +300,8 @@ function recommend(st) {
       lower('low', 'Bore smaller than the cross-hole range.');
       return finishPoint(R, st, Math.min(3, Math.max(1, Math.floor(main * 2) / 2 - 0.5)), grit, mat, mode, machine, maxRpm);
     }
-    if (shank) return finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross);
-    return finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross, feature);
+    if (shank) return finishShank(R, st, size, grit, mat, mode, crossMachine, maxRpm, main, cross);
+    return finishCross(R, st, size, grit, mat, mode, crossMachine, maxRpm, main, cross, feature);
   }
 
   /* ======================================================

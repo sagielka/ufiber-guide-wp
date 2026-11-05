@@ -14,7 +14,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.29';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.30';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -184,7 +184,7 @@ function crossLayout() {
   const M = lathe ? (x, yy) => [330 - yy, 165 + x] : (x, yy) => [192 + x, 40 + yy];
   const frame = lathe ? 'matrix(0 1 -1 0 330 165)' : 'translate(192 40)';
   const icon = lathe ? [385, 300] : [370, 26];
-  return { lathe, main, cross, slotW: Number(d.slotW) || null, slotL: Number(d.slotL) || null, through: !!ws.through, bw, PW, Lp, ops, ft, fb, M, frame, icon, vb: lathe ? '0 0 420 340' : '0 0 420 330', len: 72 };
+  return { lathe, main, cross, crossGiven: !!Number(d.cross), slotW: Number(d.slotW) || null, slotL: Number(d.slotL) || null, through: !!ws.through, bw, PW, Lp, ops, ft, fb, M, frame, icon, vb: lathe ? '0 0 420 340' : '0 0 420 330', len: 72 };
 }
 function dgCross(R) {
   const L = crossLayout(), { bw, PW, Lp, ops, ft, fb, M, icon } = L, hb = bw / 2, hex = R.grit.hex;
@@ -200,7 +200,7 @@ function dgCross(R) {
   }
   const txt = (x, y, s, o = {}) => `<text x="${x}" y="${y}" font-size="${o.size || 13}" text-anchor="${o.a || 'start'}" fill="var(${o.c || '--ink-2'})" font-family="Barlow,sans-serif"${o.w ? ` font-weight="${o.w}"` : ''}>${s}</text>`;
   const both = L.through ? ' · both sides' : '';
-  const opName = o => o.kind === 'cross' ? `Cross hole ${diaOut(L.cross)}${both}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}${both}`;
+  const opName = o => o.kind === 'cross' ? `Cross hole${L.crossGiven ? ' ' + diaOut(L.cross) : ''}${both}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}${both}`;
   let labels = '';
   if (L.lathe) {
     labels += txt(34, 22, 'Bar in the main spindle: stopped, C-axis locked', { size: 12 });
@@ -211,7 +211,7 @@ function dgCross(R) {
     labels += txt(xb + 4, 86, '5 mm before', { w: 600, c: '--accent' }) + txt(xp - 4, 86, '5 mm past', { a: 'end', w: 600, c: '--accent' });
   } else {
     labels += txt(142, 20, `Main bore ${diaOut(L.main)}`, { a: 'end', w: 600 }) + txt(142, 35, 'enter here ↓', { a: 'end', w: 600, c: '--accent' });
-    const vName = o => o.kind === 'cross' ? `Cross hole ${diaOut(L.cross)}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}`;
+    const vName = o => o.kind === 'cross' ? `Cross hole${L.crossGiven ? ' ' + diaOut(L.cross) : ''}` : `Slot ${[L.slotW, L.slotL].filter(Boolean).map(lenOutT).join(' × ')} ${lenU()}`;
     ops.forEach(o => { const [x, y] = M(hb + 10, o.c + (L.through ? -2 : 5)); labels += txt(x, y, vName(o), { size: 12.5 }) + (L.through ? txt(x, y + 15, 'both sides', { size: 12 }) : ''); });
     const [xl, yb] = M(-hb - 34, ft - 18), [, yp] = M(0, fb + 26);
     labels += txt(xl, yb, '5 mm before', { a: 'end', w: 600, c: '--accent' }) + txt(xl, yp, '5 mm past', { a: 'end', w: 600, c: '--accent' });

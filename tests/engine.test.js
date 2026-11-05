@@ -563,5 +563,29 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a groove without its width says so, and a 0.3 "width" is not taken for it', R.warnings.some(w => /Groove width needed/.test(w.t)) && R.family !== 'disc', [R.family, R.warnings.map(w => w.t)]);
 }
 
+/* ---- a cross-hole job marked "by hand" keeps the brush that fits the bore (1.6.30) ---- */
+{
+  const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'titanium', burr: 'medium', dims: { main: 4.6, ra: 0.4 } });
+  st.machine.type = 'hand';
+  const R = E.recommend(st);
+  ok('a Ø4.6 bore by hand still gets the Ø1.5 cross-hole brush, not a Ø5 end brush', R.family === 'crosshole' && R.dia === 1.5, [R.family, R.dia]);
+  ok('it says cross-hole brushes run on a machine', R.warnings.some(w => /run on a machine, not by hand/.test(w.t)), R.warnings.map(w => w.t));
+  ok('no E-Pack is offered as the drive for a cross-hole brush', !R.holders.some(h => h.sku === 'UF9999'), R.holders);
+  ok('the setup is not high confidence', R.conf.level !== 'high', R.conf);
+  ok('a hand-held point brush is offered as the alternative', R.alts.some(a => a.ov && a.ov.family === 'point'), R.alts.map(a => a.label));
+  st.override = { family: 'point' };
+  const P = E.recommend(st);
+  ok('choosing that alternative gives a point brush on the E-Pack', P.family === 'point' && P.holders.some(h => h.sku === 'UF9999'), [P.family, P.holders]);
+  st.override = {}; st.machine.type = 'mc';
+  const M = E.recommend(st);
+  ok('on a machining centre: UF2215 Ø1.5 #200 for Ti6Al4V', M.sku === 'UF2215' && !M.warnings.some(w => /not by hand/.test(w.t)), [M.sku, M.warnings.map(w => w.t)]);
+}
+
+/* ---- a signature banner is not the customer's machine (1.6.30) ---- */
+{
+  const spec = vm.runInContext('typeof extractionSpec === "function" ? extractionSpec() : ""', ctx);
+  ok('Claude is told not to take the machine from signatures, banners or tool pictures', /MACHINE:/.test(spec) && /signatures and banners/.test(spec) && /never guess/.test(spec), spec.length);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
