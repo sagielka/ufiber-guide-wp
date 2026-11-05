@@ -596,7 +596,11 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('titanium with a medium burr starts at #400, not #200 (Sagi, 1.6.33)', Rm.grit.grit === 400 && Rm.sku === 'UF2315', [Rm.grit.grit, Rm.sku]);
   ok('#200 is offered as the second option', Rm.alts.some(a => /Second option — #200/.test(a.label) && a.ov && a.ov.grit === 200), Rm.alts.map(a => a.label));
   st.burr = 'heavy';
-  ok('a heavy burr in titanium still starts coarse', E.recommend(st).grit.grit === 150);
+  const Rh = E.recommend(st);
+  ok('a heavy burr in titanium also starts at #400 with #200 second (Sagi, 1.6.34)', Rh.grit.grit === 400 && Rh.alts.some(a => /Second option — #200/.test(a.label)), [Rh.grit.grit, Rh.alts.map(a => a.label)]);
+  st.burr = 'light';
+  const Rl = E.recommend(st);
+  ok('a light burr in titanium is #400 without the "second option" rule', Rl.grit.grit === 400 && !Rl.alts.some(a => /Second option/.test(a.label)), Rl.alts.map(a => a.label));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

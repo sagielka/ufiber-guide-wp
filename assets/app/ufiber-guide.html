@@ -625,8 +625,8 @@ const MATERIALS = {
               grit: { light: 1200, medium: 800, heavy: 600 }, polish: [1200, 2000],
               feedD: 1400, feedP: 1200, docD: 0.3, docP: 0.12, chFeed: 375, coolant: 'Wet or MQL' },
   titanium: { name: 'Titanium', iso: 'S', pos: 0.1, vcDisc: [60, 120],
-              /* medium burr: #400 first, #200 only if #400 leaves the burr (NOGA, Sagi 5-Nov-2026) */
-              grit: { light: 400, medium: 400, heavy: 150 }, polish: [400, 800, 1000],
+              /* medium and heavy burrs: #400 first, #200 only if #400 leaves the burr (NOGA, Sagi 5-Nov-2026) */
+              grit: { light: 400, medium: 400, heavy: 400 }, polish: [400, 800, 1000],
               feedD: 750, feedP: 600, docD: 0.2, docP: 0.1, chFeed: 250, coolant: 'Wet recommended' },
   hrsa:     { name: 'Inconel / heat-resistant alloy', iso: 'S', pos: 0.0, vcDisc: [60, 120],
               subs: { ni: 'Inconel, Hastelloy, Waspaloy', co: 'Cobalt-chrome (incl. medical CoCr)', fe: 'Fe-based heat-resistant' },
@@ -1073,7 +1073,7 @@ function finishCross(R, st, size, grit, mat, mode, machine, maxRpm, main, cross,
   if (grit >= 1200) R.watch.push('#1200 and finer are more flexible and more likely to break if misused.');
   const coarser = gritStep(grit, -1), finer = gritStep(grit, 1);
   const okG = g => !C.grits || C.grits.includes(g);
-  const tiSecond = st.material === 'titanium' && grit === 400 && coarser === 200;
+  const tiSecond = st.material === 'titanium' && grit === 400 && coarser === 200 && ['medium', 'heavy'].includes(st.burr);
   if (okG(coarser)) R.alts.push({ label: tiSecond ? 'Second option — #200' : `One grit coarser — #${coarser}`, note: tiSecond ? 'If #400 leaves the burr after extra passes. Needs slightly higher RPM to expand.' : 'If burrs remain after extra passes. Needs slightly higher RPM to expand.', ov: { grit: coarser, dia: size, family: 'crosshole' } });
   if (okG(finer) && finer <= 6000) R.alts.push({ label: `One grit finer — #${finer}`, note: 'Less edge rounding, better internal finish.', ov: { grit: finer, dia: size, family: 'crosshole' } });
   if (main && main >= SF_SPREAD15.bore) R.alts.push({ label: 'Surface brush on a shank', note: `A Ø15 surface brush without its sleeve spreads by centrifugal force: at ${SF_SPREAD15.rpm.toLocaleString()} RPM it reaches Ø${SF_SPREAD15.mid} mid-length and deburred a Ø${SF_SPREAD15.bore} cross hole in a spread test (#2000).`, ov: { family: 'shank', dia: 15, grit: main < 20 ? SF_SPREAD15.grit : 1200 } });
@@ -1218,7 +1218,7 @@ function gritWhy(st, grit, mode) {
   const q = G(grit);
   if (mode === 'polish') return `${q.action}. For ${m.name.toLowerCase()} polishing, NOGA starts at #${materialGrit(st).polish[0]} and moves finer for the final finish.`;
   const burr = st.burr || 'light';
-  if (st.material === 'titanium' && grit === 400 && burr !== 'heavy') return `${q.action}. For ${burr} burrs in titanium NOGA starts at #400. If #400 leaves the burr after extra passes, the second option is #200.`;
+  if (st.material === 'titanium' && grit === 400) return burr === 'light' ? `${q.action}. For light burrs in titanium NOGA starts at #400.` : `${q.action}. For ${burr} burrs in titanium NOGA starts at #400. If #400 leaves the burr after extra passes, the second option is #200.`;
   return `${q.action}. For ${burr} burrs in ${m.name.toLowerCase()}, NOGA's table points here: coarser for heavier burrs and harder material, finer to keep edges crisp.`;
 }
 
@@ -1815,7 +1815,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.33';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.34';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 

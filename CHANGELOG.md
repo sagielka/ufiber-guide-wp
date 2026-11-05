@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.34 – 2026-11-05
+- Titanium, refined (NOGA, Sagi): the "#400 first, #200 as the second
+  option" rule is for medium and heavy burrs. Heavy burrs in titanium now start
+  at #400 too (they were #150). Light burrs stay at #400 without the
+  "Second option" label.
+
 ## 1.6.33 – 2026-11-05
 - Titanium with a medium burr now starts at #400; #200 is the second option,
   shown as "Second option — #200" when #400 leaves the burr (NOGA, Sagi).
