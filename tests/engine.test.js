@@ -585,6 +585,10 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
 {
   const spec = vm.runInContext('typeof extractionSpec === "function" ? extractionSpec() : ""', ctx);
   ok('Claude is told not to take the machine from signatures, banners or tool pictures', /MACHINE:/.test(spec) && /signatures and banners/.test(spec) && /never guess/.test(spec), spec.length);
+  ok('Claude is told not to guess the burr size', /never guess "medium"/.test(spec), spec.length);
+  const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'titanium', dims: { main: 4.6 } });
+  const R = E.recommend(st);
+  ok('a titanium cross hole with no burr size given starts at #400 (UF2315)', R.grit.grit === 400 && R.sku === 'UF2315', [R.grit.grit, R.sku]);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

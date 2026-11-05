@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.31 – 2026-11-05
+- Claude no longer guesses the burr size. It sets it only when the email, a
+  photo or the drawing describes or sizes the burr, and otherwise asks. A
+  Ti6Al4V cross-hole e-mail with no burr size was read as "medium", which
+  moved the grit from #400 to #200.
+- When the burr size is not given, the "understood" chips now say so
+  ("Burr: not given, light assumed"), because the burr size sets the grit.
+
 ## 1.6.30 – 2026-11-05
 - A cross-hole job marked "by hand" no longer turns into an End brush. The
   burr sits inside the bore, where no hand-held brush reaches it, and the

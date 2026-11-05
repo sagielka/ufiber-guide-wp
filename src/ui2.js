@@ -83,6 +83,8 @@ function renderUnderstood() {
   else if (st.feature === 'groove') chips.push(`<button class="u-chip miss" data-edit="groove">Groove width: <b>not found</b></button>`);
   if (d.hole) chips.push(`<span class="u-chip">Hole <b>${diaOut(d.hole)}</b></span>`);
   if (APP.parsed.burr) chips.push(`<span class="u-chip${st.burr === 'heavy' ? ' miss' : ''}">Burr <b>${st.burr}${st.burrMm ? ` · ${lenOut(st.burrMm)} ${lenU()}` : ''}</b></span>`);
+  // the grit follows the burr: when nobody said how big it is, show the assumption
+  else if (TASKS[st.task]?.mode === 'deburr') chips.push(`<span class="u-chip miss" title="The burr size sets the grit. Ask the customer, or change it in the step-by-step view.">Burr: <b>not given, ${esc(st.burr || 'light')} assumed</b></span>`);
   if (APP.parsed.machine) chips.push(`<span class="u-chip">Machine <b>${esc(MACHINES[st.machine.type] || '')}${st.machine.maxRpm ? ', ' + fmtN(st.machine.maxRpm) + ' RPM' : ''}${st.machine.iface ? ', ' + st.machine.iface : ''}</b></span>`);
   if (APP.parsed.ra) chips.push(`<span class="u-chip">Ra <b>${APP.parsed.ra} µm</b></span>`);
   const missing = !st.task ? 'task' : (!st.material ? 'material' : (!st.feature && !TASKS[st.task]?.feature ? 'feature' : null));
