@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.33 – 2026-11-05
+- Titanium with a medium burr now starts at #400; #200 is the second option,
+  shown as "Second option — #200" when #400 leaves the burr (NOGA, Sagi).
+  Light burrs stay at #400 and heavy burrs at #150. A Ti6Al4V cross hole in a
+  Ø4.6 bore is now UF2315 (UF-CH-V-D015-L50), with UF2215 as the second option.
+- Better reading of tube and pin drawings. The main bore is the long bore
+  along the part's axis; a diameter with a count in front ("6 x Ø3.6") is the
+  cross hole, never the main bore; a width with a fit and no Ø ("2.5 H8") is a
+  slot, not a hole; holes at different angles around the axis are not one
+  hole through both walls. A Ti6Al4V pin (bore Ø4.6, 6 × Ø3.6 cross holes,
+  2/2.5 H8 slots) was read as bore Ø3.6 with a Ø2.5 cross hole through both
+  walls.
+
 ## 1.6.32 – 2026-11-05
 - Every chip under "Here's what I understood" can now be tapped and changed,
   as the heading promises. Burr, Machine, Ra and Hole were plain labels, so a

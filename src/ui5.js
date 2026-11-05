@@ -286,7 +286,7 @@ ${D.text.slice(0, 14000) || '(no text — images only)'}
       try {
         const own = picked.filter(b => D.images.includes(b) && (sel == null || b.job == null || b.job === sel)).slice(0, 2);
         const big = await fitAll(own.length ? own : picked.slice(0, 1), AI_TOTAL);
-        const q = `You are reading a customer's drawing for a cross-hole deburring job${sel != null ? ' (job ' + sel + ' of the email)' : ''}. Find where the burr is (a marked circle, arrow or note) and read the diameters of the TWO holes that meet there. American drawings give inches with a leading dot (Ø.156 = 3.96 mm). Ignore entry counterbores, ports, threads and outside diameters. A note like "hole diameter approximately Ø3–4 mm" counts: main ≈ upper, cross ≈ lower.
+        const q = `You are reading a customer's drawing for a cross-hole deburring job${sel != null ? ' (job ' + sel + ' of the email)' : ''}. Find where the burr is (a marked circle, arrow or note) and read the diameters of the TWO holes that meet there. American drawings give inches with a leading dot (Ø.156 = 3.96 mm). Ignore entry counterbores, ports, threads and outside diameters. On a tube, pin or sleeve the main bore is the long bore along the part's axis; the cross holes are the holes through the wall, usually given with a count ("6 x Ø3.6"), and a count in front of a diameter never marks the main bore. A width with a fit and no Ø ("2 H8") is a slot, not a hole. A note like "hole diameter approximately Ø3–4 mm" counts: main ≈ upper, cross ≈ lower.
 Reply with ONE JSON object: {"main": mm|null, "cross": mm|null, "estimated": ["main"|"cross" for any value you did not read directly], "how": "under 20 words: where you read them"}.
 
 EMAIL TEXT (for context):

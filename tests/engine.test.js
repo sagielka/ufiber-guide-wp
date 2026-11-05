@@ -578,7 +578,7 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('choosing that alternative gives a point brush on the E-Pack', P.family === 'point' && P.holders.some(h => h.sku === 'UF9999'), [P.family, P.holders]);
   st.override = {}; st.machine.type = 'mc';
   const M = E.recommend(st);
-  ok('on a machining centre: UF2215 Ø1.5 #200 for Ti6Al4V', M.sku === 'UF2215' && !M.warnings.some(w => /not by hand/.test(w.t)), [M.sku, M.warnings.map(w => w.t)]);
+  ok('on a machining centre: UF2315 Ø1.5 #400 for Ti6Al4V with a medium burr', M.sku === 'UF2315' && !M.warnings.some(w => /not by hand/.test(w.t)), [M.sku, M.warnings.map(w => w.t)]);
 }
 
 /* ---- a signature banner is not the customer's machine (1.6.30) ---- */
@@ -586,9 +586,17 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   const spec = vm.runInContext('typeof extractionSpec === "function" ? extractionSpec() : ""', ctx);
   ok('Claude is told not to take the machine from signatures, banners or tool pictures', /MACHINE:/.test(spec) && /signatures and banners/.test(spec) && /never guess/.test(spec), spec.length);
   ok('Claude is told not to guess the burr size', /never guess "medium"/.test(spec), spec.length);
+  ok('Claude is told a counted diameter ("6 x Ø3.6") is the cross hole, not the main bore', /a count in front of a diameter marks the cross holes, never the main bore/.test(spec));
+  ok('Claude is told an H8 width is a slot, not a hole', /"2 H8"/.test(spec) && /slotW/.test(spec));
   const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'titanium', dims: { main: 4.6 } });
   const R = E.recommend(st);
   ok('a titanium cross hole with no burr size given starts at #400 (UF2315)', R.grit.grit === 400 && R.sku === 'UF2315', [R.grit.grit, R.sku]);
+  st.burr = 'medium';
+  const Rm = E.recommend(st);
+  ok('titanium with a medium burr starts at #400, not #200 (Sagi, 1.6.33)', Rm.grit.grit === 400 && Rm.sku === 'UF2315', [Rm.grit.grit, Rm.sku]);
+  ok('#200 is offered as the second option', Rm.alts.some(a => /Second option — #200/.test(a.label) && a.ov && a.ov.grit === 200), Rm.alts.map(a => a.label));
+  st.burr = 'heavy';
+  ok('a heavy burr in titanium still starts coarse', E.recommend(st).grit.grit === 150);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
