@@ -154,14 +154,28 @@ const lowOf = (a) => a[0];
 const sfPassesFor = (mode) => mode === 'polish' ? '2–3' : '1–2';
 
 /* ---------- per-family calculators ---------- */
-function sfSurface({ row, dia, grit, mode = 'deburr', worn = false, maxRpm = null }) {
+/* Nickel-based heat-resistant rows (Incoloy, Inconel, Waspaloy, Hastelloy): a surface brush on a face starts
+   at NOGA's table cutting speed, not the catalogue window. On Ø40 the window gives ~360 m/min against
+   NOGA's 25–55 m/min for hardened Ni alloys (Titan Waspaloy shield, Sagi 9-Nov-2026). Every other row keeps
+   the window: CoCr (case 89, 170–190 m/min) and grey cast iron (FT09, 275 m/min) worked well above their
+   table rows. Inside a bore (surface brush on a shank) the window stays, because the fibers must spread. */
+const SF_VC_ROWS = new Set([33, 34]);
+const sfVcBased = row => SF_VC_ROWS.has(row && row.id);
+const r10 = v => Math.max(10, Math.round(v / 10) * 10);
+function sfSurface({ row, dia, grit, mode = 'deburr', worn = false, maxRpm = null, inBore = false }) {
   const W = SF_SURF_WIN[dia]; const S = row.S; const pol = mode === 'polish';
   let start = Math.min(Math.max(r100(W[0] * (SF_GRITX[grit] || 1)), W[0]), W[1]);
   if (worn) start = Math.min(r100(start * 1.1), W[1]);
   const vc = pol ? S.vcP : S.vcD; const vcRpm = [r100(vc2rpm(vc[0], dia)), r100(vc2rpm(vc[1], dia))];
   const out = { family: 'surface', rpm: start, rpmRange: W, rpmMax: W[1], vcRange: vc, vcRpm, feedRange: pol ? S.feedP : S.feedD, engRange: pol ? S.docP : S.docD, engLabel: 'Depth of cut', engMax: 1.2, passes: pol ? '2–3' : '1–2', cool: SF_COOL[S.cool], checks: [], notes: [], source: 'NOGA Surface Brush table + NOGA RPM Advisor surface method' };
   out.feed = out.feedRange[0]; out.eng = out.engRange[0];
-  if (vcRpm[1] < W[0]) out.checks.push(`NOGA's material table (cutting speed ${vc[0]}–${vc[1]} m/min) works out to ${vcRpm[0].toLocaleString()}–${vcRpm[1].toLocaleString()} RPM for Ø${dia} — below the catalogue window for this brush (${W[0].toLocaleString()}–${W[1].toLocaleString()} RPM). NOGA's RPM Advisor and catalogue tests use the window, so this does too. If you see heat, glazing or fast wear, go lower.`);
+  if (!inBore && sfVcBased(row) && vc2rpm(vc[1], dia) < W[0]) {
+    const vr = [r10(vc2rpm(vc[0], dia)), r10(vc2rpm(vc[1], dia))];
+    out.vcRpm = vr; out.rpmRange = vr; out.vcBased = true;
+    out.rpm = worn ? Math.min(r10(vr[0] * 1.1), vr[1]) : vr[0];
+    out.source = 'NOGA Surface Brush table (cutting speed)';
+    out.checks.push(`Nickel-based alloy: the speed comes from NOGA's cutting speed for this material (${vc[0]}–${vc[1]} m/min), which is ${vr[0].toLocaleString()}–${vr[1].toLocaleString()} RPM on Ø${dia}. That is far below the catalogue window for this brush (${W[0].toLocaleString()}–${W[1].toLocaleString()} RPM), which would run about ${Math.round(Math.PI * dia * W[0] / 1000)} m/min. Start at the low end; raise the speed within the range only if burrs remain and the brush shows no heat or glazing.`);
+  } else if (vcRpm[1] < W[0]) out.checks.push(`NOGA's material table (cutting speed ${vc[0]}–${vc[1]} m/min) works out to ${vcRpm[0].toLocaleString()}–${vcRpm[1].toLocaleString()} RPM for Ø${dia} — below the catalogue window for this brush (${W[0].toLocaleString()}–${W[1].toLocaleString()} RPM). NOGA's RPM Advisor and catalogue tests use the window, so this does too. If you see heat, glazing or fast wear, go lower.`);
   else if (vcRpm[0] > W[1]) out.checks.push(`NOGA's material table works out to ${vcRpm[0].toLocaleString()}+ RPM for Ø${dia}, above the catalogue window. Staying in the window.`);
   if (pol && S.vcP[0] > S.vcD[1] * 1.5) out.checks.push(`Possible data error: NOGA's table gives a polishing cutting speed (${S.vcP[0]}–${S.vcP[1]} m/min) far higher than for deburring (${S.vcD[0]}–${S.vcD[1]} m/min) on this hard material — the opposite of every other row.`);
   if (maxRpm && out.rpm > maxRpm) { out.notes.push(`Limited to your ${maxRpm.toLocaleString()} RPM spindle.`); out.rpm = maxRpm; }
@@ -192,7 +206,7 @@ function sfShank({ row, bore, grit, mode = 'deburr', worn = false, maxRpm = null
   const out = { family: 'shank', method: 'shank', checks: [], notes: [], cool: SF_COOL[C.cool], engLabel: 'Stroke', grit, source: 'NOGA RPM Advisor surface-brush method + NOGA Cross-Hole table (feed)' };
   if (!fits.length) { out.error = 'No surface brush fits this bore.'; return out; }
   const pick = size && fits.find(f => f.d === size) ? size : fits[fits.length - 1].d;
-  const s = sfSurface({ row, dia: pick, grit, mode, worn, maxRpm });
+  const s = sfSurface({ row, dia: pick, grit, mode, worn, maxRpm, inBore: true });
   const shanks = SF_SHANKS[pick]; const shank = (deep && shanks.find(x => x[2].startsWith('long'))) || shanks[0];
   const clr = (bore - pick) / 2;
   Object.assign(out, { size: pick, fits, rpm: s.rpm, rpmRange: s.rpmRange, rpmMax: s.rpmMax, newRpm: s.rpm, feedRange: pol ? C.feedP : C.feedD, passes: pol ? C.passP : C.passD, shank, shanks, clearance: +clr.toFixed(1) });
@@ -275,5 +289,5 @@ function sfDisc({ row, dia = 22, mode = 'deburr', maxRpm = null }) {
   return out;
 }
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { gradeInfo, gradesIn, gradeRows, cleanGrades, sfShank, sfShankFits, SF_SHANKS, SF_ROWS, sfRow, sfRowFor, sfSurface, sfCross, sfPoint, sfEnd, sfDisc, sfLabel, SF_COOL, SF_GRITX, SF_SURF_WIN, SF_DISC, SF_DISC_OF, sfAdvisorSize, sfCrossFits };
+if (typeof module !== 'undefined' && module.exports) module.exports = { gradeInfo, gradesIn, gradeRows, cleanGrades, sfShank, sfShankFits, SF_SHANKS, SF_ROWS, sfRow, sfRowFor, sfSurface, sfVcBased, sfCross, sfPoint, sfEnd, sfDisc, sfLabel, SF_COOL, SF_GRITX, SF_SURF_WIN, SF_DISC, SF_DISC_OF, sfAdvisorSize, sfCrossFits };
 

@@ -616,5 +616,24 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('a light burr in titanium is #400 without the "second option" rule', Rl.grit.grit === 400 && !Rl.alts.some(a => /Second option/.test(a.label)), Rl.alts.map(a => a.label));
 }
 
+/* ---- nickel alloys run a surface brush at NOGA's cutting speed, not the catalogue window (Sagi, 1.6.36) ----
+   Titan Waspaloy shield, Ø40 #400 on a VMC: the guide said 2,900 RPM (~364 m/min) against NOGA's
+   25–55 m/min for hardened Ni alloys. CoCr and stainless keep the window; trials worked there. */
+{
+  const job = (t, extra = {}) => { const st = Object.assign(E.newState(), E.parseText(t), extra); return E.recommend(st); };
+  const Rw = job('Deburr the face of a Waspaloy 40 HRC shield ring on a VMC');
+  eq('Waspaloy face: Ø40 #400 surface brush', [Rw.sku, Rw.dia], ['UF1340', 40]);
+  eq('Waspaloy face: speed from NOGA\'s cutting speed', [Rw.params.rpm, Rw.params.rpmLo, Rw.params.rpmHi], [200, 200, 440]);
+  ok('Waspaloy face: the catalogue maximum stays the ceiling', Rw.params.rpmMax === 3600, Rw.params.rpmMax);
+  ok('Waspaloy face: the reason is shown, not filtered out', Rw.dataChecks.some(c => /Nickel-based alloy/.test(c)), Rw.dataChecks);
+  ok('Waspaloy face: "why" names the cutting speed', Rw.why.some(w => /25–55 m\/min/.test(w.d)), Rw.why.map(w => w.d));
+  const Ri = job('Deburr the face of an Inconel 718 part on a VMC', { machine: { type: 'mc', maxRpm: 2000, iface: null, coolant: true, uneven: false } });
+  ok('Inconel: a 2,000 RPM spindle does not push the brush to a bigger size', Ri.dia === 40 && !Ri.notes.some(n => /Switched to/.test(n)), [Ri.dia, Ri.notes]);
+  const Rc = job('Deburr the face of a CoCr part on a VMC');
+  eq('CoCr keeps the catalogue window (case 89)', [Rc.params.rpmLo, Rc.params.rpmHi], [2700, 3600]);
+  const Rs = job('Deburr the face of a 304 stainless plate on a VMC');
+  eq('stainless keeps the catalogue window', [Rs.params.rpmLo, Rs.params.rpmHi], [2700, 3600]);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.6.36 – 2026-11-09
+- Nickel-based alloys (Inconel, Waspaloy, Hastelloy, Incoloy): a surface brush
+  on a face or edge now starts at NOGA's cutting speed for the material, not
+  the brush's catalogue window (NOGA, Sagi). A Waspaloy 40 HRC shield on a Ø40
+  #400 brush was 2,900 RPM (about 364 m/min); NOGA's table gives 25–55 m/min,
+  so it is now 200 RPM with a 200–440 RPM range. The setup says why, and the
+  AI chat no longer quotes the window speed for these alloys.
+- A low spindle limit no longer pushes a nickel-alloy job to a larger brush.
+- Unchanged on purpose: cobalt-chrome, cast iron, stainless, titanium and the
+  other materials keep the catalogue window, where trials worked (case 89
+  CoCrMo at 170–190 m/min, FT09 grey cast iron at 275 m/min). A surface brush
+  on a shank inside a bore keeps the window too, because the fibers must
+  spread to the wall.
+
 ## 1.6.35 – 2026-11-05
 - Share links stay short when the setup has a material grade, a replaced
   competitor code, a chosen NOGA row or a changed grit, size or family. These

@@ -400,7 +400,7 @@ function recommend(st) {
     if (feature !== 'edge') lower('medium', 'Surface width not given — size assumed.');
   }
   // machine RPM check: if the machine can't reach the low end of the window, step to a larger diameter where geometry allows
-  if (maxRpm && !ov.dia) {
+  if (maxRpm && !ov.dia && !sfVcBased(sfRowOf(st))) {
     let k = sizes.indexOf(dia);
     while (k < sizes.length - 1 && maxRpm < SURFACE[sizes[k]].rpm[0] * 0.8 && ['face', 'edge', 'hole'].includes(feature)) k++;
     if (sizes[k] !== dia) { R.notes.push(`Your spindle tops out at ${maxRpm.toLocaleString()} RPM, below what a Ø${dia} brush needs. Switched to Ø${sizes[k]}, which runs slower.`); dia = sizes[k]; }
@@ -429,7 +429,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     if (dia < face * 1.5) R.notes.push(`A brush about ${want[0]}\u2013${want[1]} mm wide would cover a ${face} mm surface in one path. Ø${dia} will need overlapping passes, and the overlap is where uneven wear starts.`);
   }
   R.dataChecks = SFp.checks.filter(c => !c.startsWith("NOGA's material table"));
-  let [lo, hi] = SF_SURF_WIN[dia];
+  let [lo, hi] = SFp.rpmRange;
   let rpm = SFp.rpm;
   if (maxRpm && rpm > maxRpm) { R.warnings.push({ t: 'Spindle below recommended speed', d: `Running at your ${maxRpm.toLocaleString()} RPM limit instead of ${rpm.toLocaleString()}. Compensate with one grit coarser or an extra pass.` }); rpm = maxRpm; }
   // feed, DOC
@@ -443,7 +443,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   const seq = mode === 'polish' ? materialGrit(st).polish : null;
   const vc = Math.round(Math.PI * dia * rpm / 1000);
   R.params = {
-    rpm, rpmLo: lo, rpmHi: hi, rpmMax: hi, vc, feed, feedMax: SURFACE_LIMITS.feedMax,
+    rpm, rpmLo: lo, rpmHi: hi, rpmMax: SFp.vcBased ? SFp.rpmMax : hi, vc, feed, feedMax: SURFACE_LIMITS.feedMax,
     engage: { label: 'Depth of cut', value: doc, unit: 'mm', max: SURFACE_LIMITS.docMax, note: `NOGA table ${dr[0]}–${dr[1]} mm for this material · 1.2 mm absolute max` },
     feedRange: SFp.feedRange,
     passes, direction: mode === 'deburr' ? 'Up-cut against the burr' : 'Either; alternate between passes',
@@ -479,7 +479,9 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     { t: `Why Ø${dia}`, d: `${widthTxt}. A brush 1.5–2× the width meets the edge squarely for the most cutting power and fewest passes.` },
     { t: `Why #${grit} (${q.color.toLowerCase()})`, d: gritWhy(st, grit, mode) },
     { t: 'Which way to rotate', d: 'Up-cut matters most for burrs lying along the surface: the fiber tips lift them instead of folding them flat. For burrs standing up off the top face the rotation direction makes little difference.' },
-    { t: 'Why these parameters', d: `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if burrs remain.` },
+    { t: 'Why these parameters', d: SFp.vcBased
+      ? `Speed follows NOGA's cutting speed for ${sfLabel(row).toLowerCase()} (${SFp.vcRange[0]}–${SFp.vcRange[1]} m/min), which is ${lo.toLocaleString()}–${hi.toLocaleString()} RPM on Ø${dia}. Nickel-based alloys run far below the brush's catalogue window (${SF_SURF_WIN[dia][0].toLocaleString()}–${SF_SURF_WIN[dia][1].toLocaleString()} RPM): at window speed they overheat and glaze the fibers. Feed and depth start at the low end of NOGA's table — raise them only if burrs remain.`
+      : `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if burrs remain.` },
   ];
   R.watch = [
     'Never cut with the side of the brush — side loading snaps fibers.',
@@ -606,7 +608,7 @@ function finishShank(R, st, size, grit, mat, mode, machine, maxRpm, main, cross)
   if (sh) R.holders.push({ role: 'Shank', sku: sh[0], desc: `${sh[1]} — ${sh[2]}` });
   if (SFs && SFs.clearance >= 1) R.notes.push(`The Ø${size} brush leaves about ${SFs.clearance} mm radial clearance in the Ø${main} bore. Use a circular-interpolated or offset toolpath so the fiber tips reach the cross-hole edge.`);
   const row = sfRowOf(st); R.sfRow = row.id;
-  let rpm = sfSurface({ row, dia: size, grit, mode }).rpm;
+  let rpm = sfSurface({ row, dia: size, grit, mode, inBore: true }).rpm;
   if (isLathe(machine)) rpm = liveToolSpeed(R, machine, maxRpm, rpm, `The Ø${size} surface brush on a shank`);
   else if (maxRpm && rpm > maxRpm) { rpm = maxRpm; R.warnings.push({ t: 'Lower spindle speed', d: 'The brush will expand less. Add passes or try #1000 for more bite.' }); }
   const stroke = cross ? cross + 10 : null;
