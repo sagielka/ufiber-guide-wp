@@ -635,5 +635,14 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   eq('stainless keeps the catalogue window', [Rs.params.rpmLo, Rs.params.rpmHi], [2700, 3600]);
 }
 
+/* ---- a surface brush size picked in the link explains itself (1.6.37) ---- */
+{
+  const R = E.recommend(E.SHARE.decode('2_dd_ho_pl_l_W28H6p76_mcR8000B4_D25_G2000'));
+  const why = R.why.find(w => w.t === 'Why Ø25');
+  ok('picked Ø25 says it was chosen, not the width rule', why && /chosen for this job/.test(why.d) && /overlapping passes/.test(why.d) && !/rounds up/.test(why.d), why);
+  const R2 = E.recommend(E.SHARE.decode('2_dd_ho_pl_l_W28H6p76_mcR8000B4'));
+  ok('rule-picked size keeps the width rule text', R2.why.some(w => /× 1\.5 rounds up/.test(w.d)), R2.why.map(w => w.d));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

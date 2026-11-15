@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.37 – 2026-11-15
+- A surface brush size set in the link (for example Ø25 for a 28 mm wide
+  band) now says it was chosen for the job and that the area is covered in
+  overlapping passes. Before, it showed the width rule ("28 mm × 1.5 rounds up
+  to Ø25"), which did not add up.
+
 ## 1.6.36 – 2026-11-09
 - Nickel-based alloys (Inconel, Waspaloy, Hastelloy, Incoloy): a surface brush
   on a face or edge now starts at NOGA's cutting speed for the material, not
