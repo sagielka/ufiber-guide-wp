@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.38 – 2026-11-16
+- A face wider than about 67 mm no longer says it is "wider than one Ø100
+  pass can cover" when Ø100 covers it, and a smaller brush no longer asks for
+  a 105–140 mm brush that does not exist. Ø100 on a 70 mm face now says it
+  covers the face in one path but reaches about 15 mm past each edge, so check
+  for steps or teeth there, and that a ring-shaped face (flange, washer,
+  sprocket) is often better with a smaller brush following the ring. The step
+  list says "one path" instead of parallel passes when the brush covers the
+  area. Found on a 42CrMo4 sprocket face (Ø70, Ra 0.08).
+- Reading an email or drawing: a ring-shaped face with a large centre bore is
+  sized by its radial band, (outer Ø − bore Ø) / 2, not its outer diameter.
+- Surface brush coolant now comes from the NOGA row for the material. 42CrMo4
+  / 4140 quenched and tempered showed "Air or wet"; NOGA's row says "Wet
+  preferred".
+- "Similar applications" no longer says tested jobs used other grits "not
+  #400" when one of the listed cases (SCM440, UF1325) used #400.
+- Polishing setups no longer talk about burrs: the speed band, "why these
+  parameters", the rotation note, the grit alternatives, the chat answer on
+  depth and the diagram now speak of the previous marks and the finish.
+- A target of Ra 0.1 µm or finer adds a note: the brush follows the surface,
+  so start from a fine finishing pass, run the whole grit sequence and measure
+  after each grit.
+
 ## 1.6.37 – 2026-11-15
 - A surface brush size set in the link (for example Ø25 for a 28 mm wide
   band) now says it was chosen for the job and that the area is covered in

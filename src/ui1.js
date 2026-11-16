@@ -14,7 +14,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.37';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.38';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -129,11 +129,12 @@ function dgSurface(R) {
   const dpx = 7;
   const fib = (x0, x1, y0, y1, bend) => { let s = ''; for (let x = x0; x <= x1; x += 2.6) { const b = bend ? (x - (x0 + x1) / 2) * 0.55 + 10 : 0; s += `<path d="M${x} ${y0} Q ${x + b * .2} ${(y0 + y1) / 2} ${x + b} ${y1}" stroke="${hex}" stroke-width="1.7" fill="none"/>`; } return s; };
   const fiberEdge = 'rgba(0,0,0,.3)';
+  const pol = R.inputs?.mode === 'polish';
   return `<svg viewBox="0 0 420 356" role="img" aria-label="Surface brush engagement diagram">
   <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="var(--accent)"/></marker></defs>
   <rect x="20" y="150" width="300" height="56" fill="var(--line)"/>
-  <path d="M320 150 L331 141 L327 150 Z" fill="var(--bad)"/>
-  <text x="336" y="146" font-size="12" fill="var(--bad)" font-family="Barlow,sans-serif" font-weight="600">burr</text>
+  ${pol ? '' : `<path d="M320 150 L331 141 L327 150 Z" fill="var(--bad)"/>
+  <text x="336" y="146" font-size="12" fill="var(--bad)" font-family="Barlow,sans-serif" font-weight="600">burr</text>`}
   <line x1="60" x2="250" y1="26" y2="26" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ah)"/>
   <text x="62" y="18" font-size="13" fill="var(--ink-2)" font-family="Barlow,sans-serif" font-weight="600">Feed ${feedOut(R.params.feed)} ${feedU()}</text>
   <g class="brush-move">
@@ -145,7 +146,7 @@ function dgSurface(R) {
   </g>
   <line x1="350" x2="350" y1="150" y2="${150 + dpx}" stroke="var(--ink)" stroke-width="1.5"/><line x1="342" x2="358" y1="150" y2="150" stroke="var(--ink)"/><line x1="342" x2="358" y1="${150 + dpx}" y2="${150 + dpx}" stroke="var(--ink)"/>
   <text x="362" y="${158 + dpx / 2}" font-size="13" fill="var(--ink)" font-family="Barlow Condensed,sans-serif" font-weight="700">${R.params.engage.label === 'Depth of cut' ? lenOut(doc) + ' ' + lenU() : '~2 mm into damper'}</text>
-  <text x="22" y="224" font-size="12.5" fill="var(--ink-2)" font-family="Barlow,sans-serif">Brush cuts with its tip. Fibers sweep the edge from below (up-cut).</text>
+  <text x="22" y="224" font-size="12.5" fill="var(--ink-2)" font-family="Barlow,sans-serif">${pol ? 'Brush cuts with its tip. Light depth and more passes give a finer finish.' : 'Brush cuts with its tip. Fibers sweep the edge from below (up-cut).'}</text>
   <g transform="translate(20 240)">
     <rect width="182" height="104" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
     <text x="12" y="20" font-size="12" fill="var(--ok)" font-family="Barlow,sans-serif" font-weight="700">Right</text>

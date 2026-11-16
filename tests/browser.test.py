@@ -386,6 +386,19 @@ async def main():
             ok('a reading goes through the site endpoint', got.get('ok') and got['j'].get('task') == 'crosshole', got)
             ok('the request carries the site token', sent and sent[-1].get('k') == 'TESTTOKEN', sent[-1] if sent else None)
 
+            # --- a polishing setup: no burr wording, no false "not #400" line (1.6.38) ---
+            page3 = await ctx.new_page()
+            page3.on('pageerror', lambda e: errors.append(str(e)[:120]))
+            await page3.goto(url + '#/&setup=2_po_fa_cs-t__W70A0p08D70_la_g42CrMo4')
+            await page3.wait_for_timeout(1600)
+            body = await page3.locator('body').inner_text()
+            ok('the 42CrMo4 face setup opens', 'UF1300' in body, body[:200])
+            ok('a #400 case is listed, so the guide does not say tested jobs avoided #400',
+               'SCM440' in body and 'not #400' not in body, body[body.find('Similar applications'):][:300])
+            ok('the speed band talks about marks, not burrs, when polishing',
+               'top if the previous marks remain' in body and 'top if burrs remain' not in body)
+            ok('the polishing diagram has no burr', await page3.locator('#dgWrap text', has_text='burr').count() == 0)
+
             ok('no page errors anywhere', not errors, errors[:2])
             await browser.close()
     finally:

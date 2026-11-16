@@ -644,5 +644,25 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('rule-picked size keeps the width rule text', R2.why.some(w => /× 1\.5 rounds up/.test(w.d)), R2.why.map(w => w.d));
 }
 
+/* ---- a 42CrMo4 sprocket face, Ø70, Ra 0.08 (NOGA B.V., Nov-2026) (1.6.38) ---- */
+{
+  const R = E.recommend(E.SHARE.decode('2_po_fa_cs-t__W70A0p08D70_la_g42CrMo4'));
+  ok('a 70 mm face never says it is wider than one Ø100 pass', !R.notes.some(n => /wider than one Ø100/.test(n)), R.notes);
+  ok('Ø100 on a 70 mm face does not ask for a 105–140 mm brush', !R.notes.some(n => /105.140 mm wide/.test(n)), R.notes);
+  ok('Ø100 on a 70 mm face warns that the fibers reach past the edge', R.dia === 100 && R.notes.some(n => /reach about 15 mm past each edge/.test(n)), [R.dia, R.notes]);
+  eq('42CrMo4 (Q&T low-alloy row) is "Wet preferred", not "Air or wet"', R.params.coolant, 'Wet preferred');
+  ok('Ra 0.08 gets the starting-surface note with the whole sequence', R.notes.some(n => /Ra 0\.08 µm is a fine target/.test(n) && /#400 → #800 → #1200/.test(n)), R.notes);
+  ok('a polishing job does not say "if burrs remain" in "why"', !R.why.some(w => /burrs remain|burrs lying/.test(w.d)), R.why.map(w => w.d));
+  ok('a polishing job\'s grit alternatives do not talk about burrs', !R.alts.some(a => /burr/i.test(a.note || '')), R.alts.map(a => a.note));
+  const R25 = E.recommend(E.SHARE.decode('2_po_fa_cs-t__W70A0p08D70_la_g42CrMo4_D25'));
+  ok('Ø25 on a 70 mm face: Ø100 would cover it in one path, so no 105–140 mm ask', R25.notes.some(n => /Ø100 would cover a 70 mm area in one path/.test(n)) && !R25.notes.some(n => /105.140/.test(n)), R25.notes);
+  eq('Ø25 keeps the catalogue window for 42CrMo4', [R25.params.rpmLo, R25.params.rpmHi, R25.sku], [5000, 6000, 'UF1325']);
+  const Rw = E.recommend(E.SHARE.decode('2_po_fa_cs-t__W150A0p08_la_g42CrMo4'));
+  ok('a 150 mm face: no brush covers it in one path', Rw.notes.some(n => /No surface brush covers a 150 mm area in one path/.test(n)), Rw.notes);
+  ok('Ø100 on a 70 mm face: one path, not parallel passes', R.steps.some(t => /one path covers it/.test(t)) && !R.steps.some(t => /parallel passes/.test(t)), R.steps);
+  const Rs = E.recommend(E.SHARE.decode('2_dd_ho_pl_l_W28H6p76_mcR8000B4'));
+  ok('an ordinary hole-band job gets no overhang note', !Rs.notes.some(n => /past each edge/.test(n)), Rs.notes);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

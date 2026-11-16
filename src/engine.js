@@ -394,7 +394,6 @@ function recommend(st) {
     dia = 25; lower('medium', 'Thread deburring depends heavily on thread form and access.');
   } else if (W) {
     dia = nearestUp(sizes, W * 1.5);
-    if (W * 1.5 > 100) R.notes.push(`The surface is wider than one Ø100 pass can cover. Program parallel passes with ~30% overlap.`);
   } else {
     dia = feature === 'face' ? 40 : 25;
     if (feature !== 'edge') lower('medium', 'Surface width not given — size assumed.');
@@ -424,9 +423,19 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   const SFp = sfSurface({ row, dia, grit, mode });
   // a brush wider than the surface covers it in one path and wears evenly
   const face = Number(st.dims?.width) || 0;
-  if (face > 0) {
+  if (face > 0 && !ctx.groove) {
     const want = [Math.round(face * 1.5), Math.round(face * 2)];
-    if (dia < face * 1.5) R.notes.push(`A brush about ${want[0]}\u2013${want[1]} mm wide would cover a ${face} mm surface in one path. Ø${dia} will need overlapping passes, and the overlap is where uneven wear starts.`);
+    const largest = Math.max(...Object.keys(SURFACE).map(Number));
+    if (dia < face) {
+      R.notes.push(face > largest
+        ? `No surface brush covers a ${face} mm area in one path (Ø${largest} is the largest). Ø${dia} needs parallel passes with ~30% overlap; keep the overlap even, because that is where uneven wear starts.`
+        : face * 1.5 > largest
+        ? `Ø${largest} would cover a ${face} mm area in one path. Ø${dia} needs parallel passes with ~30% overlap; keep the overlap even, because that is where uneven wear starts.`
+        : `A brush about ${want[0]}\u2013${want[1]} mm wide would cover a ${face} mm surface in one path. Ø${dia} will need overlapping passes, and the overlap is where uneven wear starts.`);
+    } else if (ctx.feature === 'face' && (dia - face) / 2 >= 10) {
+      // the 1.5x rule covers the area in one path, but on a large face the fibers reach well past its edge
+      R.notes.push(`Ø${dia} is wider than the ${face} mm area, so it covers it in one path, but the fibers reach about ${Math.round((dia - face) / 2)} mm past each edge. Check that nothing there (a step, a wall, gear or sprocket teeth) is in the way. For a ring-shaped face with a centre bore or holes (a flange, washer or sprocket face), a smaller brush following the ring is often better: choose it under Adjust.`);
+    }
   }
   R.dataChecks = SFp.checks.filter(c => !c.startsWith("NOGA's material table"));
   let [lo, hi] = SFp.rpmRange;
@@ -447,7 +456,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     engage: { label: 'Depth of cut', value: doc, unit: 'mm', max: SURFACE_LIMITS.docMax, note: `NOGA table ${dr[0]}–${dr[1]} mm for this material · 1.2 mm absolute max` },
     feedRange: SFp.feedRange,
     passes, direction: mode === 'deburr' ? 'Up-cut against the burr' : 'Either; alternate between passes',
-    projection: `${SURFACE_LIMITS.projMax} mm (max) from the sleeve`, coolant: mat.coolant, sequence: seq && seq.length > 1 ? seq : null,
+    projection: `${SURFACE_LIMITS.projMax} mm (max) from the sleeve`, coolant: SFp.cool || mat.coolant, sequence: seq && seq.length > 1 ? seq : null,
   };
   if (damper) {
     const iface = st.machine?.iface;
@@ -467,7 +476,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     `Set brush projection to ${SURFACE_LIMITS.projMax} mm from the sleeve and touch off the length at the brush tip.`,
     'Start the spindle with the brush clear of the part.',
     ctx.groove ? 'Lower into the groove without rotation if the brush would hit a step, then start the spindle.' : `Approach from outside the part and ramp to depth (about 5°) instead of plunging straight down.`,
-    isEdge ? `Run along the edge with the brush center ${dia >= 25 ? 'inboard of' : 'on'} the edge so fibers sweep across it — the brush cuts with its tip, not its side.` : `Cover the surface in parallel passes with ~30% overlap.`,
+    isEdge ? `Run along the edge with the brush center ${dia >= 25 ? 'inboard of' : 'on'} the edge so fibers sweep across it — the brush cuts with its tip, not its side.` : (face > 0 && dia >= face ? `The brush is wider than the ${face} mm area, so one path covers it: run across it once per pass.` : `Cover the surface in parallel passes with ~30% overlap.`),
     mode === 'deburr' ? 'Choose the spindle direction so fibers hit the burr from underneath (up-cut). For burrs pushed into slots, run a second pass in the opposite direction.' : 'Alternate the path direction between passes for an even scratch pattern.',
     'Exit past the end of the feature before retracting.',
   ];
@@ -482,10 +491,12 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     { t: 'Why a Surface brush', d: 'It cuts with the fiber tips, so it deburrs and polishes faces and edges with controlled depth on a CNC or robot — repeatable, unlike hand tools.' },
     { t: `Why Ø${dia}`, d: picked ? `${widthTxt}.` : `${widthTxt}. A brush 1.5–2× the width meets the edge squarely for the most cutting power and fewest passes.` },
     { t: `Why #${grit} (${q.color.toLowerCase()})`, d: gritWhy(st, grit, mode) },
-    { t: 'Which way to rotate', d: 'Up-cut matters most for burrs lying along the surface: the fiber tips lift them instead of folding them flat. For burrs standing up off the top face the rotation direction makes little difference.' },
+    { t: 'Which way to rotate', d: mode === 'polish'
+      ? 'For polishing the rotation direction matters little. Alternate the path direction between passes so the scratch pattern stays even.'
+      : 'Up-cut matters most for burrs lying along the surface: the fiber tips lift them instead of folding them flat. For burrs standing up off the top face the rotation direction makes little difference.' },
     { t: 'Why these parameters', d: SFp.vcBased
-      ? `Speed follows NOGA's cutting speed for ${sfLabel(row).toLowerCase()} (${SFp.vcRange[0]}–${SFp.vcRange[1]} m/min), which is ${lo.toLocaleString()}–${hi.toLocaleString()} RPM on Ø${dia}. Nickel-based alloys run far below the brush's catalogue window (${SF_SURF_WIN[dia][0].toLocaleString()}–${SF_SURF_WIN[dia][1].toLocaleString()} RPM): at window speed they overheat and glaze the fibers. Feed and depth start at the low end of NOGA's table — raise them only if burrs remain.`
-      : `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if burrs remain.` },
+      ? `Speed follows NOGA's cutting speed for ${sfLabel(row).toLowerCase()} (${SFp.vcRange[0]}–${SFp.vcRange[1]} m/min), which is ${lo.toLocaleString()}–${hi.toLocaleString()} RPM on Ø${dia}. Nickel-based alloys run far below the brush's catalogue window (${SF_SURF_WIN[dia][0].toLocaleString()}–${SF_SURF_WIN[dia][1].toLocaleString()} RPM): at window speed they overheat and glaze the fibers. Feed and depth start at the low end of NOGA's table — raise them only if ${mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}.`
+      : `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if ${mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}.` },
   ];
   R.watch = [
     'Never cut with the side of the brush — side loading snaps fibers.',
@@ -497,8 +508,8 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   if (st.material === 'aluminum') R.watch.push('On diamond-machined aluminum, brushing can leave a slightly dull look.');
   // alternatives
   const coarser = gritStep(grit, -1), finer = gritStep(grit, 1);
-  R.alts.push({ label: `One grit coarser — #${coarser}`, note: 'More cutting power if burrs remain. Expect more edge rounding.', ov: { grit: coarser, dia, family: 'surface' } });
-  R.alts.push({ label: `One grit finer — #${finer}`, note: 'Smaller edge break and better finish if burrs come off easily.', ov: { grit: finer, dia, family: 'surface' } });
+  R.alts.push({ label: `One grit coarser — #${coarser}`, note: mode === 'polish' ? 'More cutting power if the previous tool marks remain. Leaves a rougher scratch for the next grit to remove.' : 'More cutting power if burrs remain. Expect more edge rounding.', ov: { grit: coarser, dia, family: 'surface' } });
+  R.alts.push({ label: `One grit finer — #${finer}`, note: mode === 'polish' ? 'Finer finish once the previous marks are gone.' : 'Smaller edge break and better finish if burrs come off easily.', ov: { grit: finer, dia, family: 'surface' } });
   const sizes = [6, 15, 25, 40, 60, 100], k2 = sizes.indexOf(dia);
   if (k2 < sizes.length - 1 && !ctx.groove) R.alts.push({ label: `Larger brush — Ø${sizes[k2 + 1]}`, note: 'Fewer passes and shorter cycle; needs more clearance.', ov: { dia: sizes[k2 + 1], grit, family: 'surface' } });
   if (machine !== 'robot' && !damper) R.alts.push({ label: 'Add a floating damper', note: 'For cast, uneven or long-run parts: constant pressure and automatic wear compensation.', ov: { grit, dia, family: 'surface' }, setUneven: true });
@@ -770,6 +781,12 @@ function finalize(R, st) {
     R.notes.push(byRow.map(x => `${x.gs.join(', ')} is ${(x.row.details || '').toLowerCase()}`).join('; ') + ` — two rows in NOGA's table. ` +
       (R.family === 'surface' || R.family === 'shank' ? (hi > lo ? `Their ${pol ? 'polishing' : 'deburring'} speeds overlap at Vc ${lo}–${hi} m/min, so one setup covers both. ` : '') : '') +
       `This setup follows the ${(used.details || '').toLowerCase()} row (${used.grade}), the slower of the two.`);
+  }
+  // a fine Ra target depends on the surface the brush starts from
+  const raT = Number(st.dims?.ra) || 0;
+  if (raT > 0 && raT <= 0.1 && TASKS[st.task]?.mode === 'polish' && R.family !== 'diamond') {
+    const seq = R.params?.sequence;
+    R.notes.push(`Ra ${raT} µm is a fine target. The brush follows the surface rather than flattening it, so the result depends on where you start: deep turning grooves and scratches stay visible. Start from a fine finishing pass where you can (about Ra 0.4–0.8 µm), ${seq ? `run the whole sequence (${seq.map(x => '#' + x).join(' → ')})` : 'finish with a fine grit (#1000–#1200 on metals)'}, and measure Ra after each grit. Move to the next grit only when the previous marks are gone.`);
   }
   // sizes Claude worked out from other drawing dimensions: say so, and keep it at Medium
   const estK = (st.est || []).filter(k => st.dims && st.dims[k] != null);

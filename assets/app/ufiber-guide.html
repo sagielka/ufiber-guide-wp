@@ -883,7 +883,6 @@ function recommend(st) {
     dia = 25; lower('medium', 'Thread deburring depends heavily on thread form and access.');
   } else if (W) {
     dia = nearestUp(sizes, W * 1.5);
-    if (W * 1.5 > 100) R.notes.push(`The surface is wider than one Ø100 pass can cover. Program parallel passes with ~30% overlap.`);
   } else {
     dia = feature === 'face' ? 40 : 25;
     if (feature !== 'edge') lower('medium', 'Surface width not given — size assumed.');
@@ -913,9 +912,19 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   const SFp = sfSurface({ row, dia, grit, mode });
   // a brush wider than the surface covers it in one path and wears evenly
   const face = Number(st.dims?.width) || 0;
-  if (face > 0) {
+  if (face > 0 && !ctx.groove) {
     const want = [Math.round(face * 1.5), Math.round(face * 2)];
-    if (dia < face * 1.5) R.notes.push(`A brush about ${want[0]}\u2013${want[1]} mm wide would cover a ${face} mm surface in one path. Ø${dia} will need overlapping passes, and the overlap is where uneven wear starts.`);
+    const largest = Math.max(...Object.keys(SURFACE).map(Number));
+    if (dia < face) {
+      R.notes.push(face > largest
+        ? `No surface brush covers a ${face} mm area in one path (Ø${largest} is the largest). Ø${dia} needs parallel passes with ~30% overlap; keep the overlap even, because that is where uneven wear starts.`
+        : face * 1.5 > largest
+        ? `Ø${largest} would cover a ${face} mm area in one path. Ø${dia} needs parallel passes with ~30% overlap; keep the overlap even, because that is where uneven wear starts.`
+        : `A brush about ${want[0]}\u2013${want[1]} mm wide would cover a ${face} mm surface in one path. Ø${dia} will need overlapping passes, and the overlap is where uneven wear starts.`);
+    } else if (ctx.feature === 'face' && (dia - face) / 2 >= 10) {
+      // the 1.5x rule covers the area in one path, but on a large face the fibers reach well past its edge
+      R.notes.push(`Ø${dia} is wider than the ${face} mm area, so it covers it in one path, but the fibers reach about ${Math.round((dia - face) / 2)} mm past each edge. Check that nothing there (a step, a wall, gear or sprocket teeth) is in the way. For a ring-shaped face with a centre bore or holes (a flange, washer or sprocket face), a smaller brush following the ring is often better: choose it under Adjust.`);
+    }
   }
   R.dataChecks = SFp.checks.filter(c => !c.startsWith("NOGA's material table"));
   let [lo, hi] = SFp.rpmRange;
@@ -936,7 +945,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     engage: { label: 'Depth of cut', value: doc, unit: 'mm', max: SURFACE_LIMITS.docMax, note: `NOGA table ${dr[0]}–${dr[1]} mm for this material · 1.2 mm absolute max` },
     feedRange: SFp.feedRange,
     passes, direction: mode === 'deburr' ? 'Up-cut against the burr' : 'Either; alternate between passes',
-    projection: `${SURFACE_LIMITS.projMax} mm (max) from the sleeve`, coolant: mat.coolant, sequence: seq && seq.length > 1 ? seq : null,
+    projection: `${SURFACE_LIMITS.projMax} mm (max) from the sleeve`, coolant: SFp.cool || mat.coolant, sequence: seq && seq.length > 1 ? seq : null,
   };
   if (damper) {
     const iface = st.machine?.iface;
@@ -956,7 +965,7 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     `Set brush projection to ${SURFACE_LIMITS.projMax} mm from the sleeve and touch off the length at the brush tip.`,
     'Start the spindle with the brush clear of the part.',
     ctx.groove ? 'Lower into the groove without rotation if the brush would hit a step, then start the spindle.' : `Approach from outside the part and ramp to depth (about 5°) instead of plunging straight down.`,
-    isEdge ? `Run along the edge with the brush center ${dia >= 25 ? 'inboard of' : 'on'} the edge so fibers sweep across it — the brush cuts with its tip, not its side.` : `Cover the surface in parallel passes with ~30% overlap.`,
+    isEdge ? `Run along the edge with the brush center ${dia >= 25 ? 'inboard of' : 'on'} the edge so fibers sweep across it — the brush cuts with its tip, not its side.` : (face > 0 && dia >= face ? `The brush is wider than the ${face} mm area, so one path covers it: run across it once per pass.` : `Cover the surface in parallel passes with ~30% overlap.`),
     mode === 'deburr' ? 'Choose the spindle direction so fibers hit the burr from underneath (up-cut). For burrs pushed into slots, run a second pass in the opposite direction.' : 'Alternate the path direction between passes for an even scratch pattern.',
     'Exit past the end of the feature before retracting.',
   ];
@@ -971,10 +980,12 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
     { t: 'Why a Surface brush', d: 'It cuts with the fiber tips, so it deburrs and polishes faces and edges with controlled depth on a CNC or robot — repeatable, unlike hand tools.' },
     { t: `Why Ø${dia}`, d: picked ? `${widthTxt}.` : `${widthTxt}. A brush 1.5–2× the width meets the edge squarely for the most cutting power and fewest passes.` },
     { t: `Why #${grit} (${q.color.toLowerCase()})`, d: gritWhy(st, grit, mode) },
-    { t: 'Which way to rotate', d: 'Up-cut matters most for burrs lying along the surface: the fiber tips lift them instead of folding them flat. For burrs standing up off the top face the rotation direction makes little difference.' },
+    { t: 'Which way to rotate', d: mode === 'polish'
+      ? 'For polishing the rotation direction matters little. Alternate the path direction between passes so the scratch pattern stays even.'
+      : 'Up-cut matters most for burrs lying along the surface: the fiber tips lift them instead of folding them flat. For burrs standing up off the top face the rotation direction makes little difference.' },
     { t: 'Why these parameters', d: SFp.vcBased
-      ? `Speed follows NOGA's cutting speed for ${sfLabel(row).toLowerCase()} (${SFp.vcRange[0]}–${SFp.vcRange[1]} m/min), which is ${lo.toLocaleString()}–${hi.toLocaleString()} RPM on Ø${dia}. Nickel-based alloys run far below the brush's catalogue window (${SF_SURF_WIN[dia][0].toLocaleString()}–${SF_SURF_WIN[dia][1].toLocaleString()} RPM): at window speed they overheat and glaze the fibers. Feed and depth start at the low end of NOGA's table — raise them only if burrs remain.`
-      : `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if burrs remain.` },
+      ? `Speed follows NOGA's cutting speed for ${sfLabel(row).toLowerCase()} (${SFp.vcRange[0]}–${SFp.vcRange[1]} m/min), which is ${lo.toLocaleString()}–${hi.toLocaleString()} RPM on Ø${dia}. Nickel-based alloys run far below the brush's catalogue window (${SF_SURF_WIN[dia][0].toLocaleString()}–${SF_SURF_WIN[dia][1].toLocaleString()} RPM): at window speed they overheat and glaze the fibers. Feed and depth start at the low end of NOGA's table — raise them only if ${mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}.`
+      : `Speed follows NOGA's RPM Advisor: the low end of the Ø${dia} window (${lo.toLocaleString()}–${hi.toLocaleString()} RPM), adjusted for grit #${grit}. Feed and depth start at the low end of NOGA's table for ${sfLabel(row).toLowerCase()} — raise them only if ${mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}.` },
   ];
   R.watch = [
     'Never cut with the side of the brush — side loading snaps fibers.',
@@ -986,8 +997,8 @@ function finishSurface(R, st, dia, grit, mat, mode, machine, maxRpm, ctx = {}) {
   if (st.material === 'aluminum') R.watch.push('On diamond-machined aluminum, brushing can leave a slightly dull look.');
   // alternatives
   const coarser = gritStep(grit, -1), finer = gritStep(grit, 1);
-  R.alts.push({ label: `One grit coarser — #${coarser}`, note: 'More cutting power if burrs remain. Expect more edge rounding.', ov: { grit: coarser, dia, family: 'surface' } });
-  R.alts.push({ label: `One grit finer — #${finer}`, note: 'Smaller edge break and better finish if burrs come off easily.', ov: { grit: finer, dia, family: 'surface' } });
+  R.alts.push({ label: `One grit coarser — #${coarser}`, note: mode === 'polish' ? 'More cutting power if the previous tool marks remain. Leaves a rougher scratch for the next grit to remove.' : 'More cutting power if burrs remain. Expect more edge rounding.', ov: { grit: coarser, dia, family: 'surface' } });
+  R.alts.push({ label: `One grit finer — #${finer}`, note: mode === 'polish' ? 'Finer finish once the previous marks are gone.' : 'Smaller edge break and better finish if burrs come off easily.', ov: { grit: finer, dia, family: 'surface' } });
   const sizes = [6, 15, 25, 40, 60, 100], k2 = sizes.indexOf(dia);
   if (k2 < sizes.length - 1 && !ctx.groove) R.alts.push({ label: `Larger brush — Ø${sizes[k2 + 1]}`, note: 'Fewer passes and shorter cycle; needs more clearance.', ov: { dia: sizes[k2 + 1], grit, family: 'surface' } });
   if (machine !== 'robot' && !damper) R.alts.push({ label: 'Add a floating damper', note: 'For cast, uneven or long-run parts: constant pressure and automatic wear compensation.', ov: { grit, dia, family: 'surface' }, setUneven: true });
@@ -1259,6 +1270,12 @@ function finalize(R, st) {
     R.notes.push(byRow.map(x => `${x.gs.join(', ')} is ${(x.row.details || '').toLowerCase()}`).join('; ') + ` — two rows in NOGA's table. ` +
       (R.family === 'surface' || R.family === 'shank' ? (hi > lo ? `Their ${pol ? 'polishing' : 'deburring'} speeds overlap at Vc ${lo}–${hi} m/min, so one setup covers both. ` : '') : '') +
       `This setup follows the ${(used.details || '').toLowerCase()} row (${used.grade}), the slower of the two.`);
+  }
+  // a fine Ra target depends on the surface the brush starts from
+  const raT = Number(st.dims?.ra) || 0;
+  if (raT > 0 && raT <= 0.1 && TASKS[st.task]?.mode === 'polish' && R.family !== 'diamond') {
+    const seq = R.params?.sequence;
+    R.notes.push(`Ra ${raT} µm is a fine target. The brush follows the surface rather than flattening it, so the result depends on where you start: deep turning grooves and scratches stay visible. Start from a fine finishing pass where you can (about Ra 0.4–0.8 µm), ${seq ? `run the whole sequence (${seq.map(x => '#' + x).join(' → ')})` : 'finish with a fine grit (#1000–#1200 on metals)'}, and measure Ra after each grit. Move to the next grit only when the previous marks are gone.`);
   }
   // sizes Claude worked out from other drawing dimensions: say so, and keep it at Medium
   const estK = (st.est || []).filter(k => st.dims && st.dims[k] != null);
@@ -1702,7 +1719,7 @@ function sfSurface({ row, dia, grit, mode = 'deburr', worn = false, maxRpm = nul
     out.vcRpm = vr; out.rpmRange = vr; out.vcBased = true;
     out.rpm = worn ? Math.min(r10(vr[0] * 1.1), vr[1]) : vr[0];
     out.source = 'NOGA Surface Brush table (cutting speed)';
-    out.checks.push(`Nickel-based alloy: the speed comes from NOGA's cutting speed for this material (${vc[0]}–${vc[1]} m/min), which is ${vr[0].toLocaleString()}–${vr[1].toLocaleString()} RPM on Ø${dia}. That is far below the catalogue window for this brush (${W[0].toLocaleString()}–${W[1].toLocaleString()} RPM), which would run about ${Math.round(Math.PI * dia * W[0] / 1000)} m/min. Start at the low end; raise the speed within the range only if burrs remain and the brush shows no heat or glazing.`);
+    out.checks.push(`Nickel-based alloy: the speed comes from NOGA's cutting speed for this material (${vc[0]}–${vc[1]} m/min), which is ${vr[0].toLocaleString()}–${vr[1].toLocaleString()} RPM on Ø${dia}. That is far below the catalogue window for this brush (${W[0].toLocaleString()}–${W[1].toLocaleString()} RPM), which would run about ${Math.round(Math.PI * dia * W[0] / 1000)} m/min. Start at the low end; raise the speed within the range only if ${pol ? 'the finish stops improving' : 'burrs remain'} and the brush shows no heat or glazing.`);
   } else if (vcRpm[1] < W[0]) out.checks.push(`NOGA's material table (cutting speed ${vc[0]}–${vc[1]} m/min) works out to ${vcRpm[0].toLocaleString()}–${vcRpm[1].toLocaleString()} RPM for Ø${dia} — below the catalogue window for this brush (${W[0].toLocaleString()}–${W[1].toLocaleString()} RPM). NOGA's RPM Advisor and catalogue tests use the window, so this does too. If you see heat, glazing or fast wear, go lower.`);
   else if (vcRpm[0] > W[1]) out.checks.push(`NOGA's material table works out to ${vcRpm[0].toLocaleString()}+ RPM for Ø${dia}, above the catalogue window. Staying in the window.`);
   if (pol && S.vcP[0] > S.vcD[1] * 1.5) out.checks.push(`Possible data error: NOGA's table gives a polishing cutting speed (${S.vcP[0]}–${S.vcP[1]} m/min) far higher than for deburring (${S.vcD[0]}–${S.vcD[1]} m/min) on this hard material — the opposite of every other row.`);
@@ -1835,7 +1852,7 @@ const APP = {
   ws: null, rec: null, 
   fx: null, fixCtx: null, parsed: null, cbStep: 0, cbTimer: null,
 };
-const APP_VERSION = '1.6.37';      /* kept in step with the WordPress plugin by build_release.py */
+const APP_VERSION = '1.6.38';      /* kept in step with the WordPress plugin by build_release.py */
 const APP_BUILT = '2026-10-04';
 const newState = () => ({ task: null, feature: null, material: null, sub: null, burr: 'light', dims: {}, machine: { type: 'mc', maxRpm: null, iface: null, coolant: true, uneven: false }, override: {} });
 
@@ -1950,11 +1967,12 @@ function dgSurface(R) {
   const dpx = 7;
   const fib = (x0, x1, y0, y1, bend) => { let s = ''; for (let x = x0; x <= x1; x += 2.6) { const b = bend ? (x - (x0 + x1) / 2) * 0.55 + 10 : 0; s += `<path d="M${x} ${y0} Q ${x + b * .2} ${(y0 + y1) / 2} ${x + b} ${y1}" stroke="${hex}" stroke-width="1.7" fill="none"/>`; } return s; };
   const fiberEdge = 'rgba(0,0,0,.3)';
+  const pol = R.inputs?.mode === 'polish';
   return `<svg viewBox="0 0 420 356" role="img" aria-label="Surface brush engagement diagram">
   <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="var(--accent)"/></marker></defs>
   <rect x="20" y="150" width="300" height="56" fill="var(--line)"/>
-  <path d="M320 150 L331 141 L327 150 Z" fill="var(--bad)"/>
-  <text x="336" y="146" font-size="12" fill="var(--bad)" font-family="Barlow,sans-serif" font-weight="600">burr</text>
+  ${pol ? '' : `<path d="M320 150 L331 141 L327 150 Z" fill="var(--bad)"/>
+  <text x="336" y="146" font-size="12" fill="var(--bad)" font-family="Barlow,sans-serif" font-weight="600">burr</text>`}
   <line x1="60" x2="250" y1="26" y2="26" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ah)"/>
   <text x="62" y="18" font-size="13" fill="var(--ink-2)" font-family="Barlow,sans-serif" font-weight="600">Feed ${feedOut(R.params.feed)} ${feedU()}</text>
   <g class="brush-move">
@@ -1966,7 +1984,7 @@ function dgSurface(R) {
   </g>
   <line x1="350" x2="350" y1="150" y2="${150 + dpx}" stroke="var(--ink)" stroke-width="1.5"/><line x1="342" x2="358" y1="150" y2="150" stroke="var(--ink)"/><line x1="342" x2="358" y1="${150 + dpx}" y2="${150 + dpx}" stroke="var(--ink)"/>
   <text x="362" y="${158 + dpx / 2}" font-size="13" fill="var(--ink)" font-family="Barlow Condensed,sans-serif" font-weight="700">${R.params.engage.label === 'Depth of cut' ? lenOut(doc) + ' ' + lenU() : '~2 mm into damper'}</text>
-  <text x="22" y="224" font-size="12.5" fill="var(--ink-2)" font-family="Barlow,sans-serif">Brush cuts with its tip. Fibers sweep the edge from below (up-cut).</text>
+  <text x="22" y="224" font-size="12.5" fill="var(--ink-2)" font-family="Barlow,sans-serif">${pol ? 'Brush cuts with its tip. Light depth and more passes give a finer finish.' : 'Brush cuts with its tip. Fibers sweep the edge from below (up-cut).'}</text>
   <g transform="translate(20 240)">
     <rect width="182" height="104" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
     <text x="12" y="20" font-size="12" fill="var(--ok)" font-family="Barlow,sans-serif" font-weight="700">Right</text>
@@ -2469,7 +2487,7 @@ function result() {
       <section class="panel" aria-labelledby="tPar">
         <div class="panel-t"><h2 id="tPar">Starting parameters</h2><span class="tiny">Start here, then optimize</span></div>
         <div class="readouts">
-          <div class="ro wide"><div class="k">Spindle speed${est}</div><div class="v">${fmtN(p.rpm)}<small>RPM</small></div>${p.vc ? `<div class="n">≈ ${fmtN(isIn() ? p.vc * 3.281 : p.vc)} ${isIn() ? 'SFM' : 'm/min'} at the brush tip</div>` : ''}<div class="gauge">${gauge(p, mMax)}</div><div class="n">Green band: working window for this tool. Raise speed toward the top if burrs remain; lower it to save the brush.</div></div>
+          <div class="ro wide"><div class="k">Spindle speed${est}</div><div class="v">${fmtN(p.rpm)}<small>RPM</small></div>${p.vc ? `<div class="n">≈ ${fmtN(isIn() ? p.vc * 3.281 : p.vc)} ${isIn() ? 'SFM' : 'm/min'} at the brush tip</div>` : ''}<div class="gauge">${gauge(p, mMax)}</div><div class="n">Green band: working window for this tool. Raise speed toward the top if ${R.inputs?.mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}; lower it to save the brush.</div></div>
           <div class="ro"><div class="k">Feed</div><div class="v">${p.feed ? feedOut(p.feed) : (p.feedNote ? 'Not set' : 'By hand')}${p.feed ? `<small>${feedU()}</small>` : ''}</div>${p.feedMax ? `<div class="n">Catalogue max ${feedOut(p.feedMax)} ${feedU()}</div>` : (p.feedNote ? `<div class="n">${esc(p.feedNote)}</div>` : '')}</div>
           <div class="ro"><div class="k">${esc(p.engage.label)}</div><div class="v">${engageV}<small>${engageU}</small></div><div class="n">${esc(p.engage.note || '')}</div></div>
           <div class="ro"><div class="k">Passes</div><div class="v">${esc(p.passes)}</div></div>
@@ -2499,8 +2517,9 @@ function result() {
     <section class="panel" aria-labelledby="tCase"><div class="panel-t"><h2 id="tCase">Similar applications</h2></div>
       ${(() => {
         const g = APP.rec?.grit?.grit;
-        const tried = [...new Set((APP.matches || []).flatMap(c => c.grits || []).filter(x => x && x !== g))];
-        return (g && tried.length) ? `<div class="callout note" style="margin-bottom:10px">${I.info}<div><b>Tested applications used ${tried.map(x => '#' + x).join(' and ')}, not #${g}.</b><span class="small">#${g} is where the tables start you. A grit that has been proven on a part like yours is the better bet — cut a test part and let the result decide.</span></div></div>` : '';
+        const all = (APP.matches || []).flatMap(c => c.grits || []);
+        const tried = [...new Set(all.filter(x => x && x !== g))];
+        return (g && tried.length && !all.includes(g)) ? `<div class="callout note" style="margin-bottom:10px">${I.info}<div><b>Tested applications used ${tried.map(x => '#' + x).join(' and ')}, not #${g}.</b><span class="small">#${g} is where the tables start you. A grit that has been proven on a part like yours is the better bet — cut a test part and let the result decide.</span></div></div>` : '';
       })()}
       ${APP.matches.length ? `<div class="match">${APP.matches.map(c => `<div class="casemini"><div><span class="tested">${I.check} Similar application successfully tested</span><div style="font-weight:600;margin-top:2px">${esc(c.part)} <span class="muted small">· ${esc(c.mat)}</span></div><div class="small muted">${esc(c.tool.split(',')[0])}${c.rpm ? ` · ${fmtN(c.rpm)} RPM` : ''}${c.feed && c.feed > 1 ? ` · ${feedOut(c.feed)} ${feedU()}` : ''}</div>${c.after ? `<div class="small" style="margin-top:2px">${esc(c.after)}</div>` : ''}</div></div>`).join('')}</div>` : `<p class="muted small">No close match yet. That's normal for new applications.</p>`}
       ${USAGE.available ? `<div id="shareBox" style="margin-top:12px">
@@ -4477,7 +4496,7 @@ function extractionSpec() {
     "options": [2-5 {"label": "short answer text", "value": the matching enum key, or a number in mm for size fields}]}]}
 Language: judge it from the description of the work only. Ignore e-mail signatures, job titles, company names, web addresses, legal footers and quoted replies — a Czech signature under an English request means the language is English. Summary and questions must be in the same language as each other.
 Rules: lengths in mm (convert inches; American drawings give inches with a leading dot and no unit, e.g. Ø.156 = 0.156 in = 3.96 mm, and a drawing note like "hole diameter approximately Ø3–4 mm" is a stated size). "main" = the larger bore the brush enters; "cross" = the smaller intersecting hole;
-WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. For holes spread around a ring or bolt circle, the width is the radial band they occupy (outer radius − inner radius of the hole pattern + one hole Ø), because the brush follows the ring. A burr height, a tolerance or a chamfer size is never a width. For a groove job, "groove" = the groove's WIDTH (an O-ring groove dimensioned .115" wide → 2.9 mm), read or worked out from the drawing the same way, and listed in "estimated" when worked out. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
+WORKING-AREA SIZE ("width") for face, surface, lay or polishing jobs: the width of the area the brush must cover; for a round feature around a hole (an O-ring gland, seal face or spot face around a port) use its OUTER diameter. A ring-shaped face with a large centre bore (a flange, washer, gear or sprocket face, where the bore is about a third of the outer Ø or more) is different: the brush follows the ring, so "width" is the radial band = (outer Ø − bore Ø) / 2 (e.g. outer Ø70, bore Ø30 → 20 mm), listed in "estimated". If the bore is not given, use the outer diameter and say in your summary that the centre bore size would refine the brush size. When it is not stated but the drawing gives the pieces, work it out instead of leaving it null: hole Ø + 2 × every land and groove width dimensioned "all around" (e.g. Ø.250 hole, .060 land, .115 groove → .250 + 2×.060 + 2×.115 = Ø.600 in = 15.2 mm), or a groove width plus its walls, or the size of the face it sits on. For holes spread around a ring or bolt circle, the width is the radial band they occupy (outer radius − inner radius of the hole pattern + one hole Ø), because the brush follows the ring. A burr height, a tolerance or a chamfer size is never a width. For a groove job, "groove" = the groove's WIDTH (an O-ring groove dimensioned .115" wide → 2.9 mm), read or worked out from the drawing the same way, and listed in "estimated" when worked out. Round to the nearest mm and list the field in "estimated". An estimate worked out from drawing dimensions is not an invented number; leave "width" null only when nothing on the drawing bounds it.
 CROSS-HOLE SIZES COME FROM THE INTERSECTION: "main" and "cross" are the two holes that actually MEET where the burr is. Entry counterbores, port or fitting bores (flare, thread, O-ring seat), outside diameters, flanges and the part's overall size are NOT the main bore, even when the brush passes through them on the way in. On a drawing, find the burr area (a circle, arrow or note) and follow each hole from there; the two smallest diameters that run into that spot are usually the pair. A size stated in words for the burr area ("hole diameter approximately Ø3–4 mm") outranks any number you pick off the drawing. A range like that given for the holes at the intersection means main ≈ the upper value and cross ≈ the lower one (Ø3–4 → main 4, cross 3): fill them and list both in "estimated" rather than leaving them null. Leave them null only when nothing at all bounds them.
 TUBES, PINS AND SLEEVES: the main bore is the long bore along the part's axis (shown in the lengthwise section, dimensioned with its own Ø and depth, often entered through a thread or counterbore at one end). The cross holes are the holes drilled through the wall into it, usually given with a count ("6 x Ø3.6"): a count in front of a diameter marks the cross holes, never the main bore. A width with a fit and no Ø ("2 H8", "2.5 H8") between two parallel lines is a slot ("slotW"), not a hole. Thread sizes (M6) and their minor diameters, counterbores and the outside diameter are not the main bore. Holes at different angles around the axis (e.g. 40° and 67°) are separate one-sided holes, not one hole through both walls; "through" is true only when the drawing shows the same hole on opposite walls.
  "slotW"/"slotL" = width and length of a slot that also opens into the main bore (never put a slot size in "cross" or "groove" on a cross-hole job). Use null when not stated — never invent numbers.
@@ -5339,7 +5358,7 @@ const ANSWERS = {
   doc_q: () => {
     const R = A.rec(), e = R.params.engage;
     return { md: `${e.label}: **${typeof e.value === 'number' ? A.len(e.value) : e.value}**${e.note ? `\n\n${e.note}` : ''}` +
-      (R.params.feedRange ? `\n\nStart at the low end and only increase if burrs remain.` : ''), props: [] };
+      (R.params.feedRange ? `\n\nStart at the low end and only increase if ${R.inputs?.mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}.` : ''), props: [] };
   },
   feed_q: () => {
     const R = A.rec(), p = R.params;

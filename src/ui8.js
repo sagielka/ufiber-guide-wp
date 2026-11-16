@@ -176,7 +176,7 @@ const ANSWERS = {
   doc_q: () => {
     const R = A.rec(), e = R.params.engage;
     return { md: `${e.label}: **${typeof e.value === 'number' ? A.len(e.value) : e.value}**${e.note ? `\n\n${e.note}` : ''}` +
-      (R.params.feedRange ? `\n\nStart at the low end and only increase if burrs remain.` : ''), props: [] };
+      (R.params.feedRange ? `\n\nStart at the low end and only increase if ${R.inputs?.mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}.` : ''), props: [] };
   },
   feed_q: () => {
     const R = A.rec(), p = R.params;

@@ -345,7 +345,7 @@ function result() {
       <section class="panel" aria-labelledby="tPar">
         <div class="panel-t"><h2 id="tPar">Starting parameters</h2><span class="tiny">Start here, then optimize</span></div>
         <div class="readouts">
-          <div class="ro wide"><div class="k">Spindle speed${est}</div><div class="v">${fmtN(p.rpm)}<small>RPM</small></div>${p.vc ? `<div class="n">≈ ${fmtN(isIn() ? p.vc * 3.281 : p.vc)} ${isIn() ? 'SFM' : 'm/min'} at the brush tip</div>` : ''}<div class="gauge">${gauge(p, mMax)}</div><div class="n">Green band: working window for this tool. Raise speed toward the top if burrs remain; lower it to save the brush.</div></div>
+          <div class="ro wide"><div class="k">Spindle speed${est}</div><div class="v">${fmtN(p.rpm)}<small>RPM</small></div>${p.vc ? `<div class="n">≈ ${fmtN(isIn() ? p.vc * 3.281 : p.vc)} ${isIn() ? 'SFM' : 'm/min'} at the brush tip</div>` : ''}<div class="gauge">${gauge(p, mMax)}</div><div class="n">Green band: working window for this tool. Raise speed toward the top if ${R.inputs?.mode === 'polish' ? 'the previous marks remain' : 'burrs remain'}; lower it to save the brush.</div></div>
           <div class="ro"><div class="k">Feed</div><div class="v">${p.feed ? feedOut(p.feed) : (p.feedNote ? 'Not set' : 'By hand')}${p.feed ? `<small>${feedU()}</small>` : ''}</div>${p.feedMax ? `<div class="n">Catalogue max ${feedOut(p.feedMax)} ${feedU()}</div>` : (p.feedNote ? `<div class="n">${esc(p.feedNote)}</div>` : '')}</div>
           <div class="ro"><div class="k">${esc(p.engage.label)}</div><div class="v">${engageV}<small>${engageU}</small></div><div class="n">${esc(p.engage.note || '')}</div></div>
           <div class="ro"><div class="k">Passes</div><div class="v">${esc(p.passes)}</div></div>
@@ -375,8 +375,9 @@ function result() {
     <section class="panel" aria-labelledby="tCase"><div class="panel-t"><h2 id="tCase">Similar applications</h2></div>
       ${(() => {
         const g = APP.rec?.grit?.grit;
-        const tried = [...new Set((APP.matches || []).flatMap(c => c.grits || []).filter(x => x && x !== g))];
-        return (g && tried.length) ? `<div class="callout note" style="margin-bottom:10px">${I.info}<div><b>Tested applications used ${tried.map(x => '#' + x).join(' and ')}, not #${g}.</b><span class="small">#${g} is where the tables start you. A grit that has been proven on a part like yours is the better bet — cut a test part and let the result decide.</span></div></div>` : '';
+        const all = (APP.matches || []).flatMap(c => c.grits || []);
+        const tried = [...new Set(all.filter(x => x && x !== g))];
+        return (g && tried.length && !all.includes(g)) ? `<div class="callout note" style="margin-bottom:10px">${I.info}<div><b>Tested applications used ${tried.map(x => '#' + x).join(' and ')}, not #${g}.</b><span class="small">#${g} is where the tables start you. A grit that has been proven on a part like yours is the better bet — cut a test part and let the result decide.</span></div></div>` : '';
       })()}
       ${APP.matches.length ? `<div class="match">${APP.matches.map(c => `<div class="casemini"><div><span class="tested">${I.check} Similar application successfully tested</span><div style="font-weight:600;margin-top:2px">${esc(c.part)} <span class="muted small">· ${esc(c.mat)}</span></div><div class="small muted">${esc(c.tool.split(',')[0])}${c.rpm ? ` · ${fmtN(c.rpm)} RPM` : ''}${c.feed && c.feed > 1 ? ` · ${feedOut(c.feed)} ${feedU()}` : ''}</div>${c.after ? `<div class="small" style="margin-top:2px">${esc(c.after)}</div>` : ''}</div></div>`).join('')}</div>` : `<p class="muted small">No close match yet. That's normal for new applications.</p>`}
       ${USAGE.available ? `<div id="shareBox" style="margin-top:12px">
