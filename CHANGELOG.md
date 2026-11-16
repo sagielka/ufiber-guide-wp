@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.39 – 2026-11-16
+- "Ask about this setup" on the website no longer answers every failure with
+  a bare "Something went wrong — try again". It now says what happened: a page
+  that has expired asks to be reloaded, a request blocked by the site's
+  firewall names the HTTP status, a refused API key says so, and anything else
+  shows its code, e.g. "(upstream_400)". Found when the chat failed twice on a
+  42CrMo4 face polishing setup with no hint why.
+
 ## 1.6.38 – 2026-11-16
 - A face wider than about 67 mm no longer says it is "wider than one Ø100
   pass can cover" when Ø100 covers it, and a smaller brush no longer asks for

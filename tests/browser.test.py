@@ -399,6 +399,26 @@ async def main():
                'top if the previous marks remain' in body and 'top if burrs remain' not in body)
             ok('the polishing diagram has no burr', await page3.locator('#dgWrap text', has_text='burr').count() == 0)
 
+            # --- a chat answer that fails says why, not just "something went wrong" (1.6.39) ---
+            page4 = await ctx.new_page()
+            page4.on('pageerror', lambda e: errors.append(str(e)[:120]))
+            replies = [(200, '{"ok":false,"reason":"rejected"}'), (403, '<html>Forbidden</html>'), (200, '{"ok":false,"reason":"upstream_400"}')]
+            async def ai_fail(route):
+                st, body = replies.pop(0)
+                await route.fulfill(status=st, content_type='application/json' if body.startswith('{') else 'text/html', body=body)
+            await page4.route('**/nufg/v1/ai', ai_fail)
+            await page4.goto(url + '?api=https%3A%2F%2Fexample.com%2Fwp-json%2Fnufg%2Fv1%2F&ai=1&k=OLDTOKEN#/&setup=2_po_fa_cs-t__W70A0p08D70_la_g42CrMo4')
+            await page4.wait_for_timeout(1600)
+            errs = await page4.evaluate("""async () => {
+                const out = [];
+                for (let i = 0; i < 3; i++) { await askClaude('The burr is still there - what should I change first?'); out.push(APP.chat.turns[APP.chat.turns.length - 1].err || ''); }
+                return out;
+            }""")
+            ok('a stale page token asks for a reload', 'reload the page' in errs[0], errs)
+            ok('a firewall refusal names the HTTP status', 'http_403' in errs[1] and 'firewall' in errs[1], errs)
+            ok('an unexpected failure shows its code', '(upstream_400)' in errs[2], errs)
+            ok('the chat stays usable after failures', await page4.evaluate("() => !!APP.sample && !APP.chat.busy"))
+
             ok('no page errors anywhere', not errors, errors[:2])
             await browser.close()
     finally:
