@@ -335,6 +335,8 @@ SETUP_CONTEXT: ${aiContext()}`;
   const turns = [{ role: 'user', content: intro }, ...(history.length ? [{ role: 'assistant', content: 'Understood. I will use only the app data and tools.' }, ...history] : []), { role: 'user', content: question.trim() }];
   // turns must alternate sensibly; collapse to valid start/end on user
   const opts = { signal: C.ctl.signal, onText: ({ text }) => { turn.content = text; const el = $('#chatLive'); if (el) el.innerHTML = mdLite(text); const log = $('#chatLog'); if (log) log.scrollTop = log.scrollHeight; } };
+  // room to think and still answer: current models think first, and the thinking counts against the limit
+  if (typeof AISERVER !== 'undefined' && APP.sample === AISERVER.sample) opts.max_tokens = 2000;
   if (APP.sampleTools) opts.tools = aiTools(turn.props); else opts.cache = false;
   try { const r = await APP.sample(turns, opts); turn.content = r.text; if (r.truncated) turn.err = 'Answer cut short — ask for less at a time.'; }
   catch (e) {
@@ -359,6 +361,7 @@ function chatError(e) {
     unreachable: 'The website couldn\'t reach Claude — try again in a minute.',
     network: 'The question didn\'t reach the website — check the connection and try again.',
     empty: 'Claude sent back an empty answer — try again.',
+    truncated: 'Claude ran out of room before answering — ask a shorter question.',
     too_large: 'The question was too large for the website to accept.',
     http_413_too_large: 'The question was too large for the website to accept.',
   };

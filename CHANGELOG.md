@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.40 – 2026-11-16
+- "Ask about this setup" on the website answers again. It came back with
+  "Claude sent back an empty answer" every time: Claude Haiku 5.5 thinks before
+  it answers, the thinking counts against the output limit, and the chat sent
+  no limit, so the site used its 256-token floor. Claude spent all of it
+  thinking and never wrote the answer. The chat now asks for 2,000 tokens, the
+  site never allows fewer than 1,024 (most 4,000), and a reply cut off before
+  any text says so instead of reading as empty.
+
 ## 1.6.39 – 2026-11-16
 - "Ask about this setup" on the website no longer answers every failure with
   a bare "Something went wrong — try again". It now says what happened: a page

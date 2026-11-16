@@ -33,7 +33,9 @@ final class NUFG_AI {
 	const MAX_PROMPT     = 24000;   // characters
 	const MAX_IMAGES     = 3;
 	const MAX_IMAGE_B64  = 1600000; // ~1.2 MB of actual image
-	const MAX_TOKENS     = 2000;
+	const MAX_TOKENS     = 4000;    // thinking plus the answer
+	const MIN_TOKENS     = 1024;    // below this a model that thinks first may never answer
+	const DEFAULT_TOKENS = 2000;    // when the guide does not say
 	const CALLS_PER_HOUR = 20;      // per visitor
 	const TIMEOUT        = 45;      // seconds
 
@@ -365,7 +367,7 @@ final class NUFG_AI {
 
 		$body = array(
 			'model'      => self::model(),
-			'max_tokens' => min( self::MAX_TOKENS, max( 256, (int) $req->get_param( 'max_tokens' ) ) ),
+			'max_tokens' => self::max_tokens( $req->get_param( 'max_tokens' ) ),
 			'messages'   => $messages,
 		);
 		$system = $req->get_param( 'system' );
@@ -394,16 +396,10 @@ final class NUFG_AI {
 			return self::no( 429 === $code ? 'rate_limited' : ( 529 === $code ? 'overloaded' : 'upstream_' . $code ) );
 		}
 		$data = json_decode( wp_remote_retrieve_body( $res ), true );
-		$text = '';
-		if ( isset( $data['content'] ) && is_array( $data['content'] ) ) {
-			foreach ( $data['content'] as $part ) {
-				if ( isset( $part['type'], $part['text'] ) && 'text' === $part['type'] ) {
-					$text .= $part['text'];
-				}
-			}
-		}
+		$text = self::reply_text( $data );
 		if ( '' === $text ) {
-			return self::no( 'empty' );
+			// thinking used the whole allowance: that is a cut-off, not an empty reply
+			return self::no( isset( $data['stop_reason'] ) && 'max_tokens' === $data['stop_reason'] ? 'truncated' : 'empty' );
 		}
 		self::record( $data, $req->get_param( 'turns' ) ? 'chat' : 'read' );
 		return new WP_REST_Response( array(
@@ -411,6 +407,33 @@ final class NUFG_AI {
 			'text'      => $text,
 			'truncated' => isset( $data['stop_reason'] ) && 'max_tokens' === $data['stop_reason'],
 		), 200 );
+	}
+
+	/**
+	 * The output allowance for one call. Current models (Haiku 5.5 included)
+	 * think before they answer, and the thinking counts against max_tokens. The
+	 * chat used to send none, got the old 256 floor, spent it all thinking and
+	 * came back with no text at all.
+	 */
+	public static function max_tokens( $asked ) {
+		$n = (int) $asked;
+		if ( $n <= 0 ) {
+			$n = self::DEFAULT_TOKENS;
+		}
+		return min( self::MAX_TOKENS, max( self::MIN_TOKENS, $n ) );
+	}
+
+	/** The answer's text: only text blocks, never thinking blocks. */
+	public static function reply_text( $data ) {
+		$text = '';
+		if ( isset( $data['content'] ) && is_array( $data['content'] ) ) {
+			foreach ( $data['content'] as $part ) {
+				if ( isset( $part['type'], $part['text'] ) && 'text' === $part['type'] && is_string( $part['text'] ) ) {
+					$text .= $part['text'];
+				}
+			}
+		}
+		return $text;
 	}
 
 	/** Accepts either a single prompt or a short conversation, plus images. */

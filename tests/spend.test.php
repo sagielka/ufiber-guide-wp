@@ -92,5 +92,14 @@ ok( 'the Haiku 5.5 rate is the published one', $price->invoke( null, 'claude-hai
 ok( 'a versioned model name still matches its rate', $price->invoke( null, 'claude-haiku-5-5-20260101' ) === array( 0.10, 0.50 ) );
 ok( 'an unknown model has no rate', null === $price->invoke( null, 'gpt-something' ) );
 
+/* ---- room to think and still answer (1.6.40) ---- */
+ok( 'a chat that names no limit gets room to think and answer, not the old 256', NUFG_AI::max_tokens( null ) >= 1024, NUFG_AI::max_tokens( null ) );
+ok( 'a small limit is raised to the floor', 1024 === NUFG_AI::max_tokens( 200 ), NUFG_AI::max_tokens( 200 ) );
+ok( 'a large limit is capped', NUFG_AI::MAX_TOKENS === NUFG_AI::max_tokens( 99999 ) );
+ok( 'the document reading keeps its own limit', 1500 === NUFG_AI::max_tokens( 1500 ) );
+$thought = array( 'stop_reason' => 'end_turn', 'content' => array( array( 'type' => 'thinking', 'thinking' => '', 'signature' => 'x' ), array( 'type' => 'text', 'text' => 'Lower the feed.' ) ) );
+ok( 'a thinking block before the answer is skipped, the answer kept', 'Lower the feed.' === NUFG_AI::reply_text( $thought ), NUFG_AI::reply_text( $thought ) );
+ok( 'a reply that is only thinking has no text', '' === NUFG_AI::reply_text( array( 'content' => array( array( 'type' => 'thinking', 'thinking' => '' ) ) ) ) );
+
 echo "\n$pass passed, $fail failed\n";
 exit( $fail ? 1 : 0 );
