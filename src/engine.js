@@ -799,7 +799,12 @@ function finalize(R, st) {
   // a "main bore" several times the cross hole is usually an entry counterbore or
   // a port, not the bore that meets the cross hole
   const dm = st.dims || {};
-  if (R.family === 'crosshole' && dm.main && dm.cross && dm.main / dm.cross > 3) {
+  const depthEcho = R.family === 'crosshole' && dm.cross && dm.depth && Math.abs(dm.cross * 25.4 - dm.depth) < 0.15;
+  if (depthEcho) {
+    R.warnings.push({ t: 'Check the cross-hole size', d: `Ø${+dm.cross.toFixed(3)} is the ${+dm.cross.toFixed(3)}" depth (${+dm.depth.toFixed(1)} mm) again, not a hole size. Enter the cross-hole diameter, or leave it empty: the stroke is then the cross hole + 10 mm.` });
+    if (R.conf.level === 'high') R.conf.level = 'medium';
+    R.conf.reasons.push('The cross-hole size looks like the depth in inches.');
+  } else if (R.family === 'crosshole' && dm.main && dm.cross && dm.main / dm.cross > 3) {
     R.warnings.push({ t: 'Check the main bore size', d: `Ø${+dm.main.toFixed(2)} is more than three times the Ø${+dm.cross.toFixed(2)} cross hole. On many parts that number is an entry counterbore, a port or a thread, not the bore that meets the cross hole. The brush is chosen from the bore at the intersection — if that is smaller, change the size and the brush changes with it.` });
     if (R.conf.level === 'high') R.conf.level = 'medium';
     R.conf.reasons.push('The main bore is much larger than the cross hole — check it is the bore at the intersection.');
@@ -845,6 +850,13 @@ function dedupeDims(st) {
   const d = st && st.dims;
   if (!d) return st;
   if (st.task === 'crosshole' && d.hole != null && (d.hole === d.cross || d.hole === d.main)) delete d.hole;
+  // "Cross hole is 1.625" deep": the depth converted (41.3) and the same number again,
+  // unconverted, as a Ø1.625 cross hole. A diameter that is just the depth in inches is
+  // that echo: the stroke and the bore check were worked out from it.
+  if (d.depth) for (const k of ['cross', 'main', 'hole']) {
+    const v = Number(d[k]);
+    if (v > 0 && v < d.depth / 10 && Math.abs(v * 25.4 - d.depth) < 0.15) delete d[k];
+  }
   return st;
 }
 /* A customer naming the tool they want is not describing their part. "ceramic
@@ -927,17 +939,22 @@ const burrLevel = mm => mm > 0.2 ? 'heavy' : mm > 0.1 ? 'medium' : 'light';
 function parseText(text) {
   // American drawings write inches with a leading dot and no unit: Ø.156 is 0.156 in.
   const t = (' ' + scrubToolWords(scrubContact(text)).replace(/,/g, '.') + ' ')
-    .replace(/([øØ⌀]|\bdia(?:meter)?\.?)\s*\.(\d{2,4})(?!\s*(?:mm|"|in\b|\d))/gi, '$10.$2"');
+    .replace(/([øØ⌀]|\bdia(?:meter)?\.?)\s*\.(\d{2,4})(?!\s*(?:mm|"|in\b|\d))/gi, '$10.$2"')
+    // ...and with the inch mark: '.500" hole' is 0.500 in, not 500 in (read as a 12.7 m bore)
+    .replace(/(^|[^\w.])\.(\d{1,4})(?=\s*(?:"|in\b|inch))/gi, '$10.$2');
+  // Material words are matched with the decimals masked: "1.625 deep" is not Inconel 625,
+  // and "2.718" is not Inconel 718. Material numbers (1.4301, 2.4668) stay.
+  const tm = t.replace(/\d*\.\d+/g, d => /^[0-3]\.\d{4}$/.test(d) ? d : ' ');
   const out = { understood: [] };
   // material. A labelled line ("Material : PET-P", "all part materials are
   // engineering plastics") says what the part is made of; other mentions can be
   // anything ("they use sandpaper on stainless and plastic"), so the label wins.
-  const labelled = [...t.matchAll(/\bmaterials?\b[^\n:=]{0,20}?(?:[:=]|\bis\b|\bare\b)\s*([^\n;]{1,60})/gi)].map(x => ' ' + x[1].split(/\.(?:\s|$)/)[0] + ' ');
+  const labelled = [...tm.matchAll(/\bmaterials?\b[^\n:=]{0,20}?(?:[:=]|\bis\b|\bare\b)\s*([^\n;]{1,60})/gi)].map(x => ' ' + x[1].split(/\.(?:\s|$)/)[0] + ' ');
   for (const seg of labelled) {
     for (const [re, m, sub] of MAT_WORDS) { if (re.test(seg)) { out.material = m; if (sub) out.sub = sub; break; } }
     if (out.material) break;
   }
-  if (!out.material) for (const [re, m, sub] of MAT_WORDS) { if (re.test(t)) { out.material = m; if (sub) out.sub = sub; break; } }
+  if (!out.material) for (const [re, m, sub] of MAT_WORDS) { if (re.test(tm)) { out.material = m; if (sub) out.sub = sub; break; } }
   const hrc = t.match(/(\d{2})\s*hrc/i); if (hrc) { if (!out.material || out.material === 'carbon') out.material = 'hardened'; out.sub = Number(hrc[1]) > 55 ? 'gt55' : 'le55'; }
   if (out.material === 'carbon' && /(quench|tempered|heat[- ]treat|through[- ]hard)/i.test(t)) out.sub = 'treated';
   // named grades pick the NOGA row; a second material named by grade is a second setup.
@@ -996,7 +1013,8 @@ function parseText(text) {
     // 3/8" is one fractional size, not the number 8. Reading the denominator as
     // inches turned a 3/8 inch brush into a 203 mm feature.
     if (/\d\s*\/\s*$/.test(before)) continue;
-    if (/\b(304|316|6061|7075|2024|4140|1045|718|625|420|410|440|390|12)\b/.test(String(v)) && !/[øØ⌀]|mm|dia/.test(raw + after.slice(0, 4))) { if (!/mm/.test(after.slice(0, 4))) continue; }
+    // a bare grade number is a material; 1.625" is a size (it was dropped as "625")
+    if (/^(304|316|6061|7075|2024|4140|1045|718|625|420|410|440|390|12)$/.test(String(v)) && !/[øØ⌀]|mm|dia|"/.test(raw + after.slice(0, 4))) { if (!/mm/.test(after.slice(0, 4))) continue; }
     const hasMark = /[øØ⌀]|dia|mm|"/.test(raw) || /^\s*mm/.test(after);
     if (!hasMark) continue;
     // "burr height: approx. 1 mm" / "a 0.3 mm burr" is the burr, not a size of the part
@@ -1006,16 +1024,22 @@ function parseText(text) {
     nums.push({ v: mm, before, after });
   }
   const tag = (n, words) => words.test(n.after.slice(0, 30)) || words.test(n.before.slice(-25));
-  if (isCross && nums.length >= 2) {
-    const mainN = nums.find(n => tag(n, /main|bore|primary|large|entry|reamed/)); const crossN = nums.find(n => n !== mainN && n.v !== mainN?.v && tag(n, /cross|drill|side|small|intersect|radial/));
+  // "Cross hole is 1.625" deep", "at a depth of 40 mm": a depth, never a diameter.
+  // Read as a size, it became a Ø41 main bore (or a Ø1.6 cross hole) on a cross-hole job.
+  const isDepth = n => /^\s*(?:deep|depth)\b/i.test(n.after) ||
+    /\b(?:depth|deep)\s*(?:of|is|=|:|at)?\s*(?:approx\.?|approximately|about|ca\.?|~)?\s*$/i.test(n.before);
+  const depthN = nums.find(isDepth);
+  const sizes = depthN ? nums.filter(n => !isDepth(n)) : nums;
+  if (isCross && sizes.length >= 2) {
+    const mainN = sizes.find(n => tag(n, /main|bore|primary|large|entry|reamed/)); const crossN = sizes.find(n => n !== mainN && n.v !== mainN?.v && tag(n, /cross|drill|side|small|intersect|radial/));
     let a = mainN?.v, b = crossN?.v;
     // the same diameter is often repeated ("entry dia 3.1 … the dia 3.1 mm reamed hole"): pick two different sizes
-    if (!a || !b) { const s = [...new Set(nums.map(n => n.v))].sort((x, y) => y - x); if (!a) a = s[0]; if (!b) b = s.find(x => x !== a); }
+    if (!a || !b) { const s = [...new Set(sizes.map(n => n.v))].sort((x, y) => y - x); if (!a) a = s[0]; if (!b) b = s.find(x => x !== a); }
     if (b != null && b > a) [a, b] = [b, a];
     out.dims = b != null ? { main: a, cross: b } : { main: a };
-  } else if (nums.length) {
+  } else if (sizes.length) {
     out.dims = {};
-    for (const n of nums) {
+    for (const n of sizes) {
       if (tag(n, /groove|slot|o-?ring|channel/)) out.dims.groove = n.v;
       else if (tag(n, /hole|bore|drill/)) { if (out.feature === 'bore' || out.task === 'id_finish' || isCross) out.dims.main = n.v; else out.dims.hole = n.v; }
       else if (tag(n, /wide|width|face|flange|surface/)) out.dims.width = n.v;
@@ -1023,6 +1047,7 @@ function parseText(text) {
       else if (!out.dims.width) out.dims.width = n.v;
     }
   }
+  if (depthN) { out.dims = out.dims || {}; out.dims.depth = depthN.v; }
   const ra = t.match(/ra\s*([\d.]+)/i); if (ra) out.ra = Number(ra[1]);
   // burr
   if (/(heavy|large|big|thick|rolled|significant) burr/i.test(t)) out.burr = 'heavy';

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.41 – 2026-11-18
+- A depth is no longer read as a hole size. "Cross hole is 1.625" deep" came
+  out of the reading twice: as the 41.3 mm depth and again, unconverted, as a
+  Ø1.625 mm cross hole. The setup then gave an 11.63 mm stroke and warned that
+  the Ø12.7 bore was "more than three times the cross hole". A diameter that is
+  just the depth in inches is now dropped, so the stroke reads "cross hole + 10
+  mm" until the real size is known; Claude's reading is told the same; links
+  made before this open without the false cross hole; and the same numbers
+  typed in by hand get a "Check the cross-hole size" warning. Found on a 15-5 PH
+  cross hole from MSC (Houston).
+- The quick reading on the device also got that email wrong, three ways:
+  ".500" hole" was 500 inches (a 12.7 m bore), "1.625" was dropped as the grade
+  number 625, and the same "1.625" made the part Inconel 625. Inch sizes
+  written with a leading dot are read as inches, decimals are never grade
+  numbers, and a number said to be deep or a depth goes to the depth only.
+  Material numbers such as 1.4301 still count.
+- Five tested-application titles had broken characters, e.g. "Pipesï¼ˆSUS)".
+  They now read "Pipes (SUS)", "Mold (Cooling hole)", "Cylinder head (Oil
+  gallery)" and so on.
+
 ## 1.6.40 – 2026-11-16
 - "Ask about this setup" on the website answers again. It came back with
   "Claude sent back an empty answer" every time: Claude Haiku 5.5 thinks before

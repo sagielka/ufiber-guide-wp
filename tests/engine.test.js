@@ -664,5 +664,48 @@ Customer will be using our ceramic brushes on BT40 spindle machines (So, pls sel
   ok('an ordinary hole-band job gets no overhang note', !Rs.notes.some(n => /past each edge/.test(n)), Rs.notes);
 }
 
+/* ---- 15-5 PH cross hole, MSC (Nov-2026) (1.6.41): ".500" hole", "Cross hole is 1.625" deep" ---- */
+{
+  const mail = `I have a customer with an application to use on of your products.
+
+Material 15-5 Ph
+
+Deburring a cross hole
+
+.500" hole
+
+Cross hole is 1.625" deep
+
+Steven W. Smith II
+Metal Working Specialist, Houston
+Direct:  346-224-3238`;
+  const p = E.parseText(mail);
+  eq('15-5 PH is martensitic stainless, not Inconel 625 out of "1.625"', [p.material, p.sub], ['stainless', 'mart']);
+  ok('.500" is a 12.7 mm bore, not a 12.7 m one', p.dims && p.dims.main === 12.7, p.dims);
+  ok('1.625" deep is the depth, not a hole size', p.dims && Math.abs(p.dims.depth - 41.275) < 0.01 && p.dims.cross == null, p.dims);
+  eq('a decimal is not a grade: 2.718 in is not Inconel 718', E.parseText('cross hole 0.25" in 2.718" bore, 17-4 PH').material, 'stainless');
+  eq('a material number still counts: 1.4301', E.parseText('cross hole in 1.4301, Ø6 bore').material, 'stainless');
+  eq('Inconel 625 named in words is still Inconel', E.parseText('cross hole in Inconel 625, Ø6 bore').material, 'hrsa');
+  // the AI reading put the depth in twice: 41.3 as the depth and 1.625 (inches, unconverted) as the cross hole
+  const run = (code) => vm.runInContext(code, ctx);
+  run('APP.ws = null; APP.smart = APP.smart || {}; APP.parsed = null;');
+  run(`applyExtraction({ task: 'crosshole', material: 'stainless', sub: 'mart', grades: ['15-5 PH'], dims: { main: 12.7, cross: 1.625, depth: 41.3 }, machine: { type: 'mc' } }, null)`);
+  const d = run('APP.ws.dims');
+  ok('an AI reading that echoes the depth as the cross hole keeps only the depth', d.main === 12.7 && d.depth === 41.3 && d.cross == null, d);
+  const old = E.SHARE.decode('2_ch_cr_ss-m_l_C1p625M12p7D41p3_mc_g15-2d5-20PH');
+  ok('an old link with the echoed depth opens without the Ø1.625 cross hole', old.dims.cross == null && old.dims.main === 12.7 && old.dims.depth === 41.3, old.dims);
+  const R = E.recommend(old);
+  eq('it still recommends the Ø7 #400 cross-hole brush', R.sku, 'UF2370');
+  ok('no "main bore is three times the cross hole" warning from a depth', !R.warnings.some(w => /Check the main bore size/.test(w.t)), R.warnings.map(w => w.t));
+  ok('the stroke waits for the real cross-hole size', R.params.engage.value === 'Ø + 10', R.params.engage);
+  const st = E.newState(); Object.assign(st, { task: 'crosshole', feature: 'cross', material: 'stainless', sub: 'mart', dims: { main: 12.7, cross: 1.625, depth: 41.275 } });
+  const Rm = E.recommend(st);
+  ok('typed in by hand, the same echo is flagged, not used quietly', Rm.warnings.some(w => w.t === 'Check the cross-hole size') && !Rm.warnings.some(w => /Check the main bore size/.test(w.t)), Rm.warnings.map(w => w.t));
+  const ok2 = E.SHARE.decode('2_ch_cr_ss-m_l_C3M12p7D41p3_mc');
+  ok('a real cross-hole size next to a depth is kept', ok2.dims.cross === 3, ok2.dims);
+  const bad = (ctx.__CASES || []).map(c => c.part).filter(t => /ï¼|Ï†|Ã|â€/.test(t));
+  ok('case titles have no broken characters ("Pipesï¼ˆSUS)")', (ctx.__CASES || []).length > 50 && !bad.length, bad);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

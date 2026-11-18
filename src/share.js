@@ -109,6 +109,7 @@ const SHARE = (() => {
       const v = Number(st.dims[k]);
       if (!isFinite(v) || v <= 0 || v > 5000) delete st.dims[k]; else st.dims[k] = v;
     }
+    dedupeDims(st);   // links made before 1.6.41 carry a depth echoed as the cross hole
     st.machine = Object.assign(newState().machine, (st.machine && typeof st.machine === 'object') ? st.machine : {});
     if (!MACHINES[st.machine.type]) st.machine.type = 'mc';
     const mr = Number(st.machine.maxRpm); st.machine.maxRpm = (isFinite(mr) && mr > 0 && mr < 200000) ? mr : null;
